@@ -78,7 +78,7 @@ func GetProvider(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	json.NewEncoder(w).Encode(&Provider{})
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func PostRenter(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func GetRenter(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	json.NewEncoder(w).Encode(&Renter{})
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func GetRenterFiles(w http.ResponseWriter, r *http.Request) {
@@ -108,8 +108,7 @@ func GetRenterFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var empty []File
-	json.NewEncoder(w).Encode(&empty)
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func PostRenterFile(w http.ResponseWriter, r *http.Request) {
@@ -123,8 +122,7 @@ func PostRenterFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var empty []File
-	json.NewEncoder(w).Encode(&empty)
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func GetRenterFile(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +137,7 @@ func GetRenterFile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	json.NewEncoder(w).Encode(&File{})
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func DeleteRenterFile(w http.ResponseWriter, r *http.Request) {
@@ -155,5 +153,5 @@ func DeleteRenterFile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	json.NewEncoder(w).Encode(&File{})
+	w.WriteHeader(http.StatusNotFound)
 }

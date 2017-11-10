@@ -1,15 +1,13 @@
-package main
+package metaserver
 
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"skybin/core"
 	"strconv"
 
-	"flag"
 	"github.com/gorilla/mux"
 )
 
@@ -18,14 +16,37 @@ const filePath = "db.json"
 var providers []core.Provider
 var renters []core.Renter
 
-type StorageFile struct {
+func NewServer() http.Handler {
+
+	// If the database exists, load it into memory.
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		loadDbFromFile()
+	}
+
+	router := mux.NewRouter()
+
+	router.HandleFunc("/providers", getProviders).Methods("GET")
+	router.HandleFunc("/providers", postProvider).Methods("POST")
+	router.HandleFunc("/providers/{id}", getProvider).Methods("GET")
+
+	router.HandleFunc("/renters", postRenter).Methods("POST")
+	router.HandleFunc("/renters/{id}", getRenter).Methods("GET")
+	router.HandleFunc("/renters/{id}/files", getRenterFiles).Methods("GET")
+	router.HandleFunc("/renters/{id}/files", postRenterFile).Methods("POST")
+	router.HandleFunc("/renters/{id}/files/{fileId}", getRenterFile).Methods("GET")
+	router.HandleFunc("/renters/{id}/files/{fileId}", delteRenterFile).Methods("DELETE")
+
+	return router
+}
+
+type storageFile struct {
 	Providers []core.Provider
 	Renters   []core.Renter
 }
 
 func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 	println("Dumping database to", filePath, "...")
-	db := StorageFile{Providers: providers, Renters: renters}
+	db := storageFile{Providers: providers, Renters: renters}
 
 	dbBytes, err := json.Marshal(db)
 	if err != nil {
@@ -46,7 +67,7 @@ func loadDbFromFile() {
 		panic(err)
 	}
 
-	var db StorageFile
+	var db storageFile
 	parseErr := json.Unmarshal(contents, &db)
 	if parseErr != nil {
 		panic(parseErr)
@@ -56,53 +77,37 @@ func loadDbFromFile() {
 	renters = db.Renters
 }
 
-// our main function
-func main() {
-	addrFlag := flag.String("addr", "", "address to run on (host:port)")
-	flag.Parse()
-
-	addr := core.DefaultMetaAddr
-	if len(*addrFlag) > 0 {
-		addr = *addrFlag
-	}
-
-	// If the database exists, load it into memory.
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
-		loadDbFromFile()
-	}
-
-	router := mux.NewRouter()
-
-	providers = append(providers, core.Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
-
-	router.HandleFunc("/providers", GetProviders).Methods("GET")
-	router.HandleFunc("/providers", PostProvider).Methods("POST")
-	router.HandleFunc("/providers/{id}", GetProvider).Methods("GET")
-
-	router.HandleFunc("/renters", PostRenter).Methods("POST")
-	router.HandleFunc("/renters/{id}", GetRenter).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", GetRenterFiles).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", PostRenterFile).Methods("POST")
-	router.HandleFunc("/renters/{id}/files/{fileId}", GetRenterFile).Methods("GET")
-	router.HandleFunc("/renters/{id}/files/{fileId}", DeleteRenterFile).Methods("DELETE")
-
-	log.Fatal(http.ListenAndServe(addr, router))
+type getProvidersResp struct {
+	Providers []core.Provider `json:"providers"`
+	Error string `json:"error"`
 }
 
-func GetProviders(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(providers)
+func getProviders(w http.ResponseWriter, r *http.Request) {
+	resp := getProvidersResp{
+		Providers: providers,
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
-func PostProvider(w http.ResponseWriter, r *http.Request) {
+type postProviderResp struct {
+	Error string `json:"error"`
+}
+
+func postProvider(w http.ResponseWriter, r *http.Request) {
 	var provider core.Provider
 	_ = json.NewDecoder(r.Body).Decode(&provider)
 	provider.ID = strconv.Itoa(len(providers) + 1)
 	providers = append(providers, provider)
 	json.NewEncoder(w).Encode(provider)
 	dumpDbToFile(providers, renters)
+
+	var resp postProviderResp
+	body, _ := json.Marshal(&resp)
+	w.WriteHeader(http.StatusCreated)
+	w.Write(body)
 }
 
-func GetProvider(w http.ResponseWriter, r *http.Request) {
+func getProvider(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for _, item := range providers {
 		if item.ID == params["id"] {
@@ -113,7 +118,7 @@ func GetProvider(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func PostRenter(w http.ResponseWriter, r *http.Request) {
+func postRenter(w http.ResponseWriter, r *http.Request) {
 	var renter core.Renter
 	_ = json.NewDecoder(r.Body).Decode(&renter)
 	renter.ID = strconv.Itoa(len(renters) + 1)
@@ -122,7 +127,7 @@ func PostRenter(w http.ResponseWriter, r *http.Request) {
 	dumpDbToFile(providers, renters)
 }
 
-func GetRenter(w http.ResponseWriter, r *http.Request) {
+func getRenter(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for _, item := range renters {
 		if item.ID == params["id"] {
@@ -133,7 +138,7 @@ func GetRenter(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func GetRenterFiles(w http.ResponseWriter, r *http.Request) {
+func getRenterFiles(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for _, item := range renters {
 		if item.ID == params["id"] {
@@ -144,7 +149,7 @@ func GetRenterFiles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func PostRenterFile(w http.ResponseWriter, r *http.Request) {
+func postRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for i, item := range renters {
 		if item.ID == params["id"] {
@@ -159,7 +164,7 @@ func PostRenterFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func GetRenterFile(w http.ResponseWriter, r *http.Request) {
+func getRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for _, item := range renters {
 		if item.ID == params["id"] {
@@ -174,7 +179,7 @@ func GetRenterFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func DeleteRenterFile(w http.ResponseWriter, r *http.Request) {
+func delteRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for _, item := range renters {
 		if item.ID == params["id"] {

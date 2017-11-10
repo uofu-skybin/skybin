@@ -21,12 +21,12 @@ type RenterConfig struct {
 	MetaAddr string `json:"metadataServiceAddress"`
 }
 
-type renterAPI struct {
+type renterServer struct {
 	config *RenterConfig
 	logger *log.Logger
 }
 
-func (api *renterAPI) postStorage(w http.ResponseWriter, r *http.Request) {
+func (api *renterServer) postStorage(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("POST", r.URL)
 	params := struct {
 		Amount int `json:"amount"`
@@ -36,10 +36,9 @@ func (api *renterAPI) postStorage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
-
 }
 
-func (api *renterAPI) postFiles(w http.ResponseWriter, r *http.Request) {
+func (api *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("POST", r.URL)
 	params := struct {
 		SourcePath string `json:"sourcePath"`
@@ -52,11 +51,11 @@ func (api *renterAPI) postFiles(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (api *renterAPI) getFiles(w http.ResponseWriter, r *http.Request) {
+func (api *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("GET", r.URL)
 }
 
-func (api *renterAPI) getFile(w http.ResponseWriter, r *http.Request) {
+func (api *renterServer) getFile(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("GET", r.URL)
 	params := mux.Vars(r)
 	_, exists := params["filename"]
@@ -66,7 +65,7 @@ func (api *renterAPI) getFile(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (api *renterAPI) postDownload(w http.ResponseWriter, r *http.Request) {
+func (api *renterServer) postDownload(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("POST", r.URL)
 	params := mux.Vars(r)
 	_, exists := params["filename"]
@@ -88,7 +87,7 @@ func runRenter(args ...string) {
 	var config RenterConfig
 	err = loadJSON(path.Join(homedir, "renter", "config.json"), &config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error: cannot read config. error: %s", err)
 	}
 
 	addr := config.Addr
@@ -96,7 +95,7 @@ func runRenter(args ...string) {
 		addr = *addrFlag
 	}
 
-	api := renterAPI{
+	api := renterServer{
 		config: &config,
 		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}

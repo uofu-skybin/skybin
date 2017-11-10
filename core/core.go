@@ -8,9 +8,8 @@ const (
 type Provider struct {
 	ID          string `json:"id,omitempty"`
 	PublicKey   string `json:"publicKey,omitempty"`
-	Host        string `json:"host,omitempty"`
-	Port        int    `json:"port,omitempty"`
-	SpaceAvail  int    `json:"spaceAvail,omitempty"`
+	Addr        string  `json:"address"`
+	SpaceAvail  int64    `json:"spaceAvail,omitempty"`
 	StorageRate int    `json:"storageRate,omitempty"`
 }
 

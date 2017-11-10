@@ -17,6 +17,8 @@ type Cmd struct {
 var commands = []Cmd{
 	initCmd,
 	renterCmd,
+	providerCmd,
+	metaServerCmd,
 }
 
 func usage() {

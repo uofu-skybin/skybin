@@ -7,47 +7,22 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"skybin/core"
 
 	"github.com/gorilla/mux"
 )
 
 const filePath = "db.json"
 
-type Provider struct {
-	ID          string `json:id,omitempty`
-	PublicKey   string `json:publicKey,omitempty`
-	Host        string `json:host,omitempty`
-	Port        int    `json:port,omitempty`
-	SpaceAvail  int    `json:spaceAvail,omitempty`
-	StorageRate int    `json:storageRate,omitempty`
-}
-
-type Block struct {
-	ID        string     `json:id,omitempty`
-	Locations []Provider `json:locations,omitempty`
-}
-
-type File struct {
-	ID     string  `json:id,omitempty`
-	Name   string  `json:name,omitempty`
-	Blocks []Block `json:blocks,omitempty`
-}
-
-type Renter struct {
-	ID        string `json:id,omitempty`
-	PublicKey string `json:publicKey,omitempty`
-	Files     []File `json:files,omitempty`
-}
-
-var providers []Provider
-var renters []Renter
+var providers []core.Provider
+var renters []core.Renter
 
 type StorageFile struct {
-	Providers []Provider
-	Renters   []Renter
+	Providers []core.Provider
+	Renters   []core.Renter
 }
 
-func dumpDbToFile(providers []Provider, renters []Renter) {
+func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 	println("Dumping database to", filePath, "...")
 	db := StorageFile{Providers: providers, Renters: renters}
 
@@ -89,7 +64,7 @@ func main() {
 
 	router := mux.NewRouter()
 
-	providers = append(providers, Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
+	providers = append(providers, core.Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
 
 	router.HandleFunc("/providers", GetProviders).Methods("GET")
 	router.HandleFunc("/providers", PostProvider).Methods("POST")
@@ -110,7 +85,7 @@ func GetProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostProvider(w http.ResponseWriter, r *http.Request) {
-	var provider Provider
+	var provider core.Provider
 	_ = json.NewDecoder(r.Body).Decode(&provider)
 	provider.ID = strconv.Itoa(len(providers) + 1)
 	providers = append(providers, provider)
@@ -130,7 +105,7 @@ func GetProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostRenter(w http.ResponseWriter, r *http.Request) {
-	var renter Renter
+	var renter core.Renter
 	_ = json.NewDecoder(r.Body).Decode(&renter)
 	renter.ID = strconv.Itoa(len(renters) + 1)
 	renters = append(renters, renter)
@@ -164,7 +139,7 @@ func PostRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	for i, item := range renters {
 		if item.ID == params["id"] {
-			var file File
+			var file core.File
 			_ = json.NewDecoder(r.Body).Decode(&file)
 			renters[i].Files = append(item.Files, file)
 			json.NewEncoder(w).Encode(item.Files)

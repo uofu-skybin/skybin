@@ -1,5 +1,10 @@
 package core
 
+const (
+	DefaultMetaAddr = "127.0.0.1:8001"
+	DefaultRenterAddr = "127.0.0.1:8002"
+)
+
 type Provider struct {
 	ID          string `json:id,omitempty`
 	PublicKey   string `json:publicKey,omitempty`

@@ -10,6 +10,7 @@ import (
 	"skybin/core"
 
 	"github.com/gorilla/mux"
+	"flag"
 )
 
 const filePath = "db.json"
@@ -57,6 +58,14 @@ func loadDbFromFile() {
 
 // our main function
 func main() {
+	addrFlag := flag.String("addr", "", "address to run on (host:port)")
+	flag.Parse()
+
+	addr := core.DefaultMetaAddr
+	if len(*addrFlag) > 0 {
+		addr = *addrFlag
+	}
+
 	// If the database exists, load it into memory.
 	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
 		loadDbFromFile()
@@ -67,7 +76,7 @@ func main() {
 	providers = append(providers, core.Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
 
 	router.HandleFunc("/providers", GetProviders).Methods("GET")
-	router.HandleFunc("/providers", PostProvider).Methods("POST")
+	router.HandleFunc("/providers", PostProvider).Methods("POST")p
 	router.HandleFunc("/providers/{id}", GetProvider).Methods("GET")
 
 	router.HandleFunc("/renters", PostRenter).Methods("POST")
@@ -77,7 +86,7 @@ func main() {
 	router.HandleFunc("/renters/{id}/files/{fileId}", GetRenterFile).Methods("GET")
 	router.HandleFunc("/renters/{id}/files/{fileId}", DeleteRenterFile).Methods("DELETE")
 
-	log.Fatal(http.ListenAndServe(":8000", router))
+	log.Fatal(http.ListenAndServe(addr, router))
 }
 
 func GetProviders(w http.ResponseWriter, r *http.Request) {

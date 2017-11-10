@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"encoding/json"
+	"flag"
 )
 
 var renterCmd = Cmd{
@@ -75,6 +76,9 @@ func (api *renterAPI) postDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func runRenter(args ...string) {
+	fs := flag.NewFlagSet("renter", flag.ExitOnError)
+	addrFlag := fs.String("addr", "", "address to listen at (host:port)")
+	fs.Parse(args)
 
 	homedir, err := findHomeDir()
 	if err != nil {
@@ -85,6 +89,11 @@ func runRenter(args ...string) {
 	err = loadJSON(path.Join(homedir, "renter", "config.json"), &config)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	addr := config.Addr
+	if len(*addrFlag) > 0 {
+		addr = *addrFlag
 	}
 
 	api := renterAPI{
@@ -100,6 +109,6 @@ func runRenter(args ...string) {
 	router.HandleFunc("/files/{filename}", api.getFile).Methods("GET")
 	router.HandleFunc("/files/{filename}/download", api.postDownload).Methods("POST")
 
-	log.Println("starting renter service at", config.Addr)
-	log.Fatal(http.ListenAndServe(config.Addr, router))
+	log.Println("starting renter service at", addr)
+	log.Fatal(http.ListenAndServe(addr, router))
 }

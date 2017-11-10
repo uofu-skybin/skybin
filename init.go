@@ -11,6 +11,7 @@ import (
 	"flag"
 	"crypto/rand"
 	"os/user"
+	"skybin/core"
 )
 
 var initCmd = Cmd{
@@ -38,11 +39,6 @@ func findHomeDir() (string, error) {
 	}
 	return homedir, nil
 }
-
-const (
-	DefaultMetaAddr = "127.0.0.1:8002"
-	DefaultRenterAddr = ":8001"
-)
 
 func runInit(args ...string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
@@ -75,8 +71,8 @@ func runInit(args ...string) {
 
 	// Create renter config
 	renterConfig := RenterConfig{
-		Addr: DefaultRenterAddr,
-		MetaAddr: DefaultMetaAddr,
+		Addr: core.DefaultRenterAddr,
+		MetaAddr: core.DefaultMetaAddr,
 	}
 	err = saveJSON(path.Join(homedir, "renter", "config.json"), &renterConfig)
 	checkErr(err)

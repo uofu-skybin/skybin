@@ -1,17 +1,17 @@
-package main
+package cmd
 
 import (
 	"flag"
+	"log"
+	"net/http"
 	"skybin/core"
 	"skybin/metaserver"
-	"net/http"
-	"log"
 )
 
 var metaServerCmd = Cmd{
-	Name: "metaserver",
-	Description: "Run a metaserver server",
-	Run: runMetaServer,
+	Name:        "metaserver",
+	Description: "Start a metadata server",
+	Run:         runMetaServer,
 }
 
 func runMetaServer(args ...string) {

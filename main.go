@@ -4,22 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"skybin/cmd"
 	"text/tabwriter"
 )
-
-type Cmd struct {
-	Name        string
-	Usage       string
-	Description string
-	Run         func(args ...string)
-}
-
-var commands = []Cmd{
-	initCmd,
-	renterCmd,
-	providerCmd,
-	metaServerCmd,
-}
 
 func usage() {
 	fmt.Printf("usage: %s <command> [option...]\n", os.Args[0])
@@ -30,14 +17,13 @@ func usage() {
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 5, 5, ' ', 0)
 
-	for _, cmd := range commands {
+	for _, cmd := range cmd.Commands {
 		fmt.Fprintf(tw, "\t%s\t%s\n", cmd.Name, cmd.Description)
 	}
 
 	tw.Flush()
 
 	fmt.Println()
-	os.Exit(1)
 }
 
 func main() {
@@ -45,9 +31,10 @@ func main() {
 
 	if len(os.Args) < 2 {
 		usage()
+		os.Exit(1)
 	}
 
-	for _, command := range commands {
+	for _, command := range cmd.Commands {
 		if command.Name == os.Args[1] {
 			command.Run(os.Args[2:]...)
 			return

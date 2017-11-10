@@ -79,7 +79,7 @@ func loadDbFromFile() {
 
 type getProvidersResp struct {
 	Providers []core.Provider `json:"providers"`
-	Error string `json:"error"`
+	Error     string          `json:"error"`
 }
 
 func getProviders(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,8 @@ func getProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 type postProviderResp struct {
-	Error string `json:"error"`
+	Provider core.Provider `json:"error"`
+	Error    string        `json:"error"`
 }
 
 func postProvider(w http.ResponseWriter, r *http.Request) {
@@ -98,13 +99,9 @@ func postProvider(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&provider)
 	provider.ID = strconv.Itoa(len(providers) + 1)
 	providers = append(providers, provider)
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(provider)
 	dumpDbToFile(providers, renters)
-
-	var resp postProviderResp
-	body, _ := json.Marshal(&resp)
-	w.WriteHeader(http.StatusCreated)
-	w.Write(body)
 }
 
 func getProvider(w http.ResponseWriter, r *http.Request) {

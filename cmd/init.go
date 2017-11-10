@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"crypto/rand"
@@ -12,11 +12,13 @@ import (
 	"os/user"
 	"path"
 	"skybin/core"
+	"skybin/provider"
+	"skybin/renter"
 )
 
 var initCmd = Cmd{
 	Name:        "init",
-	Description: "Set up skybin",
+	Description: "Set up a skybin directory",
 	Run:         runInit,
 }
 
@@ -64,17 +66,33 @@ func runInit(args ...string) {
 	checkErr(os.MkdirAll(path.Join(homedir, "provider"), 0700))
 
 	// Create renter keys
-	userkey, err := rsa.GenerateKey(rand.Reader, 2048)
+	renterKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	checkErr(err)
-	savePrivateKey(userkey, path.Join(homedir, "renter", "renterid"))
-	savePublicKey(userkey.PublicKey, path.Join(homedir, "renter", "renterid.pub"))
+	savePrivateKey(renterKey, path.Join(homedir, "renter", "renterid"))
+	savePublicKey(renterKey.PublicKey, path.Join(homedir, "renter", "renterid.pub"))
 
 	// Create renter config
-	renterConfig := RenterConfig{
-		Addr:     core.DefaultRenterAddr,
-		MetaAddr: core.DefaultMetaAddr,
+	renterConfig := renter.Config{
+		Addr:         core.DefaultRenterAddr,
+		MetaAddr:     core.DefaultMetaAddr,
+		IdentityFile: path.Join(homedir, "renter", "renterid"),
 	}
 	err = saveJSON(path.Join(homedir, "renter", "config.json"), &renterConfig)
+	checkErr(err)
+
+	// Create provider keys
+	providerKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	checkErr(err)
+	savePrivateKey(providerKey, path.Join(homedir, "provider", "providerid"))
+	savePublicKey(providerKey.PublicKey, path.Join(homedir, "provider", "providerid.pub"))
+
+	// Create provider config
+	providerConfig := provider.Config{
+		Addr:         core.DefaultProviderAddr,
+		MetaAddr:     core.DefaultMetaAddr,
+		IdentityFile: path.Join(homedir, "provider", "providerid"),
+	}
+	err = saveJSON(path.Join(homedir, "provider", "config.json"), &providerConfig)
 	checkErr(err)
 }
 

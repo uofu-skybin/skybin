@@ -1,28 +1,20 @@
-package main
+package cmd
 
 import (
 	"flag"
 	"log"
+	"net/http"
+	"os"
 	"path"
 	"skybin/core"
 	"skybin/metaserver"
-	"net/http"
-	"github.com/gorilla/mux"
+	"skybin/provider"
 )
 
 var providerCmd = Cmd{
-	Name: "provider",
-	Description: "Run a provider server",
-	Run: runProvider,
-}
-
-type ProviderConfig struct {
-	Addr string `json:"address"`
-	MetaAddr string `json:"metadataServiceAddress"`
-}
-
-type providerServer struct {
-
+	Name:        "provider",
+	Description: "Start a provider server",
+	Run:         runProvider,
 }
 
 func runProvider(args ...string) {
@@ -35,7 +27,7 @@ func runProvider(args ...string) {
 		log.Fatal(err)
 	}
 
-	var config ProviderConfig
+	var config provider.Config
 	err = loadJSON(path.Join(homedir, "provider", "config.json"), &config)
 	if err != nil {
 		log.Fatalf("error: cannot read config. error: %s", err)
@@ -46,22 +38,21 @@ func runProvider(args ...string) {
 		addr = config.Addr
 	}
 
+	// Register with metadata service.
 	info := core.Provider{
-		ID: "",
-		PublicKey: "",
-		Addr: addr,
+		ID:         "",
+		PublicKey:  "",
+		Addr:       addr,
 		SpaceAvail: 1 << 32,
 	}
-
-	// Register with metaserver service.
 	metaService := metaserver.NewClient(config.MetaAddr, &http.Client{})
 	err = metaService.RegisterProvider(&info)
 	if err != nil {
 		log.Fatalf("error: unable to register with metaservice. error: %s", err)
 	}
 
-	router := mux.NewRouter()
+	server := provider.NewServer(&config, log.New(os.Stdout, "", log.LstdFlags))
 
 	log.Println("starting provider server at", addr)
-	log.Fatal(http.ListenAndServe(addr, router))
+	log.Fatal(http.ListenAndServe(addr, server))
 }

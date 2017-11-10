@@ -1,23 +1,23 @@
 package metaserver
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"skybin/core"
-	"encoding/json"
-	"fmt"
-	"errors"
-	"bytes"
 )
 
 func NewClient(addr string, client *http.Client) *Client {
 	return &Client{
-		addr: addr,
+		addr:   addr,
 		client: client,
 	}
 }
 
 type Client struct {
-	addr string
+	addr   string
 	client *http.Client
 }
 

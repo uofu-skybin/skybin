@@ -1,23 +1,23 @@
 package main
 
 import (
-	"log"
-	"path"
-	"github.com/gorilla/mux"
-	"net/http"
-	"os"
 	"encoding/json"
 	"flag"
+	"github.com/gorilla/mux"
+	"log"
+	"net/http"
+	"os"
+	"path"
 )
 
 var renterCmd = Cmd{
-	Name: "renter",
+	Name:        "renter",
 	Description: "Start a renter server",
-	Run: runRenter,
+	Run:         runRenter,
 }
 
 type RenterConfig struct {
-	Addr string `json:"address"`
+	Addr     string `json:"address"`
 	MetaAddr string `json:"metadataServiceAddress"`
 }
 
@@ -28,7 +28,7 @@ type renterAPI struct {
 
 func (api *renterAPI) postStorage(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("POST", r.URL)
-	params := struct{
+	params := struct {
 		Amount int `json:"amount"`
 	}{}
 	err := json.NewDecoder(r.Body).Decode(&params)
@@ -41,9 +41,9 @@ func (api *renterAPI) postStorage(w http.ResponseWriter, r *http.Request) {
 
 func (api *renterAPI) postFiles(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("POST", r.URL)
-	params := struct{
+	params := struct {
 		SourcePath string `json:"sourcePath"`
-		DestPath string `json:"destPath"`
+		DestPath   string `json:"destPath"`
 	}{}
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
@@ -60,7 +60,7 @@ func (api *renterAPI) getFile(w http.ResponseWriter, r *http.Request) {
 	api.logger.Println("GET", r.URL)
 	params := mux.Vars(r)
 	_, exists := params["filename"]
-	if !exists{
+	if !exists {
 		log.Fatal("no filename param")
 	}
 

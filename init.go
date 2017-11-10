@@ -1,23 +1,23 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
+	"flag"
 	"log"
 	"os"
-	"path"
-	"flag"
-	"crypto/rand"
 	"os/user"
+	"path"
 	"skybin/core"
 )
 
 var initCmd = Cmd{
-	Name: "init",
+	Name:        "init",
 	Description: "Set up skybin",
-	Run: runInit,
+	Run:         runInit,
 }
 
 func defaultHomeDir() (string, error) {
@@ -71,7 +71,7 @@ func runInit(args ...string) {
 
 	// Create renter config
 	renterConfig := RenterConfig{
-		Addr: core.DefaultRenterAddr,
+		Addr:     core.DefaultRenterAddr,
 		MetaAddr: core.DefaultMetaAddr,
 	}
 	err = saveJSON(path.Join(homedir, "renter", "config.json"), &renterConfig)

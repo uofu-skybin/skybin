@@ -6,11 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"skybin/core"
+	"strconv"
 
-	"github.com/gorilla/mux"
 	"flag"
+	"github.com/gorilla/mux"
 )
 
 const filePath = "db.json"
@@ -76,7 +76,7 @@ func main() {
 	providers = append(providers, core.Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
 
 	router.HandleFunc("/providers", GetProviders).Methods("GET")
-	router.HandleFunc("/providers", PostProvider).Methods("POST")p
+	router.HandleFunc("/providers", PostProvider).Methods("POST")
 	router.HandleFunc("/providers/{id}", GetProvider).Methods("GET")
 
 	router.HandleFunc("/renters", PostRenter).Methods("POST")

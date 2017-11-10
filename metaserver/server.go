@@ -79,7 +79,7 @@ func loadDbFromFile() {
 
 type getProvidersResp struct {
 	Providers []core.Provider `json:"providers"`
-	Error     string          `json:"error"`
+	Error     string          `json:"error,omitempty"`
 }
 
 func getProviders(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +90,8 @@ func getProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 type postProviderResp struct {
-	Provider core.Provider `json:"error"`
-	Error    string        `json:"error"`
+	Provider core.Provider `json:"provider"`
+	Error    string        `json:"error,omitempty"`
 }
 
 func postProvider(w http.ResponseWriter, r *http.Request) {

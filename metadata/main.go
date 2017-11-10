@@ -2,12 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gorilla/mux"
 )
+
+const filePath = "db.json"
 
 type Provider struct {
 	ID          string `json:id,omitempty`
@@ -38,8 +42,51 @@ type Renter struct {
 var providers []Provider
 var renters []Renter
 
+type StorageFile struct {
+	Providers []Provider
+	Renters   []Renter
+}
+
+func dumpDbToFile(providers []Provider, renters []Renter) {
+	println("Dumping database to", filePath, "...")
+	db := StorageFile{Providers: providers, Renters: renters}
+
+	dbBytes, err := json.Marshal(db)
+	if err != nil {
+		panic(err)
+	}
+
+	writeErr := ioutil.WriteFile(filePath, dbBytes, 0644)
+	if writeErr != nil {
+		panic(err)
+	}
+}
+
+func loadDbFromFile() {
+	println("Loading renter/provider database from", filePath, "...")
+
+	contents, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+
+	var db StorageFile
+	parseErr := json.Unmarshal(contents, &db)
+	if parseErr != nil {
+		panic(parseErr)
+	}
+
+	providers = db.Providers
+	renters = db.Renters
+}
+
 // our main function
 func main() {
+	// If the database exists, load it into memory.
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		loadDbFromFile()
+	}
+
 	router := mux.NewRouter()
 
 	providers = append(providers, Provider{ID: "1", PublicKey: "test", Host: "test", Port: 2, SpaceAvail: 50, StorageRate: 5})
@@ -68,6 +115,7 @@ func PostProvider(w http.ResponseWriter, r *http.Request) {
 	provider.ID = strconv.Itoa(len(providers) + 1)
 	providers = append(providers, provider)
 	json.NewEncoder(w).Encode(provider)
+	dumpDbToFile(providers, renters)
 }
 
 func GetProvider(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +135,7 @@ func PostRenter(w http.ResponseWriter, r *http.Request) {
 	renter.ID = strconv.Itoa(len(renters) + 1)
 	renters = append(renters, renter)
 	json.NewEncoder(w).Encode(renter)
+	dumpDbToFile(providers, renters)
 }
 
 func GetRenter(w http.ResponseWriter, r *http.Request) {
@@ -113,12 +162,13 @@ func GetRenterFiles(w http.ResponseWriter, r *http.Request) {
 
 func PostRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range renters {
+	for i, item := range renters {
 		if item.ID == params["id"] {
 			var file File
 			_ = json.NewDecoder(r.Body).Decode(&file)
-			item.Files = append(item.Files, file)
+			renters[i].Files = append(item.Files, file)
 			json.NewEncoder(w).Encode(item.Files)
+			dumpDbToFile(providers, renters)
 			return
 		}
 	}
@@ -148,6 +198,7 @@ func DeleteRenterFile(w http.ResponseWriter, r *http.Request) {
 				if file.ID == params["fileId"] {
 					item.Files = append(item.Files[:i], item.Files[i+1:]...)
 					json.NewEncoder(w).Encode(file)
+					dumpDbToFile(providers, renters)
 					return
 				}
 			}

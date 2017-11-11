@@ -46,6 +46,7 @@ func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 	url := fmt.Sprintf("http://%s/files", client.addr)
+
 	req := postFilesReq{
 		SourcePath: srcPath,
 		DestPath:   destPath,
@@ -55,15 +56,18 @@ func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("error: %s", resp.Status)
-	}
-	var fileInfo core.File
-	err = json.NewDecoder(resp.Body).Decode(&fileInfo)
+
+	var respMsg postFilesResp
+	err = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if err != nil {
 		return nil, err
 	}
-	return &fileInfo, nil
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, errors.New(respMsg.Error)
+	}
+
+	return respMsg.File, nil
 }
 
 func (client *Client) ListFiles() ([]core.File, error) {

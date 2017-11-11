@@ -79,6 +79,11 @@ type postFilesReq struct {
 	DestPath   string `json:"destPath"`
 }
 
+type postFilesResp struct {
+	File *core.File `json:"file,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
 func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println("POST", r.URL)
 
@@ -93,11 +98,11 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 	fileInfo, err := server.renter.Upload(req.SourcePath, req.DestPath)
 	if err != nil {
 		server.logger.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		server.writeResp(w, http.StatusInternalServerError, &postFilesResp{Error: err.Error()})
 		return
 	}
 
-	server.writeResp(w, http.StatusCreated, &fileInfo)
+	server.writeResp(w, http.StatusCreated, &postFilesResp{File: fileInfo})
 }
 
 type getFilesResp struct {

@@ -32,7 +32,7 @@ def main():
     if resp.status_code != 201:
         print('post /files. bad response {}'.format(resp))
         sys.exit(1)
-    file_info = json.loads(resp.content)
+    file_info = json.loads(resp.content)['file']
     print('file info:')
     pprint(file_info)
     file_id = file_info['id']

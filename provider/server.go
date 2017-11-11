@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	ProviderID   string `json:"providerId"`
 	Addr         string `json:"address"`
 	MetaAddr     string `json:"metaServerAddress"`
 	IdentityFile string `json:"identityFile"`

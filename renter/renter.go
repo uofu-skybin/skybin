@@ -1,8 +1,6 @@
 package renter
 
 import (
-	"crypto/sha1"
-	"encoding/base32"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -11,15 +9,14 @@ import (
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/provider"
+	"github.com/satori/go.uuid"
+	"os/user"
+	"path"
+	"io"
 )
 
-func hash(data []byte) string {
-	h := sha1.New()
-	h.Write(data)
-	return base32.StdEncoding.EncodeToString(h.Sum(nil))
-}
-
 type Config struct {
+	RenterId     string `json:"renterId"`
 	Addr         string `json:"address"`
 	MetaAddr     string `json:"metaServerAddress"`
 	IdentityFile string `json:"identityFile"`
@@ -28,13 +25,13 @@ type Config struct {
 type Renter struct {
 	Config    *Config
 	Homedir   string
+	files     []core.File
 	contracts []core.Contract
 	freelist  []storageBlob
-	files     []core.File
 }
 
 type storageBlob struct {
-	ProviderID string
+	ProviderId string
 	Addr       string
 	Amount     int64
 }
@@ -48,8 +45,8 @@ func (r *Renter) ReserveStorage(amount int64) error {
 
 	for _, pinfo := range providers {
 		contract := core.Contract{
-			RenterID:     "",
-			ProviderID:   "",
+			RenterId:     r.Config.RenterId,
+			ProviderId:   pinfo.ID,
 			StorageSpace: amount,
 		}
 		client := provider.NewClient(pinfo.Addr, &http.Client{})
@@ -62,7 +59,7 @@ func (r *Renter) ReserveStorage(amount int64) error {
 		}
 		r.contracts = append(r.contracts, contract)
 		r.freelist = append(r.freelist, storageBlob{
-			ProviderID: pinfo.ID,
+			ProviderId: pinfo.ID,
 			Addr:       pinfo.Addr,
 			Amount:     contract.StorageSpace,
 		})
@@ -72,13 +69,13 @@ func (r *Renter) ReserveStorage(amount int64) error {
 	return errors.New("cannot find storage provider")
 }
 
-func (r *Renter) Upload(srcPath, destPath string) error {
+func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	finfo, err := os.Stat(srcPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if finfo.IsDir() {
-		return errors.New("directory uploads not supported yet")
+		return nil, errors.New("directory uploads not supported yet")
 	}
 
 	var idx int
@@ -89,28 +86,84 @@ func (r *Renter) Upload(srcPath, destPath string) error {
 		}
 	}
 	if blob.Amount < finfo.Size() {
-		return errors.New("error: not enough storage")
+		return nil, errors.New("error: not enough storage")
 	}
 
 	data, err := ioutil.ReadFile(srcPath)
 	if err != nil {
-		return fmt.Errorf("error: cannot read file. error: %s", err)
+		return nil, fmt.Errorf("error: cannot read file. error: %s", err)
 	}
-	blockID := hash(data)
+	blockId := core.Hash(data)
 
 	provider := provider.NewClient(blob.Addr, &http.Client{})
-	err = provider.PutBlock(blockID, data)
+	err = provider.PutBlock(blockId, data)
 	if err != nil {
-		return fmt.Errorf("error: cannot upload block. error: %s", err)
+		return nil, fmt.Errorf("error: cannot upload block. error: %s", err)
 	}
-
 	r.freelist = append(r.freelist[:idx], r.freelist[idx+1:]...)
-	r.files = append(r.files, core.File{
+
+	file := core.File{
+		ID: uuid.NewV4().String(),
 		Name: destPath,
-		Blocks: []core.Block{
-			{ID: blockID, Locations: []string{blob.ProviderID}},
+	}
+	file.Blocks = append(file.Blocks, core.Block{
+		ID: blockId,
+		Locations: []core.BlockLocation{
+			{ProviderId: blob.ProviderId, Addr: blob.Addr},
 		},
 	})
+	r.files = append(r.files, file)
+
+	return &file, nil
+}
+
+func (r *Renter) ListFiles() ([]core.File, error) {
+	return r.files, nil
+}
+
+func (r *Renter) Lookup(fileId string) (*core.File, error) {
+	for _, file := range r.files {
+		if file.ID == fileId {
+			return &file, nil
+		}
+	}
+	return nil, fmt.Errorf("cannot find file with ID %s", fileId)
+}
+
+func (r *Renter) Download(fileInfo *core.File) error {
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	outPath := path.Join(user.HomeDir, fileInfo.Name)
+
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	for _, block := range fileInfo.Blocks {
+		err = downloadBlock(&block, outFile)
+		if err != nil {
+			_ = os.Remove(outPath)
+			return err
+		}
+	}
 
 	return nil
+}
+
+func downloadBlock(block *core.Block, out io.Writer) error {
+	for _, location := range block.Locations {
+		client := provider.NewClient(location.Addr, &http.Client{})
+		data, err := client.GetBlock(block.ID)
+		if err != nil {
+			continue
+		}
+		// TODO: Check short write.
+		_, err = out.Write(data)
+		return err
+	}
+	return fmt.Errorf("cannot download block %s", block.ID)
 }

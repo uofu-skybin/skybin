@@ -72,7 +72,10 @@ func runInit(args ...string) {
 	savePublicKey(renterKey.PublicKey, path.Join(homedir, "renter", "renterid.pub"))
 
 	// Create renter config
+	keyBytes, err := asn1.Marshal(renterKey.PublicKey)
+	checkErr(err)
 	renterConfig := renter.Config{
+		RenterId:     core.Hash(keyBytes),
 		Addr:         core.DefaultRenterAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "renter", "renterid"),
@@ -87,7 +90,10 @@ func runInit(args ...string) {
 	savePublicKey(providerKey.PublicKey, path.Join(homedir, "provider", "providerid.pub"))
 
 	// Create provider config
+	keyBytes, err = asn1.Marshal(providerKey.PublicKey)
+	checkErr(err)
 	providerConfig := provider.Config{
+		ProviderID:   core.Hash(keyBytes),
 		Addr:         core.DefaultProviderAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),

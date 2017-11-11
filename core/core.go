@@ -1,5 +1,10 @@
 package core
 
+import (
+	"crypto/sha1"
+	"encoding/base32"
+)
+
 const (
 	DefaultMetaAddr     = "127.0.0.1:8001"
 	DefaultRenterAddr   = "127.0.0.1:8002"
@@ -15,28 +20,37 @@ type Provider struct {
 }
 
 type Contract struct {
-	RenterID          string `json:"renterID"`
-	ProviderID        string `json:"providerID"`
+	RenterId          string `json:"renterID"`
+	ProviderId        string `json:"providerID"`
 	StorageSpace      int64  `json:"storageSpace"`
 	RenterSignature   string `json:"renterSignature"`
 	ProviderSignature string `json:"providerSignature"`
 }
 
-type Block struct {
-	ID string `json:"id,omitempty"`
+type BlockLocation struct {
+	ProviderId string `json:"providerId"`
+	Addr string `json:"address"`
+}
 
-	// Locations contains the IDs of the providers storing the block.
-	Locations []string `json:"locations,omitempty"`
+type Block struct {
+	ID string `json:"id"`
+	Locations []BlockLocation `json:"locations"`
 }
 
 type File struct {
-	ID     string  `json:"id,omitempty"`
-	Name   string  `json:"name,omitempty"`
-	Blocks []Block `json:"blocks,omitempty"`
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Blocks []Block `json:"blocks"`
 }
 
 type Renter struct {
-	ID        string `json:"id,omitempty"`
-	PublicKey string `json:"publicKey,omitempty"`
-	Files     []File `json:"files,omitempty"`
+	ID        string `json:"id"`
+	PublicKey string `json:"publicKey"`
+	Files     []File `json:"files"`
+}
+
+func Hash(data []byte) string {
+	h := sha1.New()
+	h.Write(data)
+	return base32.StdEncoding.EncodeToString(h.Sum(nil))
 }

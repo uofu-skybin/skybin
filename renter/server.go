@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"skybin/core"
 )
 
 func NewServer(renter *Renter, logger *log.Logger) http.Handler {
@@ -20,8 +21,8 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/storage", server.postStorage).Methods("POST")
 	router.HandleFunc("/files", server.postFiles).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
-	router.HandleFunc("/files/{filename}", server.getFile).Methods("GET")
-	router.HandleFunc("/files/{filename}/download", server.postDownload).Methods("POST")
+	router.HandleFunc("/files/{fileId}", server.getFile).Methods("GET")
+	router.HandleFunc("/files/{fileId}/download", server.postDownload).Methods("POST")
 
 	return router
 }
@@ -49,7 +50,7 @@ func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) 
 
 	err = server.renter.ReserveStorage(params.Amount)
 	if err != nil {
-		server.logger.Println("error", err)
+		server.logger.Println("error:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -69,35 +70,86 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.renter.Upload(params.SourcePath, params.DestPath)
+	fileInfo, err := server.renter.Upload(params.SourcePath, params.DestPath)
 	if err != nil {
 		server.logger.Println("error:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	resp := struct{
+		File *core.File `json:"file"`
+	}{
+		fileInfo,
+	}
 	w.WriteHeader(http.StatusCreated)
+	err = json.NewEncoder(w).Encode(&resp)
+	if err != nil {
+		server.logger.Println(err)
+	}
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println("GET", r.URL)
+	files, err := server.renter.ListFiles()
+	resp := struct{
+		Files []core.File `json:"files"`
+		Error string `json:"error,omitempty"`
+	}{
+		Files: files,
+	}
+	if err != nil {
+		server.logger.Println(err)
+		resp.Error = err.Error()
+	}
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		server.logger.Println("error:", err)
+	}
 }
 
 func (server *renterServer) getFile(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println("GET", r.URL)
 	params := mux.Vars(r)
-	_, exists := params["filename"]
-	if !exists {
-		log.Fatal("no filename param")
+	fileId := params["fileId"]
+	file, err := server.renter.Lookup(fileId)
+	resp := struct{
+		File *core.File `json:"file"`
+		Error string `json:"error,omitempty"`
+	}{
+		File: file,
 	}
-
+	if err != nil {
+		server.logger.Println(err)
+		resp.Error = err.Error()
+	}
+	err = json.NewEncoder(w).Encode(&resp)
+	if err != nil {
+		server.logger.Println("error:", err)
+	}
 }
 
 func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println("POST", r.URL)
-	params := mux.Vars(r)
-	_, exists := params["filename"]
-	if !exists {
-		log.Fatal("no filename param")
+	vars := mux.Vars(r)
+	fileId := vars["fileId"]
+	fileInfo, err := server.renter.Lookup(fileId)
+	if err != nil {
+		server.logger.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = server.renter.Download(fileInfo)
+	resp := struct{
+		Error string `json:"error,omitempty"`
+	}{}
+	if err != nil {
+		server.logger.Println(err)
+		resp.Error = err.Error()
+	}
+	w.WriteHeader(http.StatusCreated)
+	err = json.NewEncoder(w).Encode(&resp)
+	if err != nil {
+		server.logger.Println(err)
 	}
 }

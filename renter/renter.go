@@ -10,9 +10,8 @@ import (
 	"skybin/metaserver"
 	"skybin/provider"
 	"github.com/satori/go.uuid"
-	"os/user"
-	"path"
 	"io"
+	"log"
 )
 
 type Config struct {
@@ -130,14 +129,11 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 	return nil, fmt.Errorf("cannot find file with ID %s", fileId)
 }
 
-func (r *Renter) Download(fileInfo *core.File) error {
-	user, err := user.Current()
-	if err != nil {
-		return err
-	}
-	outPath := path.Join(user.HomeDir, fileInfo.Name)
+func (r *Renter) Download(fileInfo *core.File, destpath string) error {
 
-	outFile, err := os.Create(outPath)
+	log.Println("downloading to", destpath)
+
+	outFile, err := os.Create(destpath)
 	if err != nil {
 		return err
 	}
@@ -146,7 +142,7 @@ func (r *Renter) Download(fileInfo *core.File) error {
 	for _, block := range fileInfo.Blocks {
 		err = downloadBlock(&block, outFile)
 		if err != nil {
-			_ = os.Remove(outPath)
+			_ = os.Remove(destpath)
 			return err
 		}
 	}

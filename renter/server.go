@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"skybin/core"
+	"os/user"
+	"path"
 )
 
 func NewServer(renter *Renter, logger *log.Logger) http.Handler {
@@ -77,13 +79,8 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := struct{
-		File *core.File `json:"file"`
-	}{
-		fileInfo,
-	}
 	w.WriteHeader(http.StatusCreated)
-	err = json.NewEncoder(w).Encode(&resp)
+	err = json.NewEncoder(w).Encode(&fileInfo)
 	if err != nil {
 		server.logger.Println(err)
 	}
@@ -101,6 +98,7 @@ func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		server.logger.Println(err)
 		resp.Error = err.Error()
+		return
 	}
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
@@ -133,20 +131,44 @@ func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request)
 	server.logger.Println("POST", r.URL)
 	vars := mux.Vars(r)
 	fileId := vars["fileId"]
+	params := struct{
+		Destination string `json:"destination,omitempty"`
+	}{}
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		server.logger.Println(err)
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+
 	fileInfo, err := server.renter.Lookup(fileId)
 	if err != nil {
 		server.logger.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = server.renter.Download(fileInfo)
+
+	// Download to home directory if no destination given
+	if len(params.Destination) == 0 {
+		user, err := user.Current()
+		if err != nil {
+			server.logger.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		params.Destination = path.Join(user.HomeDir, fileInfo.Name)
+	}
+
 	resp := struct{
 		Error string `json:"error,omitempty"`
 	}{}
+
+	err = server.renter.Download(fileInfo, params.Destination)
 	if err != nil {
 		server.logger.Println(err)
 		resp.Error = err.Error()
 	}
+
 	w.WriteHeader(http.StatusCreated)
 	err = json.NewEncoder(w).Encode(&resp)
 	if err != nil {

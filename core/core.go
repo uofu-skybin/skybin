@@ -29,11 +29,11 @@ type Contract struct {
 
 type BlockLocation struct {
 	ProviderId string `json:"providerId"`
-	Addr string `json:"address"`
+	Addr       string `json:"address"`
 }
 
 type Block struct {
-	ID string `json:"id"`
+	ID        string          `json:"id"`
 	Locations []BlockLocation `json:"locations"`
 }
 

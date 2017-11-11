@@ -9,6 +9,10 @@ type Cmd struct {
 
 var Commands = []Cmd{
 	initCmd,
+	reserveCmd,
+	uploadCmd,
+	listCmd,
+	downloadCmd,
 	renterCmd,
 	providerCmd,
 	metaServerCmd,

@@ -9,6 +9,7 @@ import (
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/provider"
+	"skybin/util"
 )
 
 var providerCmd = Cmd{
@@ -28,7 +29,7 @@ func runProvider(args ...string) {
 	}
 
 	var config provider.Config
-	err = loadJSON(path.Join(homedir, "provider", "config.json"), &config)
+	err = util.LoadJson(path.Join(homedir, "provider", "config.json"), &config)
 	if err != nil {
 		log.Fatalf("error: cannot read config. error: %s", err)
 	}

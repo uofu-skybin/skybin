@@ -14,6 +14,7 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"skybin/renter"
+	"skybin/util"
 )
 
 var initCmd = Cmd{
@@ -80,7 +81,7 @@ func runInit(args ...string) {
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "renter", "renterid"),
 	}
-	err = saveJSON(path.Join(homedir, "renter", "config.json"), &renterConfig)
+	err = util.SaveJson(path.Join(homedir, "renter", "config.json"), &renterConfig)
 	checkErr(err)
 
 	// Create provider keys
@@ -98,7 +99,7 @@ func runInit(args ...string) {
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),
 	}
-	err = saveJSON(path.Join(homedir, "provider", "config.json"), &providerConfig)
+	err = util.SaveJson(path.Join(homedir, "provider", "config.json"), &providerConfig)
 	checkErr(err)
 }
 

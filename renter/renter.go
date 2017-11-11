@@ -3,15 +3,16 @@ package renter
 import (
 	"errors"
 	"fmt"
+	"github.com/satori/go.uuid"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/provider"
-	"github.com/satori/go.uuid"
-	"io"
-	"log"
+	"skybin/util"
 )
 
 type Config struct {
@@ -35,13 +36,29 @@ type storageBlob struct {
 	Amount     int64
 }
 
-func (r *Renter) ReserveStorage(amount int64) error {
+func LoadFromDisk(homedir string) (*Renter, error) {
+	renter := &Renter{
+		Homedir: homedir,
+	}
+
+	config := &Config{}
+	err := util.LoadJson(path.Join(homedir, "config.json"), config)
+	if err != nil {
+		return nil, err
+	}
+	renter.Config = config
+
+	return renter, err
+}
+
+func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
 	providers, err := metaService.GetProviders()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	var contracts []*core.Contract
 	for _, pinfo := range providers {
 		contract := core.Contract{
 			RenterId:     r.Config.RenterId,
@@ -56,16 +73,21 @@ func (r *Renter) ReserveStorage(amount int64) error {
 		if len(signedContract.ProviderSignature) == 0 {
 			continue
 		}
-		r.contracts = append(r.contracts, contract)
+		contracts = append(contracts, signedContract)
+
+		r.contracts = append(r.contracts, *signedContract)
 		r.freelist = append(r.freelist, storageBlob{
 			ProviderId: pinfo.ID,
 			Addr:       pinfo.Addr,
 			Amount:     contract.StorageSpace,
 		})
-		return nil
+		break
+	}
+	if len(contracts) == 0 {
+		return nil, errors.New("Cannot find storage providers")
 	}
 
-	return errors.New("cannot find storage provider")
+	return contracts, nil
 }
 
 func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
@@ -74,7 +96,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, err
 	}
 	if finfo.IsDir() {
-		return nil, errors.New("directory uploads not supported yet")
+		return nil, errors.New("Directory uploads not supported yet")
 	}
 
 	var idx int
@@ -99,10 +121,11 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error: cannot upload block. error: %s", err)
 	}
+
 	r.freelist = append(r.freelist[:idx], r.freelist[idx+1:]...)
 
 	file := core.File{
-		ID: uuid.NewV4().String(),
+		ID:   uuid.NewV4().String(),
 		Name: destPath,
 	}
 	file.Blocks = append(file.Blocks, core.Block{
@@ -130,9 +153,6 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 }
 
 func (r *Renter) Download(fileInfo *core.File, destpath string) error {
-
-	log.Println("downloading to", destpath)
-
 	outFile, err := os.Create(destpath)
 	if err != nil {
 		return err

@@ -25,24 +25,18 @@ func runRenter(args ...string) {
 		log.Fatal(err)
 	}
 
-	var config renter.Config
-	err = loadJSON(path.Join(homedir, "renter", "config.json"), &config)
+	r, err := renter.LoadFromDisk(path.Join(homedir, "renter"))
 	if err != nil {
-		log.Fatalf("error: cannot read config. error: %s", err)
+		log.Fatal(err)
 	}
 
-	addr := config.Addr
+	addr := r.Config.Addr
 	if len(*addrFlag) > 0 {
 		addr = *addrFlag
 	}
 
-	r := renter.Renter{
-		Config:  &config,
-		Homedir: path.Join(homedir, "renter"),
-	}
+	server := renter.NewServer(r, log.New(os.Stdout, "", log.LstdFlags))
 
-	server := renter.NewServer(&r, log.New(os.Stdout, "", log.LstdFlags))
-
-	log.Println("starting renter service at", addr)
+	log.Println("starting renter server at", addr)
 	log.Fatal(http.ListenAndServe(addr, server))
 }

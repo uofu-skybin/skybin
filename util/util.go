@@ -1,11 +1,11 @@
-package cmd
+package util
 
 import (
 	"encoding/json"
 	"io/ioutil"
 )
 
-func saveJSON(filename string, v interface{}) error {
+func SaveJson(filename string, v interface{}) error {
 	bytes, err := json.MarshalIndent(v, "", "    ")
 	if err != nil {
 		return err
@@ -14,7 +14,7 @@ func saveJSON(filename string, v interface{}) error {
 	return err
 }
 
-func loadJSON(filename string, v interface{}) error {
+func LoadJson(filename string, v interface{}) error {
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err

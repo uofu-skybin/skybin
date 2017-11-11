@@ -52,7 +52,15 @@ func runProvider(args ...string) {
 		log.Fatalf("error: unable to register with metaservice. error: %s", err)
 	}
 
-	server := provider.NewServer(&config, log.New(os.Stdout, "", log.LstdFlags))
+	logfile, err := os.OpenFile(path.Join(homedir, "provider", "provider.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Cannot create log file: %s", err)
+	}
+	defer logfile.Close()
+
+	logger := log.New(logfile, "", log.LstdFlags)
+
+	server := provider.NewServer(&config, logger)
 
 	log.Println("starting provider server at", addr)
 	log.Fatal(http.ListenAndServe(addr, server))

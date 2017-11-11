@@ -1,20 +1,20 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
-	"strconv"
+	"net/http"
+	"path"
 	"skybin/renter"
 	"skybin/util"
-	"path"
-	"fmt"
-	"net/http"
+	"strconv"
 )
 
 var reserveCmd = Cmd{
-	Name: "reserve",
+	Name:        "reserve",
 	Description: "Reserve storage",
-	Usage: "reserve <amount>",
-	Run: runReserve,
+	Usage:       "reserve <amount>",
+	Run:         runReserve,
 }
 
 func runReserve(args ...string) {

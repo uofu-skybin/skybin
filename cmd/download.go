@@ -2,16 +2,16 @@ package cmd
 
 import (
 	"log"
-	"path"
 	"os"
+	"path"
 	"path/filepath"
 )
 
 var downloadCmd = Cmd{
-	Name: "download",
+	Name:        "download",
 	Description: "Download a file",
-	Usage: "download <filename> [destination]",
-	Run: runDownload,
+	Usage:       "download <filename> [destination]",
+	Run:         runDownload,
 }
 
 func runDownload(args ...string) {

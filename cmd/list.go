@@ -3,10 +3,10 @@ package cmd
 import "log"
 
 var listCmd = Cmd{
-	Name: "list",
+	Name:        "list",
 	Description: "List uploaded files",
-	Usage: "list",
-	Run: runList,
+	Usage:       "list",
+	Run:         runList,
 }
 
 func runList(args ...string) {

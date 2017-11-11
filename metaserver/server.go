@@ -7,36 +7,49 @@ import (
 	"os"
 	"skybin/core"
 	"strconv"
+	"path"
 
 	"github.com/gorilla/mux"
 )
 
-const filePath = "db.json"
+const dbPath = "db.json"
 
-var providers []core.Provider
-var renters []core.Renter
-
-func NewServer() http.Handler {
-
-	// If the database exists, load it into memory.
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
-		loadDbFromFile()
-	}
+func NewServer(homedir string) http.Handler {
 
 	router := mux.NewRouter()
 
-	router.HandleFunc("/providers", getProviders).Methods("GET")
-	router.HandleFunc("/providers", postProvider).Methods("POST")
-	router.HandleFunc("/providers/{id}", getProvider).Methods("GET")
+	server := &metaServer{
+		router: router,
+	}
 
-	router.HandleFunc("/renters", postRenter).Methods("POST")
-	router.HandleFunc("/renters/{id}", getRenter).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", getRenterFiles).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", postRenterFile).Methods("POST")
-	router.HandleFunc("/renters/{id}/files/{fileId}", getRenterFile).Methods("GET")
-	router.HandleFunc("/renters/{id}/files/{fileId}", delteRenterFile).Methods("DELETE")
+	// If the database exists, load it into memory.
+	if _, err := os.Stat(path.Join(homedir, dbPath)); !os.IsNotExist(err) {
+		server.loadDbFromFile()
+	}
 
-	return router
+	router.HandleFunc("/providers", server.getProviders).Methods("GET")
+	router.HandleFunc("/providers", server.postProvider).Methods("POST")
+	router.HandleFunc("/providers/{id}", server.getProvider).Methods("GET")
+
+	router.HandleFunc("/renters", server.postRenter).Methods("POST")
+	router.HandleFunc("/renters/{id}", server.getRenter).Methods("GET")
+	router.HandleFunc("/renters/{id}/files", server.getRenterFiles).Methods("GET")
+	router.HandleFunc("/renters/{id}/files", server.postRenterFile).Methods("POST")
+	router.HandleFunc("/renters/{id}/files/{fileId}", server.getRenterFile).Methods("GET")
+	router.HandleFunc("/renters/{id}/files/{fileId}", server.deleteRenterFile).Methods("DELETE")
+
+	return server
+}
+
+type metaServer struct {
+	homedir   string
+	providers []core.Provider
+	renters   []core.Renter
+	router    *mux.Router
+}
+
+func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	server.router.ServeHTTP(w, r)
 }
 
 type storageFile struct {
@@ -44,8 +57,7 @@ type storageFile struct {
 	Renters   []core.Renter
 }
 
-func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
-	println("Dumping database to", filePath, "...")
+func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 	db := storageFile{Providers: providers, Renters: renters}
 
 	dbBytes, err := json.Marshal(db)
@@ -53,16 +65,15 @@ func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 		panic(err)
 	}
 
-	writeErr := ioutil.WriteFile(filePath, dbBytes, 0644)
+	writeErr := ioutil.WriteFile(path.Join(server.homedir, dbPath), dbBytes, 0644)
 	if writeErr != nil {
 		panic(err)
 	}
 }
 
-func loadDbFromFile() {
-	println("Loading renter/provider database from", filePath, "...")
+func (server *metaServer) loadDbFromFile() {
 
-	contents, err := ioutil.ReadFile(filePath)
+	contents, err := ioutil.ReadFile(path.Join(server.homedir, dbPath))
 	if err != nil {
 		panic(err)
 	}
@@ -73,8 +84,8 @@ func loadDbFromFile() {
 		panic(parseErr)
 	}
 
-	providers = db.Providers
-	renters = db.Renters
+	server.providers = db.Providers
+	server.renters = db.Renters
 }
 
 type getProvidersResp struct {
@@ -82,9 +93,9 @@ type getProvidersResp struct {
 	Error     string          `json:"error,omitempty"`
 }
 
-func getProviders(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) getProviders(w http.ResponseWriter, r *http.Request) {
 	resp := getProvidersResp{
-		Providers: providers,
+		Providers: server.providers,
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -94,19 +105,19 @@ type postProviderResp struct {
 	Error    string        `json:"error,omitempty"`
 }
 
-func postProvider(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) postProvider(w http.ResponseWriter, r *http.Request) {
 	var provider core.Provider
 	_ = json.NewDecoder(r.Body).Decode(&provider)
-	provider.ID = strconv.Itoa(len(providers) + 1)
-	providers = append(providers, provider)
+	provider.ID = strconv.Itoa(len(server.providers) + 1)
+	server.providers = append(server.providers, provider)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(provider)
-	dumpDbToFile(providers, renters)
+	server.dumpDbToFile(server.providers, server.renters)
 }
 
-func getProvider(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) getProvider(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range providers {
+	for _, item := range server.providers {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item)
 			return
@@ -115,18 +126,18 @@ func getProvider(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func postRenter(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) postRenter(w http.ResponseWriter, r *http.Request) {
 	var renter core.Renter
 	_ = json.NewDecoder(r.Body).Decode(&renter)
-	renter.ID = strconv.Itoa(len(renters) + 1)
-	renters = append(renters, renter)
+	renter.ID = strconv.Itoa(len(server.renters) + 1)
+	server.renters = append(server.renters, renter)
 	json.NewEncoder(w).Encode(renter)
-	dumpDbToFile(providers, renters)
+	server.dumpDbToFile(server.providers, server.renters)
 }
 
-func getRenter(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) getRenter(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range renters {
+	for _, item := range server.renters {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item)
 			return
@@ -135,9 +146,9 @@ func getRenter(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func getRenterFiles(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) getRenterFiles(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range renters {
+	for _, item := range server.renters {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item.Files)
 			return
@@ -146,24 +157,24 @@ func getRenterFiles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func postRenterFile(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) postRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for i, item := range renters {
+	for i, item := range server.renters {
 		if item.ID == params["id"] {
 			var file core.File
 			_ = json.NewDecoder(r.Body).Decode(&file)
-			renters[i].Files = append(item.Files, file)
+			server.renters[i].Files = append(item.Files, file)
 			json.NewEncoder(w).Encode(item.Files)
-			dumpDbToFile(providers, renters)
+			server.dumpDbToFile(server.providers, server.renters)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func getRenterFile(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) getRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range renters {
+	for _, item := range server.renters {
 		if item.ID == params["id"] {
 			for _, file := range item.Files {
 				if file.ID == params["fileId"] {
@@ -176,15 +187,15 @@ func getRenterFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func delteRenterFile(w http.ResponseWriter, r *http.Request) {
+func (server *metaServer) deleteRenterFile(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range renters {
+	for _, item := range server.renters {
 		if item.ID == params["id"] {
 			for i, file := range item.Files {
 				if file.ID == params["fileId"] {
 					item.Files = append(item.Files[:i], item.Files[i+1:]...)
 					json.NewEncoder(w).Encode(file)
-					dumpDbToFile(providers, renters)
+					server.dumpDbToFile(server.providers, server.renters)
 					return
 				}
 			}

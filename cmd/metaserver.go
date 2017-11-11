@@ -24,7 +24,7 @@ func runMetaServer(args ...string) {
 		addr = *addrFlag
 	}
 
-	server := metaserver.NewServer()
+	server := metaserver.NewServer(".")
 
 	log.Println("starting metaserver server at", addr)
 	log.Fatal(http.ListenAndServe(addr, server))

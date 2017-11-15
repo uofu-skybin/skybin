@@ -66,6 +66,7 @@ func runInit(args ...string) {
 	checkErr(os.MkdirAll(path.Join(homedir, "renter"), 0700))
 	checkErr(os.MkdirAll(path.Join(homedir, "provider"), 0700))
 	checkErr(os.MkdirAll(path.Join(homedir, "provider/blocks"), 0700)) // add blocks folder
+
 	// Create renter keys
 	renterKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	checkErr(err)
@@ -76,7 +77,7 @@ func runInit(args ...string) {
 	keyBytes, err := asn1.Marshal(renterKey.PublicKey)
 	checkErr(err)
 	renterConfig := renter.Config{
-		RenterId:     core.Hash(keyBytes),
+		RenterId:     util.Hash(keyBytes),
 		Addr:         core.DefaultRenterAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "renter", "renterid"),
@@ -94,7 +95,7 @@ func runInit(args ...string) {
 	keyBytes, err = asn1.Marshal(providerKey.PublicKey)
 	checkErr(err)
 	providerConfig := provider.Config{
-		ProviderID:   core.Hash(keyBytes),
+		ProviderID:   util.Hash(keyBytes),
 		Addr:         core.DefaultProviderAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),

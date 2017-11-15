@@ -78,8 +78,8 @@ type postFilesReq struct {
 }
 
 type postFilesResp struct {
-	File *core.File `json:"file,omitempty"`
-	Error string `json:"error,omitempty"`
+	File  *core.File `json:"file,omitempty"`
+	Error string     `json:"error,omitempty"`
 }
 
 func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {

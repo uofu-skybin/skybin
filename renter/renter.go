@@ -32,16 +32,16 @@ type Renter struct {
 
 // snapshot stores a renter's serialized state
 type snapshot struct {
-	Files []core.File `json:"files"`
-	Contracts []core.Contract `json:"contracts"`
-	FreeStorage []storageBlob `json:"freeStorage"`
+	Files       []core.File     `json:"files"`
+	Contracts   []core.Contract `json:"contracts"`
+	FreeStorage []storageBlob   `json:"freeStorage"`
 }
 
 // storageBlob is a chunk of free storage we've already rented
 type storageBlob struct {
 	ProviderId string // The provider who owns the rented storage
 	Addr       string // The provider's network address
-	Amount     int64 // The free storage in bytes
+	Amount     int64  // The free storage in bytes
 }
 
 const (
@@ -79,8 +79,8 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 
 func (r *Renter) saveSnapshot() error {
 	s := snapshot{
-		Files: r.files,
-		Contracts: r.contracts,
+		Files:       r.files,
+		Contracts:   r.contracts,
 		FreeStorage: r.freelist,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
@@ -167,7 +167,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot read file. Error: %s", err)
 	}
-	blockId := core.Hash(data)
+	blockId := util.Hash(data)
 	provider := provider.NewClient(blob.Addr, &http.Client{})
 	err = provider.PutBlock(blockId, data)
 	if err != nil {
@@ -175,13 +175,13 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 
 	// Remove the used storage from the freelist
-	r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx +1:]...)
+	r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx+1:]...)
 	remaining := blob.Amount - finfo.Size()
 	if remaining > kMinBlobSize {
 		leftover := storageBlob{
 			ProviderId: blob.ProviderId,
-			Addr: blob.Addr,
-			Amount: remaining,
+			Addr:       blob.Addr,
+			Amount:     remaining,
 		}
 		r.freelist = append(r.freelist, leftover)
 	}

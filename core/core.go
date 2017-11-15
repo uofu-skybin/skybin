@@ -1,10 +1,5 @@
 package core
 
-import (
-	"crypto/sha1"
-	"encoding/base32"
-)
-
 const (
 	DefaultMetaAddr     = "127.0.0.1:8001"
 	DefaultRenterAddr   = "127.0.0.1:8002"
@@ -47,10 +42,4 @@ type Renter struct {
 	ID        string `json:"id"`
 	PublicKey string `json:"publicKey"`
 	Files     []File `json:"files"`
-}
-
-func Hash(data []byte) string {
-	h := sha1.New()
-	h.Write(data)
-	return base32.StdEncoding.EncodeToString(h.Sum(nil))
 }

@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"skybin/core"
 	"strconv"
-	"path"
 
 	"github.com/gorilla/mux"
 )

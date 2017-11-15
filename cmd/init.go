@@ -65,7 +65,7 @@ func runInit(args ...string) {
 	checkErr(os.MkdirAll(homedir, 0700))
 	checkErr(os.MkdirAll(path.Join(homedir, "renter"), 0700))
 	checkErr(os.MkdirAll(path.Join(homedir, "provider"), 0700))
-
+	checkErr(os.MkdirAll(path.Join(homedir, "provider/blocks"), 0700)) // add blocks folder
 	// Create renter keys
 	renterKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	checkErr(err)
@@ -98,6 +98,7 @@ func runInit(args ...string) {
 		Addr:         core.DefaultProviderAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),
+		BlockDir:     path.Join(homedir, "provider", "blocks"),
 	}
 	err = util.SaveJson(path.Join(homedir, "provider", "config.json"), &providerConfig)
 	checkErr(err)

@@ -2,10 +2,14 @@ package provider
 
 import (
 	"encoding/json"
-	"github.com/gorilla/mux"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path"
 	"skybin/core"
+
+	"github.com/gorilla/mux"
 )
 
 type Config struct {
@@ -13,6 +17,7 @@ type Config struct {
 	Addr         string `json:"address"`
 	MetaAddr     string `json:"metaServerAddress"`
 	IdentityFile string `json:"identityFile"`
+	BlockDir     string `json:"blockDirectory"`
 }
 
 func NewServer(config *Config, logger *log.Logger) http.Handler {
@@ -23,12 +28,13 @@ func NewServer(config *Config, logger *log.Logger) http.Handler {
 		config: config,
 		logger: logger,
 		router: router,
-		blocks: map[string][]byte{},
+		// blocks:  map[string][]byte{},
 	}
 
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
+	// router.HandleFunc("/info", server.getInfo).Methods("GET")
 
 	return &server
 }
@@ -38,7 +44,7 @@ type providerServer struct {
 	logger    *log.Logger
 	router    *mux.Router
 	contracts []*core.Contract
-	blocks    map[string][]byte
+	// blocks    map[string][]byte
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +95,10 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "no block given", http.StatusBadRequest)
 		return
 	}
-	server.blocks[blockID] = params.Data
+
+	path := path.Join(server.config.BlockDir, blockID)
+	ioutil.WriteFile(path, params.Data, 0666)
+
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -105,11 +114,17 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no block given", http.StatusBadRequest)
 		return
 	}
-	data, exists := server.blocks[blockID]
-	if !exists {
-		http.Error(w, "no such block", http.StatusBadRequest)
+
+	path := path.Join(server.config.BlockDir, blockID)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			//TODO: handle error on providers end
+		}
+		http.Error(w, "error retrieving block", http.StatusBadRequest)
 		return
 	}
+
 	resp := getBlockResp{
 		Data: data,
 	}

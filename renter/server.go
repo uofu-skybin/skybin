@@ -14,7 +14,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 
 	router := mux.NewRouter()
 
-	server := renterServer{
+	server := &renterServer{
 		renter: renter,
 		logger: logger,
 		router: router,
@@ -23,10 +23,9 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/storage", server.postStorage).Methods("POST")
 	router.HandleFunc("/files", server.postFiles).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
-	//	router.HandleFunc("/files/{fileId}", server.getFile).Methods("GET")
 	router.HandleFunc("/files/{fileId}/download", server.postDownload).Methods("POST")
 
-	return router
+	return server
 }
 
 type renterServer struct {
@@ -36,23 +35,22 @@ type renterServer struct {
 }
 
 func (server *renterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println(r.RemoteAddr, r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
 }
 
-type reserveStorageReq struct {
+type postStorageReq struct {
 	Amount int64 `json:"amount"`
 }
 
-type reserveStorageResp struct {
+type postStorageResp struct {
 	Contracts []*core.Contract `json:"contracts,omitempty"`
 	Error     string           `json:"error,omitempty"`
 }
 
 func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
-
-	var req reserveStorageReq
-	var resp reserveStorageResp
+	var req postStorageReq
+	var resp postStorageResp
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -85,7 +83,6 @@ type postFilesResp struct {
 }
 
 func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
 
 	var req postFilesReq
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -111,7 +108,6 @@ type getFilesResp struct {
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("GET", r.URL)
 
 	files, err := server.renter.ListFiles()
 	if err != nil {
@@ -125,7 +121,6 @@ func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 
 // TODO: Update
 //func (server *renterServer) getFile(w http.ResponseWriter, r *http.Request) {
-//	server.logger.Println("GET", r.URL)
 //	vars := mux.Vars(r)
 //	fileId := vars["fileId"]
 //	file, err := server.renter.Lookup(fileId)
@@ -154,8 +149,6 @@ type postDownloadResp struct {
 }
 
 func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
-
 	var req postDownloadReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {

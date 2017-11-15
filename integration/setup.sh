@@ -19,13 +19,13 @@ mkdir files
 echo "starting services"
 
 echo "starting metaserver"
-../skybin metaserver > /dev/null &
+../skybin metaserver &
 sleep 1
 
 echo "starting provider"
-../skybin provider > /dev/null &
+../skybin provider &
 
 echo "starting renter"
-../skybin renter > /dev/null &
+../skybin renter &
 
 wait

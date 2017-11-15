@@ -41,7 +41,7 @@ func runReserve(args ...string) {
 	log.Println("SUCCESS")
 	log.Println("Summary:")
 	for _, c := range contracts {
-		log.Printf("\tProvider ID: %s, Amount: %d\n", c.ProviderId, c.StorageSpace)
+		log.Printf("\tProvider ID: %s, Bytes Reserved: %d\n", c.ProviderId, c.StorageSpace)
 	}
 }
 

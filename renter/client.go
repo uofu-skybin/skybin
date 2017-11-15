@@ -24,14 +24,14 @@ type Client struct {
 func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	url := fmt.Sprintf("http://%s/storage", client.addr)
 
-	req := reserveStorageReq{Amount: amount}
+	req := postStorageReq{Amount: amount}
 	data, _ := json.Marshal(&req)
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
 
-	var respMsg reserveStorageResp
+	var respMsg postStorageResp
 	err = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if err != nil {
 		return nil, err

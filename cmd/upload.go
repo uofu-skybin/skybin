@@ -3,6 +3,7 @@ package cmd
 import (
 	"log"
 	"path"
+	"path/filepath"
 )
 
 var uploadCmd = Cmd{
@@ -18,7 +19,11 @@ func runUpload(args ...string) {
 		log.Fatal("Must provide filename")
 	}
 
-	filename := args[0]
+	filename, err := filepath.Abs(args[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	destpath := path.Base(filename)
 	if len(args) == 2 {
 		destpath = args[1]

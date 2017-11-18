@@ -88,14 +88,28 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		server.logger.Println(err)
-		http.Error(w, "bad json", http.StatusBadRequest)
+		server.writeResp(w, http.StatusBadRequest,
+			&postFilesResp{Error: "Bad json"})
+		return
+	}
+	if len(req.DestPath) == 0 {
+		server.writeResp(w, http.StatusBadRequest,
+			&postFilesResp{Error: "No destpath given"})
 		return
 	}
 
-	fileInfo, err := server.renter.Upload(req.SourcePath, req.DestPath)
+	var fileInfo *core.File
+
+	// Is this a create folder request?
+	if len(req.SourcePath) == 0 {
+		fileInfo, err = server.renter.CreateFolder(req.DestPath)
+	} else {
+		fileInfo, err = server.renter.Upload(req.SourcePath, req.DestPath)
+	}
 	if err != nil {
 		server.logger.Println(err)
-		server.writeResp(w, http.StatusInternalServerError, &postFilesResp{Error: err.Error()})
+		server.writeResp(w, http.StatusInternalServerError,
+			&postFilesResp{Error: err.Error()})
 		return
 	}
 
@@ -108,7 +122,6 @@ type getFilesResp struct {
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
-
 	files, err := server.renter.ListFiles()
 	if err != nil {
 		server.logger.Println(err)
@@ -154,7 +167,7 @@ func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
-			&postDownloadResp{Error: "bad json"})
+			&postDownloadResp{Error: "Bad json"})
 		return
 	}
 

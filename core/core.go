@@ -35,6 +35,7 @@ type Block struct {
 type File struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
+	IsDir  bool    `json:"isDir"`
 	Blocks []Block `json:"blocks"`
 }
 

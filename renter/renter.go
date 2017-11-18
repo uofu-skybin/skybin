@@ -77,15 +77,6 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
-func (r *Renter) saveSnapshot() error {
-	s := snapshot{
-		Files:       r.files,
-		Contracts:   r.contracts,
-		FreeStorage: r.freelist,
-	}
-	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
-}
-
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
@@ -137,6 +128,20 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	return contracts, nil
 }
 
+func (r *Renter) CreateFolder(name string) (*core.File, error) {
+	file := core.File{
+		ID: uuid.NewV4().String(),
+		Name: name,
+		IsDir: true,
+		Blocks: nil,
+	}
+	err := r.addFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
 func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	finfo, err := os.Stat(srcPath)
 	if err != nil {
@@ -162,14 +167,15 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 			"Be sure to reserve storage before uploading files.")
 	}
 
-	// Upload file to provider
+	// Upload the file to the provider
 	data, err := ioutil.ReadFile(srcPath)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot read file. Error: %s", err)
 	}
 	blockId := util.Hash(data)
-	provider := provider.NewClient(blob.Addr, &http.Client{})
-	err = provider.PutBlock(blockId, data)
+
+	pvdr := provider.NewClient(blob.Addr, &http.Client{})
+	err = pvdr.PutBlock(blockId, data)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot upload block to provider. Error: %s", err)
 	}
@@ -186,24 +192,25 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		r.freelist = append(r.freelist, leftover)
 	}
 
-	// Save the file metadata
-	file := core.File{
-		ID:   uuid.NewV4().String(),
-		Name: destPath,
-	}
-	file.Blocks = append(file.Blocks, core.Block{
+	block := core.Block{
 		ID: blockId,
 		Locations: []core.BlockLocation{
 			{ProviderId: blob.ProviderId, Addr: blob.Addr},
 		},
-	})
-	r.files = append(r.files, file)
+	}
 
-	err = r.saveSnapshot()
+	file := core.File{
+		ID:   uuid.NewV4().String(),
+		Name: destPath,
+		IsDir: false,
+		Blocks: []core.Block{
+			block,
+		},
+	}
+
+	err = r.addFile(file)
 	if err != nil {
-
-		// TODO: We probably shouldn't bail in this case.
-		return nil, fmt.Errorf("Unable to save snapshot. Error: %s", err)
+		return nil, err
 	}
 
 	return &file, nil
@@ -238,6 +245,25 @@ func (r *Renter) Download(fileInfo *core.File, destpath string) error {
 	}
 
 	return nil
+}
+
+func (r *Renter) addFile(f core.File) error {
+	r.files = append(r.files, f)
+	err := r.saveSnapshot()
+	if err != nil {
+		r.files = r.files[:len(r.files)-1]
+		return fmt.Errorf("Unable to save snapshot. Error %s", err)
+	}
+	return nil
+}
+
+func (r *Renter) saveSnapshot() error {
+	s := snapshot{
+		Files:       r.files,
+		Contracts:   r.contracts,
+		FreeStorage: r.freelist,
+	}
+	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
 }
 
 func downloadBlock(block *core.Block, out io.Writer) error {

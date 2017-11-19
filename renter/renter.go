@@ -230,6 +230,10 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 }
 
 func (r *Renter) Download(fileInfo *core.File, destpath string) error {
+	if fileInfo.IsDir {
+		return errors.New("Directory downloads not supported yet")
+	}
+
 	outFile, err := os.Create(destpath)
 	if err != nil {
 		return err

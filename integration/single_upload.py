@@ -1,14 +1,14 @@
 
 # Sanity-check for basic upload/list/download functionality
 
+from constants import *
+from pprint import pprint
 import filecmp
 import json
 import os
 import requests
 import sys
-from pprint import pprint
 
-RENTER_ADDR = "http://localhost:8002"
 FILE_NAME = 'files/samplefile.txt'
 DOWNLOAD_NAME = 'files/samplefile_download.txt'
 

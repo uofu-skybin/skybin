@@ -12,23 +12,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Config struct {
-	ProviderID   string `json:"providerId"`
-	Addr         string `json:"address"`
-	MetaAddr     string `json:"metaServerAddress"`
-	IdentityFile string `json:"identityFile"`
-	BlockDir     string `json:"blockDirectory"`
-}
-
-func NewServer(config *Config, logger *log.Logger) http.Handler {
+func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	router := mux.NewRouter()
 
 	server := providerServer{
-		config: config,
-		logger: logger,
-		router: router,
-		// blocks:  map[string][]byte{},
+		provider: provider,
+		logger:   logger,
+		router:   router,
 	}
 
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
@@ -40,11 +31,9 @@ func NewServer(config *Config, logger *log.Logger) http.Handler {
 }
 
 type providerServer struct {
-	config    *Config
-	logger    *log.Logger
-	router    *mux.Router
-	contracts []*core.Contract
-	// blocks    map[string][]byte
+	provider *Provider
+	logger   *log.Logger
+	router   *mux.Router
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -69,10 +58,11 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	params.Contract.ProviderSignature = "my signature"
-	server.contracts = append(server.contracts, params.Contract)
+	server.provider.contracts = append(server.provider.contracts, *params.Contract)
 	resp := postContractResp{
 		Contract: params.Contract,
 	}
+	server.provider.saveSnapshot()
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -96,7 +86,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	path := path.Join(server.config.BlockDir, blockID)
+	path := path.Join(server.provider.Homedir, "blocks", blockID)
 	ioutil.WriteFile(path, params.Data, 0666)
 
 	w.WriteHeader(http.StatusCreated)
@@ -115,7 +105,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := path.Join(server.config.BlockDir, blockID)
+	path := path.Join(server.provider.Homedir, "blocks", blockID)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

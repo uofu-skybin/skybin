@@ -99,7 +99,6 @@ func runInit(args ...string) {
 		Addr:         core.DefaultProviderAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),
-		BlockDir:     path.Join(homedir, "provider", "blocks"),
 	}
 	err = util.SaveJson(path.Join(homedir, "provider", "config.json"), &providerConfig)
 	checkErr(err)

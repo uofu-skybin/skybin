@@ -20,6 +20,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 		router: router,
 	}
 
+	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/storage", server.postStorage).Methods("POST")
 	router.HandleFunc("/files", server.postFiles).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
@@ -37,6 +38,22 @@ type renterServer struct {
 func (server *renterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.RemoteAddr, r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
+}
+
+type errorResp struct {
+	Error string `json:"error"`
+}
+
+func (server *renterServer) getInfo(w http.ResponseWriter, r *http.Request) {
+	info, err := server.renter.Info()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+
+	}
+	server.writeResp(w, http.StatusOK, info)
 }
 
 type postStorageReq struct {

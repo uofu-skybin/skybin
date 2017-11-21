@@ -77,6 +77,31 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
+// Info is information about a renter
+type Info struct {
+	ID              string `json:"id"`
+	ReservedStorage int64  `json:"reservedStorage"`
+	FreeStorage     int64  `json:"freeStorage"`
+	TotalContracts  int    `json:"totalContracts"`
+}
+
+func (r *Renter) Info() (*Info, error) {
+	var reserved int64 = 0
+	for _, contract := range r.contracts {
+		reserved += contract.StorageSpace
+	}
+	var free int64 = 0
+	for _, blob := range r.freelist {
+		free += blob.Amount
+	}
+	return &Info{
+		ID:              r.Config.RenterId,
+		ReservedStorage: reserved,
+		FreeStorage:     free,
+		TotalContracts:  len(r.contracts),
+	}, nil
+}
+
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
@@ -130,9 +155,9 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	file := core.File{
-		ID: uuid.NewV4().String(),
-		Name: name,
-		IsDir: true,
+		ID:     uuid.NewV4().String(),
+		Name:   name,
+		IsDir:  true,
 		Blocks: nil,
 	}
 	err := r.addFile(file)
@@ -200,8 +225,8 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 
 	file := core.File{
-		ID:   uuid.NewV4().String(),
-		Name: destPath,
+		ID:    uuid.NewV4().String(),
+		Name:  destPath,
 		IsDir: false,
 		Blocks: []core.Block{
 			block,

@@ -25,6 +25,10 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
+
+	// TODO: Move this to the local provider server later
+	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+
 	// router.HandleFunc("/info", server.getInfo).Methods("GET")
 
 	return &server
@@ -65,6 +69,21 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	server.provider.saveSnapshot()
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+type getContractsResp struct {
+	Contracts []core.Contract `json:"contracts,omitempty"`
+	Error     string          `json:"error,omitempty"`
+}
+
+//TODO move to provider local server later
+func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {
+	//TODO handle errors
+
+	resp := getContractsResp{
+		Contracts: server.provider.contracts,
+	}
+	_ = json.NewEncoder(w).Encode(&resp)
 }
 
 type postBlockParams struct {

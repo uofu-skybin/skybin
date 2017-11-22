@@ -173,7 +173,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, err
 	}
 	if finfo.IsDir() {
-		return nil, errors.New("Directory uploads not supported yet")
+		return nil, errors.New("Folder uploads not supported yet")
 	}
 	if finfo.Size() > (1 << 28) {
 		return nil, errors.New("Large file uploads not supported yet")
@@ -256,7 +256,7 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 
 func (r *Renter) Download(fileInfo *core.File, destpath string) error {
 	if fileInfo.IsDir {
-		return errors.New("Directory downloads not supported yet")
+		return errors.New("Folder downloads not supported yet")
 	}
 
 	outFile, err := os.Create(destpath)

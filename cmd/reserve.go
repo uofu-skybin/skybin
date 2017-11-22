@@ -1,12 +1,7 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
-	"net/http"
-	"path"
-	"skybin/renter"
-	"skybin/util"
 	"strconv"
 )
 
@@ -43,19 +38,4 @@ func runReserve(args ...string) {
 	for _, c := range contracts {
 		log.Printf("\tProvider ID: %s, Bytes Reserved: %d\n", c.ProviderId, c.StorageSpace)
 	}
-}
-
-func getRenterClient() (*renter.Client, error) {
-	homedir, err := findHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	var config renter.Config
-	err = util.LoadJson(path.Join(homedir, "renter", "config.json"), &config)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot load renter config. Error: %s", err)
-	}
-
-	return renter.NewClient(config.Addr, &http.Client{}), nil
 }

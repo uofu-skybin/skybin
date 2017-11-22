@@ -11,6 +11,7 @@ import (
 var metaServerCmd = Cmd{
 	Name:        "metaserver",
 	Description: "Start a metadata server",
+	Usage:       "metaserver [-addr]",
 	Run:         runMetaServer,
 }
 

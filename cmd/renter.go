@@ -12,6 +12,7 @@ import (
 var renterCmd = Cmd{
 	Name:        "renter",
 	Description: "Start a renter server",
+	Usage:       "renter [-addr]",
 	Run:         runRenter,
 }
 

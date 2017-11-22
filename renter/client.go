@@ -70,6 +70,10 @@ func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 	return respMsg.File, nil
 }
 
+func (client *Client) CreateFolder(name string) (*core.File, error) {
+	return client.Upload("", name)
+}
+
 func (client *Client) ListFiles() ([]core.File, error) {
 	url := fmt.Sprintf("http://%s/files", client.addr)
 

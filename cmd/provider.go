@@ -14,6 +14,7 @@ import (
 var providerCmd = Cmd{
 	Name:        "provider",
 	Description: "Start a provider server",
+	Usage:       "provider [-addr]",
 	Run:         runProvider,
 }
 

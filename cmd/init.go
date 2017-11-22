@@ -9,7 +9,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"os/user"
 	"path"
 	"skybin/core"
 	"skybin/provider"
@@ -20,27 +19,8 @@ import (
 var initCmd = Cmd{
 	Name:        "init",
 	Description: "Set up a skybin directory",
+	Usage:       "init [-home]",
 	Run:         runInit,
-}
-
-func defaultHomeDir() (string, error) {
-	user, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	return path.Join(user.HomeDir, ".skybin"), nil
-}
-
-func findHomeDir() (string, error) {
-	homedir := os.Getenv("SKYBIN_HOME")
-	if len(homedir) == 0 {
-		var err error
-		homedir, err = defaultHomeDir()
-		if err != nil {
-			return "", err
-		}
-	}
-	return homedir, nil
 }
 
 func runInit(args ...string) {

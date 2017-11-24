@@ -32,11 +32,22 @@ type Block struct {
 	Locations []BlockLocation `json:"locations"`
 }
 
+// Permission provides access to a file to a non-owning user
+type Permission struct {
+
+	// The user who this permission grants access to
+	UserId string `json:"userId"`
+
+	// The file's encryption key encrypted with the user's public key
+	SessionKey string `json:"sessionKey"`
+}
+
 type File struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	IsDir  bool    `json:"isDir"`
-	Blocks []Block `json:"blocks"`
+	ID         string       `json:"id"`
+	Name       string       `json:"name"`
+	IsDir      bool         `json:"isDir"`
+	AccessList []Permission `json:"accessList"`
+	Blocks     []Block      `json:"blocks"`
 }
 
 type Renter struct {

@@ -2,6 +2,7 @@
 # Upload multiple files and folders
 
 from constants import *
+from helpers import *
 from pprint import pprint
 import json
 import os
@@ -17,10 +18,7 @@ def main():
     print(sys.argv[0])
 
     print('reserving space')
-    resp = requests.post(RENTER_ADDR + '/storage', json={'amount': 1 << 30})
-    if resp.status_code != 201:
-        print('post /storage\n{}'.format(resp.content.decode('utf-8')))
-        sys.exit(1)
+    reserve_space(1 << 30)
 
     files = [
         'a.txt',

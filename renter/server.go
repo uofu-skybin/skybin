@@ -25,6 +25,8 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files", server.postFiles).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
 	router.HandleFunc("/files/{fileId}/download", server.postDownload).Methods("POST")
+	router.HandleFunc("/files/{fileId}/permissions", server.postPermissions).Methods("POST")
+	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
 
 	return server
 }
@@ -41,13 +43,12 @@ func (server *renterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type errorResp struct {
-	Error string `json:"error"`
+	Error string `json:"error,omitempty"`
 }
 
 func (server *renterServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := server.renter.Info()
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
 			&errorResp{Error: err.Error()})
 		return
@@ -62,7 +63,6 @@ type postStorageReq struct {
 
 type postStorageResp struct {
 	Contracts []*core.Contract `json:"contracts,omitempty"`
-	Error     string           `json:"error,omitempty"`
 }
 
 func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) {
@@ -71,17 +71,15 @@ func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) 
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		server.logger.Println(err)
-		resp.Error = err.Error()
-		server.writeResp(w, http.StatusBadRequest, &resp)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: err.Error()})
 		return
 	}
 
 	contracts, err := server.renter.ReserveStorage(req.Amount)
 	if err != nil {
-		server.logger.Println(err)
-		resp.Error = err.Error()
-		server.writeResp(w, http.StatusInternalServerError, &resp)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
 		return
 	}
 
@@ -95,8 +93,7 @@ type postFilesReq struct {
 }
 
 type postFilesResp struct {
-	File  *core.File `json:"file,omitempty"`
-	Error string     `json:"error,omitempty"`
+	File *core.File `json:"file,omitempty"`
 }
 
 func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
@@ -104,14 +101,13 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 	var req postFilesReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
-			&postFilesResp{Error: "Bad json"})
+			&errorResp{Error: "Bad json"})
 		return
 	}
 	if len(req.DestPath) == 0 {
 		server.writeResp(w, http.StatusBadRequest,
-			&postFilesResp{Error: "No destpath given"})
+			&errorResp{Error: "No destpath given"})
 		return
 	}
 
@@ -124,9 +120,8 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 		fileInfo, err = server.renter.Upload(req.SourcePath, req.DestPath)
 	}
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
-			&postFilesResp{Error: err.Error()})
+			&errorResp{Error: err.Error()})
 		return
 	}
 
@@ -134,67 +129,39 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type getFilesResp struct {
-	Files []core.File `json:"files,omitempty"`
-	Error string      `json:"error,omitempty"`
+	Files []*core.File `json:"files,omitempty"`
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 	files, err := server.renter.ListFiles()
 	if err != nil {
-		server.logger.Println(err)
-		server.writeResp(w, http.StatusInternalServerError, &getFilesResp{Error: err.Error()})
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
 		return
 	}
 
 	server.writeResp(w, http.StatusOK, &getFilesResp{Files: files})
 }
 
-// TODO: Update
-//func (server *renterServer) getFile(w http.ResponseWriter, r *http.Request) {
-//	vars := mux.Vars(r)
-//	fileId := vars["fileId"]
-//	file, err := server.renter.Lookup(fileId)
-//	resp := struct{
-//		File *core.File `json:"file"`
-//		Error string `json:"error,omitempty"`
-//	}{
-//		File: file,
-//	}
-//	if err != nil {
-//		server.logger.Println(err)
-//		resp.Error = err.Error()
-//	}
-//	err = json.NewEncoder(w).Encode(&resp)
-//	if err != nil {
-//		server.logger.Println("error:", err)
-//	}
-//}
-
 type postDownloadReq struct {
 	Destination string `json:"destination,omitempty"`
-}
-
-type postDownloadResp struct {
-	Error string `json:"error,omitempty"`
 }
 
 func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request) {
 	var req postDownloadReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
-			&postDownloadResp{Error: "Bad json"})
+			&errorResp{Error: "Bad json"})
 		return
 	}
 
 	fileId := mux.Vars(r)["fileId"]
 
-	fileInfo, err := server.renter.Lookup(fileId)
+	f, err := server.renter.Lookup(fileId)
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
-			&postDownloadResp{Error: err.Error()})
+			&errorResp{Error: err.Error()})
 		return
 	}
 
@@ -202,23 +169,54 @@ func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request)
 	if len(req.Destination) == 0 {
 		user, err := user.Current()
 		if err != nil {
-			server.logger.Println(err)
 			server.writeResp(w, http.StatusInternalServerError,
-				&postDownloadResp{Error: err.Error()})
+				&errorResp{Error: err.Error()})
 			return
 		}
-		req.Destination = path.Join(user.HomeDir, fileInfo.Name)
+		req.Destination = path.Join(user.HomeDir, f.Name)
 	}
 
-	err = server.renter.Download(fileInfo, req.Destination)
+	err = server.renter.Download(f, req.Destination)
 	if err != nil {
-		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
-			&postDownloadResp{Error: err.Error()})
+			&errorResp{Error: err.Error()})
 		return
 	}
 
-	server.writeResp(w, http.StatusCreated, &postDownloadResp{})
+	server.writeResp(w, http.StatusCreated, &errorResp{})
+}
+
+type postPermissionsReq struct {
+	UserId string `json:"userId"`
+}
+
+func (server *renterServer) postPermissions(w http.ResponseWriter, r *http.Request) {
+	var req postPermissionsReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: "Bad json"})
+		return
+	}
+	fileId := mux.Vars(r)["fileId"]
+	f, err := server.renter.Lookup(fileId)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	err = server.renter.ShareFile(f, req.UserId)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusCreated, &errorResp{})
+}
+
+func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement
+	server.writeResp(w, http.StatusOK, &getFilesResp{Files: []*core.File{}})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
@@ -230,5 +228,11 @@ func (server *renterServer) writeResp(w http.ResponseWriter, status int, body in
 	_, err = w.Write(data)
 	if err != nil {
 		server.logger.Fatalf("error: cannot write response body. error: %s", err)
+	}
+
+	if r, ok := body.(*errorResp); ok && len(r.Error) > 0 {
+		server.logger.Print(status, r)
+	} else {
+		server.logger.Println(status)
 	}
 }

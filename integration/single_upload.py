@@ -2,6 +2,7 @@
 # Sanity-check for basic upload/list/download functionality
 
 from constants import *
+from helpers import *
 from pprint import pprint
 import filecmp
 import json
@@ -16,10 +17,7 @@ def main():
     print(sys.argv[0])
 
     print('reserving space')
-    resp = requests.post(RENTER_ADDR + "/storage", json={'amount': 1 << 25})
-    if resp.status_code != 201:
-        print('post /storage. bad response {}'.format(resp))
-        sys.exit(1)
+    reserve_space(1 << 25)
 
     print('uploading file')
     with open(FILE_NAME, 'w+') as f:

@@ -25,16 +25,16 @@ type Config struct {
 type Renter struct {
 	Config    *Config
 	Homedir   string
-	files     []core.File
-	contracts []core.Contract
-	freelist  []storageBlob
+	files     []*core.File
+	contracts []*core.Contract
+	freelist  []*storageBlob
 }
 
 // snapshot stores a renter's serialized state
 type snapshot struct {
-	Files       []core.File     `json:"files"`
-	Contracts   []core.Contract `json:"contracts"`
-	FreeStorage []storageBlob   `json:"freeStorage"`
+	Files       []*core.File     `json:"files"`
+	Contracts   []*core.Contract `json:"contracts"`
+	FreeStorage []*storageBlob   `json:"freeStorage"`
 }
 
 // storageBlob is a chunk of free storage we've already rented
@@ -131,8 +131,8 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 		contracts = append(contracts, signedContract)
 
-		r.contracts = append(r.contracts, *signedContract)
-		r.freelist = append(r.freelist, storageBlob{
+		r.contracts = append(r.contracts, signedContract)
+		r.freelist = append(r.freelist, &storageBlob{
 			ProviderId: pinfo.ID,
 			Addr:       pinfo.Addr,
 			Amount:     contract.StorageSpace,
@@ -154,17 +154,18 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
-	file := core.File{
-		ID:     uuid.NewV4().String(),
-		Name:   name,
-		IsDir:  true,
-		Blocks: nil,
+	file := &core.File{
+		ID:         uuid.NewV4().String(),
+		Name:       name,
+		IsDir:      true,
+		AccessList: []core.Permission{},
+		Blocks:     []core.Block{},
 	}
 	err := r.addFile(file)
 	if err != nil {
 		return nil, err
 	}
-	return &file, nil
+	return file, nil
 }
 
 func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
@@ -181,13 +182,13 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 
 	// Find storage
 	var blobIdx int
-	var blob storageBlob
+	var blob *storageBlob
 	for blobIdx, blob = range r.freelist {
 		if blob.Amount >= finfo.Size() {
 			break
 		}
 	}
-	if blob.Amount < finfo.Size() {
+	if blob == nil {
 		return nil, errors.New("Cannot find enough storage. " +
 			"Be sure to reserve storage before uploading files.")
 	}
@@ -209,7 +210,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx+1:]...)
 	remaining := blob.Amount - finfo.Size()
 	if remaining > kMinBlobSize {
-		leftover := storageBlob{
+		leftover := &storageBlob{
 			ProviderId: blob.ProviderId,
 			Addr:       blob.Addr,
 			Amount:     remaining,
@@ -224,10 +225,11 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		},
 	}
 
-	file := core.File{
-		ID:    uuid.NewV4().String(),
-		Name:  destPath,
-		IsDir: false,
+	file := &core.File{
+		ID:         uuid.NewV4().String(),
+		Name:       destPath,
+		IsDir:      false,
+		AccessList: []core.Permission{},
 		Blocks: []core.Block{
 			block,
 		},
@@ -238,24 +240,24 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, err
 	}
 
-	return &file, nil
+	return file, nil
 }
 
-func (r *Renter) ListFiles() ([]core.File, error) {
+func (r *Renter) ListFiles() ([]*core.File, error) {
 	return r.files, nil
 }
 
 func (r *Renter) Lookup(fileId string) (*core.File, error) {
 	for _, file := range r.files {
 		if file.ID == fileId {
-			return &file, nil
+			return file, nil
 		}
 	}
 	return nil, fmt.Errorf("Cannot find file with ID %s", fileId)
 }
 
-func (r *Renter) Download(fileInfo *core.File, destpath string) error {
-	if fileInfo.IsDir {
+func (r *Renter) Download(f *core.File, destpath string) error {
+	if f.IsDir {
 		return errors.New("Folder downloads not supported yet")
 	}
 
@@ -265,7 +267,7 @@ func (r *Renter) Download(fileInfo *core.File, destpath string) error {
 	}
 	defer outFile.Close()
 
-	for _, block := range fileInfo.Blocks {
+	for _, block := range f.Blocks {
 		err = downloadBlock(&block, outFile)
 		if err != nil {
 			_ = os.Remove(destpath)
@@ -276,7 +278,18 @@ func (r *Renter) Download(fileInfo *core.File, destpath string) error {
 	return nil
 }
 
-func (r *Renter) addFile(f core.File) error {
+func (r *Renter) ShareFile(f *core.File, userId string) error {
+	f.AccessList = append(f.AccessList, core.Permission{
+		UserId: userId,
+	})
+	err := r.saveSnapshot()
+	if err != nil {
+		return fmt.Errorf("Unable to save snapshot. Error %s", err)
+	}
+	return nil
+}
+
+func (r *Renter) addFile(f *core.File) error {
 	r.files = append(r.files, f)
 	err := r.saveSnapshot()
 	if err != nil {

@@ -198,7 +198,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot read file. Error: %s", err)
 	}
-	blockId := util.Hash(data)
+	blockId := uuid.NewV4().String()
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
 	err = pvdr.PutBlock(blockId, data)

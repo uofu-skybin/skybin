@@ -229,6 +229,8 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		ID:         uuid.NewV4().String(),
 		Name:       destPath,
 		IsDir:      false,
+		Size:       finfo.Size(),
+		ModTime:    finfo.ModTime(),
 		AccessList: []core.Permission{},
 		Blocks: []core.Block{
 			block,

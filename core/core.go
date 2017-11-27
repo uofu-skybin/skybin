@@ -1,5 +1,7 @@
 package core
 
+import "time"
+
 const (
 	DefaultMetaAddr     = "127.0.0.1:8001"
 	DefaultRenterAddr   = "127.0.0.1:8002"
@@ -46,6 +48,8 @@ type File struct {
 	ID         string       `json:"id"`
 	Name       string       `json:"name"`
 	IsDir      bool         `json:"isDir"`
+	Size       int64        `json:"size"`
+	ModTime    time.Time    `json:"modTime"`
 	AccessList []Permission `json:"accessList"`
 	Blocks     []Block      `json:"blocks"`
 }

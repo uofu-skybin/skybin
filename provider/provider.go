@@ -13,7 +13,10 @@ type Config struct {
 	Addr         string `json:"address"`
 	MetaAddr     string `json:"metaServerAddress"`
 	IdentityFile string `json:"identityFile"`
-	// BlockDir     string `json:"blockDirectory"`
+	//TODO: potentially move to secondary structure
+	ProviderRate  string `json:"providerRate"`
+	ProviderTotal string `json:"providerTotal"`
+	ProviderAvail string `json:"providerAvail"`
 }
 
 type Provider struct {
@@ -24,7 +27,6 @@ type Provider struct {
 
 type snapshot struct {
 	Contracts []core.Contract `json:"contracts"`
-	// FreeStorage []storageBlob   `json:"freeStorage"`
 }
 
 func (provider *Provider) saveSnapshot() error {
@@ -53,9 +55,8 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Unable to load snapshot. Error: %s", err)
 		}
-		// provider.files = s.Files
+
 		provider.contracts = s.Contracts
-		// provider.freelist = s.FreeStorage
 	}
 
 	return provider, err

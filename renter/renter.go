@@ -3,7 +3,6 @@ package renter
 import (
 	"errors"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"skybin/metaserver"
 	"skybin/provider"
 	"skybin/util"
+
+	"github.com/satori/go.uuid"
 )
 
 type Config struct {
@@ -201,7 +202,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	blockId := uuid.NewV4().String()
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
-	err = pvdr.PutBlock(blockId, data)
+	err = pvdr.PutBlock(blockId, r.Config.RenterId, data)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot upload block to provider. Error: %s", err)
 	}

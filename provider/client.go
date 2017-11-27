@@ -39,9 +39,9 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 	return respMsg.Contract, nil
 }
 
-func (client *Client) PutBlock(blockID string, data []byte) error {
+func (client *Client) PutBlock(blockID string, renterID string, data []byte) error {
 	url := fmt.Sprintf("http://%s/blocks/%s", client.addr, blockID)
-	body, err := json.Marshal(&postBlockParams{Data: data})
+	body, err := json.Marshal(&postBlockParams{RenterID: renterID, Data: data})
 	if err != nil {
 		return err
 	}

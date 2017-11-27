@@ -66,6 +66,7 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	resp := postContractResp{
 		Contract: params.Contract,
 	}
+	// os.MkdirAll(server.provider.Homedir, "blocks", params.Contract.RenterId)
 	server.provider.saveSnapshot()
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -78,6 +79,7 @@ type getContractsResp struct {
 
 //TODO move to provider local server later
 func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println("POST", r.URL)
 	//TODO handle errors
 
 	resp := getContractsResp{
@@ -87,7 +89,8 @@ func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Reques
 }
 
 type postBlockParams struct {
-	Data []byte `json:"data"`
+	RenterID string `json:"renterID"`
+	Data     []byte `json:"data"`
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +109,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	path := path.Join(server.provider.Homedir, "blocks", blockID)
+	server.logger.Println("RenterID", params.RenterID)
 	ioutil.WriteFile(path, params.Data, 0666)
 
 	w.WriteHeader(http.StatusCreated)

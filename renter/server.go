@@ -126,7 +126,7 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server.writeResp(w, http.StatusCreated, &postFilesResp{File: fileInfo})
+	server.writeResp(w, http.StatusCreated, fileInfo)
 }
 
 type getFilesResp struct {

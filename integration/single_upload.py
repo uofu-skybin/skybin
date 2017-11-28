@@ -24,8 +24,7 @@ def main():
         for _ in range(50):
             f.write('hello world\n')
 
-    resp = upload_file(os.path.abspath(FILE_NAME), 'samplefile.txt')
-    file_info = resp['file']
+    file_info = upload_file(os.path.abspath(FILE_NAME), 'samplefile.txt')
     file_id = file_info['id']
 
     print('downloading file')

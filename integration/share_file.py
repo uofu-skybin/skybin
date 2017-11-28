@@ -15,8 +15,8 @@ def main():
     print('uploading file')
     with open('files/share.txt', 'w+') as f:
         f.write('hello world\n')
-    resp = upload_file(os.path.abspath('files/share.txt'), 'share.txt')
-    file_id = resp['file']['id']
+    file_info = upload_file(os.path.abspath('files/share.txt'), 'share.txt')
+    file_id = file_info['id']
     
     print('sharing file')
     share_file(file_id, 'user1')

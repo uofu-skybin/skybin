@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"skybin/core"
+	"log"
 )
 
 func NewClient(addr string, client *http.Client) *Client {
@@ -62,13 +63,13 @@ func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, decodeError(resp.Body)
 	}
 
-	var respMsg postFilesResp
-	err = json.NewDecoder(resp.Body).Decode(&respMsg)
+	file := &core.File{}
+	err = json.NewDecoder(resp.Body).Decode(file)
 	if err != nil {
 		return nil, err
 	}
 
-	return respMsg.File, nil
+	return file, nil
 }
 
 func (client *Client) CreateFolder(name string) (*core.File, error) {

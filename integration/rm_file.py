@@ -21,10 +21,10 @@ def main():
             f.write('\n')
 
     print('uploading file')
-    resp = upload_file(os.path.abspath('files/' + filename), filename)
+    file_info = upload_file(os.path.abspath('files/' + filename), filename)
+    file_id = file_info['id']
 
     print('removing file')
-    file_id = resp['file']['id']
     remove_file(file_id)
 
     print('checking listed files')

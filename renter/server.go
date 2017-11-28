@@ -24,6 +24,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/storage", server.postStorage).Methods("POST")
 	router.HandleFunc("/files", server.postFiles).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
+	router.HandleFunc("/files/{fileId}", server.deleteFile).Methods("DELETE")
 	router.HandleFunc("/files/{fileId}/download", server.postDownload).Methods("POST")
 	router.HandleFunc("/files/{fileId}/permissions", server.postPermissions).Methods("POST")
 	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
@@ -141,6 +142,17 @@ func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.writeResp(w, http.StatusOK, &getFilesResp{Files: files})
+}
+
+func (server *renterServer) deleteFile(w http.ResponseWriter, r *http.Request) {
+	fileId := mux.Vars(r)["fileId"]
+	err := server.renter.Remove(fileId)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 type postDownloadReq struct {

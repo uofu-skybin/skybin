@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"skybin/core"
-	"io"
 )
 
 func NewClient(addr string, client *http.Client) *Client {
@@ -107,6 +107,26 @@ func (client *Client) Download(fileId string, destpath string) error {
 	}
 
 	if resp.StatusCode != http.StatusCreated {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
+func (client *Client) Remove(fileId string) error {
+	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileId)
+
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
 

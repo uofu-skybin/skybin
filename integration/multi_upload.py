@@ -37,13 +37,7 @@ def main():
 
     print('uploading files to root folder')
     for name in files:
-        resp = requests.post(RENTER_ADDR + '/files', json={
-            'sourcePath': os.path.abspath('files/' + name),
-            'destPath': name
-        })
-        if resp.status_code != 201:
-            print('post /files\n{}'.format(resp.content.decode('utf-8')))
-            sys.exit(1)
+        upload_file(os.path.abspath('files/' + name), name)
 
     folders = [
         'school',
@@ -53,23 +47,13 @@ def main():
 
     print('creating folders')
     for folder in folders:
-        resp = requests.post(RENTER_ADDR + '/files', json={
-            'destPath': folder
-        })
-        if resp.status_code != 201:
-            print('post /files\n{}'.format(resp.content.decode('utf-8')))
-            sys.exit(1)
+        upload_file(None, folder)
 
     print('uploading files to folders')
     for folder in folders:
         for filename in files:
-            resp = requests.post(RENTER_ADDR + '/files', json={
-                'sourcePath': os.path.abspath('files/' + filename),
-                'destPath': '{}/{}'.format(folder, filename)
-            })
-            if resp.status_code != 201:
-                print('post /files\n{}'.format(resp.content.decode('utf-8')))
-                sys.exit(1)
+            upload_file(os.path.abspath('files/' + filename),
+                         '{}/{}'.format(folder, filename))
 
     print('listing files')
     resp = requests.get(RENTER_ADDR + '/files')

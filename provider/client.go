@@ -70,3 +70,19 @@ func (client *Client) GetBlock(blockID string) ([]byte, error) {
 	}
 	return respMsg.Data, nil
 }
+
+func (client *Client) RemoveBlock(blockID string) error {
+	url := fmt.Sprintf("http://%s/blocks/%s", client.addr, blockID)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("bad status code")
+	}
+	return nil
+}

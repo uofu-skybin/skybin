@@ -24,6 +24,7 @@ var Commands = []Cmd{
 	uploadCmd,
 	listCmd,
 	downloadCmd,
+	rmCmd,
 	mkdirCmd,
 	renterCmd,
 	providerCmd,

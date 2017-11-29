@@ -292,6 +292,34 @@ func (r *Renter) ShareFile(f *core.File, userId string) error {
 	return nil
 }
 
+func (r *Renter) Remove(fileId string) error {
+	var idx int
+	var f *core.File
+	for idx, f = range r.files {
+		if f.ID == fileId {
+			break
+		}
+	}
+	if idx == len(r.files) {
+		return fmt.Errorf("Cannot find file with ID %s", fileId)
+	}
+	r.files = append(r.files[:idx], r.files[idx+1:]...)
+	err := r.saveSnapshot()
+	if err != nil {
+		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
+	}
+	for _, block := range f.Blocks {
+		for _, location := range block.Locations {
+			pvdr := provider.NewClient(location.Addr, &http.Client{})
+			err := pvdr.RemoveBlock(block.ID)
+			if err != nil {
+				return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (r *Renter) addFile(f *core.File) error {
 	r.files = append(r.files, f)
 	err := r.saveSnapshot()

@@ -25,7 +25,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
-
+	router.HandleFunc("/blocks/{blockID}", server.deleteBlock).Methods("DELETE")
 	// TODO: Move this to the local provider server later
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
@@ -142,4 +142,28 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		Data: data,
 	}
 	_ = json.NewEncoder(w).Encode(&resp)
+}
+
+func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println("DELETE", r.URL)
+	vars := mux.Vars(r)
+	blockID, exists := vars["blockID"]
+	if !exists {
+		http.Error(w, "no block given", http.StatusBadRequest)
+		return
+	}
+
+	path := path.Join(server.provider.Homedir, "blocks", blockID)
+
+	//TODO: DANGER DANGER DANGER!!! AUTHENTICATE FIRST
+	err := os.Remove(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			//TODO: handle error on providers end
+		}
+		http.Error(w, "error retrieving block", http.StatusBadRequest)
+		return
+	}
+
+	// _ = json.NewEncoder(w).Encode(&resp)
 }

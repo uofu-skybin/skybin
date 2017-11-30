@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"skybin/core"
-	"log"
 )
 
 func NewClient(addr string, client *http.Client) *Client {

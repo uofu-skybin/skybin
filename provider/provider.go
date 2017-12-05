@@ -20,6 +20,7 @@ type Provider struct {
 	Config    *Config
 	Homedir   string
 	contracts []core.Contract
+	activity  []Activity
 }
 
 // TODO: add struct for provider settings and/or place them in this structure
@@ -32,11 +33,18 @@ type Info struct {
 	TotalContracts  int   `json:"providerContracts"`
 }
 
+type Activity struct {
+	RequestType string        `json:"requestType,omitempty"`
+	BlockId     string        `json:"blockId,omitempty"`
+	RenterId    string        `json:"renterId,omitempty"`
+	TimeStamp   string        `json:"time,omitempty"`
+	Contract    core.Contract `json:"contract,omitempty"`
+}
+
 func (p *Provider) Info() (*Info, error) {
 
 	// Default storage size, TODO: make dynamic when settings is implemented
 	var total int64 = 10000000000
-
 	// Calculate size of total contracted storage
 	var reserved int64 = 0
 	for _, contract := range p.contracts {

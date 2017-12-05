@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"skybin/core"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -27,7 +28,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
 	router.HandleFunc("/blocks/{blockID}", server.deleteBlock).Methods("DELETE")
 
-	// TODO: Move this to the local provider server later
+	// TODO: Move these to the local provider server later
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
@@ -75,6 +76,15 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	// -- this could potentially complicate sharing
 	// os.MkdirAll(server.provider.Homedir, "blocks", params.Contract.RenterId)
 	server.provider.saveSnapshot()
+
+	activity := Activity{
+		RequestType: "NEGOTIATE CONTRACT",
+		Contract:    *params.Contract,
+		TimeStamp:   time.Now().Format(time.RFC3339),
+		RenterId:    params.Contract.RenterId,
+	}
+	server.provider.activity = append(server.provider.activity, activity)
+
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -86,7 +96,7 @@ type getContractsResp struct {
 
 //TODO move to provider local server later
 func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
+	server.logger.Println("GET", r.URL)
 	//TODO handle errors
 
 	resp := getContractsResp{
@@ -118,6 +128,15 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	path := path.Join(server.provider.Homedir, "blocks", blockID)
 	server.logger.Println("RenterID", params.RenterID)
 
+	activity := Activity{
+		RequestType: "POST BLOCK",
+		BlockId:     blockID,
+		RenterId:    params.RenterID,
+		TimeStamp:   time.Now().Format(time.RFC3339),
+	}
+
+	server.provider.activity = append(server.provider.activity, activity)
+
 	// TODO: verify that renter has a contract and available storage here
 	// definitely move this logic to the provider class
 	ioutil.WriteFile(path, params.Data, 0666)
@@ -147,6 +166,14 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error retrieving block", http.StatusBadRequest)
 		return
 	}
+	activity := Activity{
+		RequestType: "GET BLOCK",
+		BlockId:     blockID,
+		TimeStamp:   time.Now().Format(time.RFC3339),
+		// TODO: Need this param from renter
+		// RenterId:    params.RenterID,
+	}
+	server.provider.activity = append(server.provider.activity, activity)
 
 	resp := getBlockResp{
 		Data: data,
@@ -162,6 +189,14 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		http.Error(w, "no block given", http.StatusBadRequest)
 		return
 	}
+	activity := Activity{
+		RequestType: "DELETE BLOCK",
+		BlockId:     blockID,
+		TimeStamp:   time.Now().Format(time.RFC3339),
+		// TODO: Need this param from provider
+		// RenterId:    params.RenterID,
+	}
+	server.provider.activity = append(server.provider.activity, activity)
 
 	path := path.Join(server.provider.Homedir, "blocks", blockID)
 
@@ -175,11 +210,6 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		http.Error(w, "error deleting block", http.StatusBadRequest)
 		return
 	}
-}
-
-// TODO: implement this in provider class
-func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("GET", r.URL)
 }
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
@@ -211,4 +241,19 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 	} else {
 		server.logger.Println(status)
 	}
+}
+
+type getActivityResp struct {
+	Activity []Activity `json:"activity,omitempty"`
+	Error    string     `json:"error,omitempty"`
+}
+
+//TODO move to provider local server
+func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println("GET", r.URL)
+
+	resp := getActivityResp{
+		Activity: server.provider.activity,
+	}
+	_ = json.NewEncoder(w).Encode(&resp)
 }

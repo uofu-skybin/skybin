@@ -26,10 +26,11 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/blocks/{blockID}", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
 	router.HandleFunc("/blocks/{blockID}", server.deleteBlock).Methods("DELETE")
+
 	// TODO: Move this to the local provider server later
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
-
-	// router.HandleFunc("/info", server.getInfo).Methods("GET")
+	router.HandleFunc("/info", server.getInfo).Methods("GET")
+	router.HandleFunc("/activity", server.getActivity).Methods("GET")
 
 	return &server
 }
@@ -38,6 +39,9 @@ type providerServer struct {
 	provider *Provider
 	logger   *log.Logger
 	router   *mux.Router
+}
+type errorResp struct {
+	Error string `json:"error,omitempty"`
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +70,9 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	resp := postContractResp{
 		Contract: params.Contract,
 	}
+	// sub divide blocks into subdirs for each individual renter
+	// ++ in the future this will make it really easy to determine an individual renters used space
+	// -- this could potentially complicate sharing
 	// os.MkdirAll(server.provider.Homedir, "blocks", params.Contract.RenterId)
 	server.provider.saveSnapshot()
 	w.WriteHeader(http.StatusCreated)
@@ -110,6 +117,9 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 
 	path := path.Join(server.provider.Homedir, "blocks", blockID)
 	server.logger.Println("RenterID", params.RenterID)
+
+	// TODO: verify that renter has a contract and available storage here
+	// definitely move this logic to the provider class
 	ioutil.WriteFile(path, params.Data, 0666)
 
 	w.WriteHeader(http.StatusCreated)
@@ -132,7 +142,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			//TODO: handle error on providers end
+			//TODO: log error on providers end
 		}
 		http.Error(w, "error retrieving block", http.StatusBadRequest)
 		return
@@ -157,13 +167,48 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 
 	//TODO: DANGER DANGER DANGER!!! AUTHENTICATE FIRST
 	err := os.Remove(path)
+
 	if err != nil {
 		if os.IsNotExist(err) {
 			//TODO: handle error on providers end
 		}
-		http.Error(w, "error retrieving block", http.StatusBadRequest)
+		http.Error(w, "error deleting block", http.StatusBadRequest)
 		return
 	}
+}
 
-	// _ = json.NewEncoder(w).Encode(&resp)
+// TODO: implement this in provider class
+func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println("GET", r.URL)
+}
+
+func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
+
+	info, err := server.provider.Info()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+
+	}
+	server.writeResp(w, http.StatusOK, info)
+}
+
+// TODO: make requests more consistent in older functions
+func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
+	w.WriteHeader(status)
+	data, err := json.MarshalIndent(body, "", "    ")
+	if err != nil {
+		server.logger.Fatalf("error: cannot to encode response. error: %s", err)
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		server.logger.Fatalf("error: cannot write response body. error: %s", err)
+	}
+
+	if r, ok := body.(*errorResp); ok && len(r.Error) > 0 {
+		server.logger.Print(status, r)
+	} else {
+		server.logger.Println(status)
+	}
 }

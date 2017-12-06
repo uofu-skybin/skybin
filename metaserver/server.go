@@ -8,22 +8,24 @@ import (
 	"path"
 	"skybin/core"
 	"strconv"
+	"log"
 
 	"github.com/gorilla/mux"
 )
 
-const dbPath = "db.json"
-
-func NewServer(homedir string) http.Handler {
+func NewServer(homedir string, logger *log.Logger) http.Handler {
 
 	router := mux.NewRouter()
 
 	server := &metaServer{
+		homedir: homedir,
+		dbpath: path.Join(homedir, "metaDB.json"),
 		router: router,
+		logger: logger,
 	}
 
 	// If the database exists, load it into memory.
-	if _, err := os.Stat(path.Join(homedir, dbPath)); !os.IsNotExist(err) {
+	if _, err := os.Stat(server.dbpath); !os.IsNotExist(err) {
 		server.loadDbFromFile()
 	}
 
@@ -43,12 +45,15 @@ func NewServer(homedir string) http.Handler {
 
 type metaServer struct {
 	homedir   string
+	dbpath    string
 	providers []core.Provider
 	renters   []core.Renter
+	logger    *log.Logger
 	router    *mux.Router
 }
 
 func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println(r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
 }
 
@@ -65,7 +70,7 @@ func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core
 		panic(err)
 	}
 
-	writeErr := ioutil.WriteFile(path.Join(server.homedir, dbPath), dbBytes, 0644)
+	writeErr := ioutil.WriteFile(path.Join(server.homedir, server.dbpath), dbBytes, 0644)
 	if writeErr != nil {
 		panic(err)
 	}
@@ -73,7 +78,7 @@ func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core
 
 func (server *metaServer) loadDbFromFile() {
 
-	contents, err := ioutil.ReadFile(path.Join(server.homedir, dbPath))
+	contents, err := ioutil.ReadFile(path.Join(server.homedir, server.dbpath))
 	if err != nil {
 		panic(err)
 	}

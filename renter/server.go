@@ -63,7 +63,7 @@ type postStorageReq struct {
 }
 
 type postStorageResp struct {
-	Contracts []*core.Contract `json:"contracts,omitempty"`
+	Contracts []*core.Contract `json:"contracts"`
 }
 
 func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ type postFilesReq struct {
 }
 
 type postFilesResp struct {
-	File *core.File `json:"file,omitempty"`
+	File *core.File `json:"file"`
 }
 
 func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +130,7 @@ func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type getFilesResp struct {
-	Files []*core.File `json:"files,omitempty"`
+	Files []*core.File `json:"files"`
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {

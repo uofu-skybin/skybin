@@ -176,6 +176,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
 		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
+		return
 	}
 
 	data, err := ioutil.ReadFile(path)
@@ -211,6 +212,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
 		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
+		return
 	}
 
 	err := os.Remove(path)

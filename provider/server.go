@@ -10,8 +10,8 @@ import (
 	"skybin/core"
 	"time"
 
-	"github.com/gorilla/mux"
 	"fmt"
+	"github.com/gorilla/mux"
 )
 
 func NewServer(provider *Provider, logger *log.Logger) http.Handler {
@@ -40,10 +40,10 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 }
 
 type Activity struct {
-	RequestType string        `json:"requestType,omitempty"`
-	BlockId     string        `json:"blockId,omitempty"`
-	RenterId    string        `json:"renterId,omitempty"`
-	TimeStamp   time.Time     `json:"time,omitempty"`
+	RequestType string         `json:"requestType,omitempty"`
+	BlockId     string         `json:"blockId,omitempty"`
+	RenterId    string         `json:"renterId,omitempty"`
+	TimeStamp   time.Time      `json:"time,omitempty"`
 	Contract    *core.Contract `json:"contract,omitempty"`
 }
 
@@ -51,7 +51,7 @@ type providerServer struct {
 	provider *Provider
 	logger   *log.Logger
 	router   *mux.Router
-	activity  []Activity // Activity feed
+	activity []Activity // Activity feed
 }
 
 const (
@@ -62,9 +62,9 @@ const (
 const (
 
 	// Activity types
-	negotiateType = "NEGOTIATE CONTRACT"
-	postBlockType = "POST BLOCK"
-	getBlockType = "GET BLOCK"
+	negotiateType   = "NEGOTIATE CONTRACT"
+	postBlockType   = "POST BLOCK"
+	getBlockType    = "GET BLOCK"
 	deleteBlockType = "DELETE BLOCK"
 )
 
@@ -260,11 +260,11 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	free := reserved - used
 
 	info := getInfoResp{
-		TotalStorage: 1 << 30,
+		TotalStorage:    1 << 30,
 		ReservedStorage: reserved,
-		UsedStorage: used,
-		FreeStorage: free,
-		TotalContracts: len(server.provider.contracts),
+		UsedStorage:     used,
+		FreeStorage:     free,
+		TotalContracts:  len(server.provider.contracts),
 	}
 
 	server.writeResp(w, http.StatusOK, &info)
@@ -305,4 +305,3 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 		server.logger.Println(status)
 	}
 }
-

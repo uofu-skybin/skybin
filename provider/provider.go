@@ -36,7 +36,7 @@ type snapshot struct {
 func (provider *Provider) saveSnapshot() error {
 	s := snapshot{
 		Contracts: provider.contracts,
-		Stats: provider.stats,
+		Stats:     provider.stats,
 	}
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }

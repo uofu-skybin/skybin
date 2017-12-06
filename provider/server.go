@@ -46,6 +46,7 @@ type errorResp struct {
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println(r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
 }
 
@@ -59,7 +60,6 @@ type postContractResp struct {
 }
 
 func (server *providerServer) postContract(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
 	var params postContractParams
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
@@ -111,7 +111,6 @@ type postBlockParams struct {
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("POST", r.URL)
 	var params postBlockParams
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
@@ -149,7 +148,6 @@ type getBlockResp struct {
 }
 
 func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("GET", r.URL)
 	vars := mux.Vars(r)
 	blockID, exists := vars["blockID"]
 	if !exists {
@@ -182,7 +180,6 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("DELETE", r.URL)
 	vars := mux.Vars(r)
 	blockID, exists := vars["blockID"]
 	if !exists {
@@ -250,8 +247,6 @@ type getActivityResp struct {
 
 //TODO move to provider local server
 func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println("GET", r.URL)
-
 	resp := getActivityResp{
 		Activity: server.provider.activity,
 	}

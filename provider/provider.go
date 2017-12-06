@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"skybin/core"
 	"skybin/util"
 )
@@ -16,62 +15,28 @@ type Config struct {
 	IdentityFile string `json:"identityFile"`
 }
 
+// Provider node statistics
+type Stats struct {
+	StorageReserved int64 `json:"storageReserved"`
+	StorageUsed     int64 `json:"storageUsed"`
+}
+
 type Provider struct {
 	Config    *Config
 	Homedir   string
-	contracts []core.Contract
-	activity  []Activity
-}
-
-// TODO: add struct for provider settings and/or place them in this structure
-type Info struct {
-	// MinRate          string `json:"providerRate"`
-	TotalStorage    int64 `json:"providerAllocated"`
-	ReservedStorage int64 `json:"providerReserved"`
-	FreeStorage     int64 `json:"providerFree"`
-	UsedStorage     int64 `json:"providerUsed"`
-	TotalContracts  int   `json:"providerContracts"`
-}
-
-type Activity struct {
-	RequestType string        `json:"requestType,omitempty"`
-	BlockId     string        `json:"blockId,omitempty"`
-	RenterId    string        `json:"renterId,omitempty"`
-	TimeStamp   string        `json:"time,omitempty"`
-	Contract    core.Contract `json:"contract,omitempty"`
-}
-
-func (p *Provider) Info() (*Info, error) {
-
-	// Default storage size, TODO: make dynamic when settings is implemented
-	var total int64 = 10000000000
-	// Calculate size of total contracted storage
-	var reserved int64 = 0
-	for _, contract := range p.contracts {
-		reserved += contract.StorageSpace
-	}
-
-	// Walk the dir and determine total size
-	used, err := DirSize(path.Join(p.Homedir, "blocks"))
-	if err != nil {
-		return nil, err
-	}
-	return &Info{
-		TotalStorage:    total,
-		ReservedStorage: reserved,
-		UsedStorage:     used,
-		FreeStorage:     total - used,
-		TotalContracts:  len(p.contracts),
-	}, nil
+	contracts []*core.Contract
+	stats     Stats
 }
 
 type snapshot struct {
-	Contracts []core.Contract `json:"contracts"`
+	Contracts []*core.Contract `json:"contracts"`
+	Stats     Stats            `json:"stats"`
 }
 
 func (provider *Provider) saveSnapshot() error {
 	s := snapshot{
 		Contracts: provider.contracts,
+		Stats: provider.stats,
 	}
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
@@ -100,17 +65,4 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	}
 
 	return provider, err
-}
-
-// calculate total size of all blocks in the dir
-// in the future potentially store this info in a json but for now this is easy
-func DirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
 }

@@ -95,6 +95,11 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	}
 
 	contract := params.Contract
+	if contract == nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{"No contract given"})
+		return
+	}
 
 	// Sign contract
 	contract.ProviderSignature = "signature"
@@ -127,6 +132,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	var params postBlockParams
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
+		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
 			errorResp{Error: "Bad json"})
 		return

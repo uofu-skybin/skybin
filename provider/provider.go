@@ -43,7 +43,8 @@ func (provider *Provider) saveSnapshot() error {
 
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
-		Homedir: homedir,
+		Homedir:   homedir,
+		contracts: make([]*core.Contract, 0),
 	}
 
 	config := &Config{}

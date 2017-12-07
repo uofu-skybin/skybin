@@ -22,6 +22,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		provider: provider,
 		logger:   logger,
 		router:   router,
+		activity: make([]Activity, 0),
 	}
 
 	// API for remote renters
@@ -243,7 +244,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 }
 
 type getContractsResp struct {
-	Contracts []*core.Contract `json:"contracts,omitempty"`
+	Contracts []*core.Contract `json:"contracts"`
 }
 
 func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +278,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 type getActivityResp struct {
-	Activity []Activity `json:"activity,omitempty"`
+	Activity []Activity `json:"activity"`
 }
 
 func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {

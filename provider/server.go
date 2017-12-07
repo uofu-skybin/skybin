@@ -56,7 +56,7 @@ type providerServer struct {
 
 const (
 	// Max activity feed size
-	maxActivity = 50
+	maxActivity = 10
 )
 
 const (
@@ -163,7 +163,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		RenterId:    params.RenterID,
 		TimeStamp:   time.Now(),
 	}
-	server.activity = append(server.activity, activity)
+	server.addActivity(activity)
 }
 
 type getBlockResp struct {
@@ -203,7 +203,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		// TODO: Need this param from renter
 		// RenterId:    params.RenterID,
 	}
-	server.activity = append(server.activity, activity)
+	server.addActivity(activity)
 }
 
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +238,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		// TODO: Need this param from provider
 		// RenterId:    params.RenterID,
 	}
-	server.activity = append(server.activity, activity)
+	server.addActivity(activity)
 
 }
 

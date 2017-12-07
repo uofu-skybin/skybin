@@ -62,6 +62,7 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		}
 
 		provider.contracts = s.Contracts
+		provider.stats = s.Stats
 	}
 
 	return provider, err

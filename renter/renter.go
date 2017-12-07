@@ -12,6 +12,7 @@ import (
 	"skybin/metaserver"
 	"skybin/provider"
 	"skybin/util"
+	"strings"
 
 	"github.com/satori/go.uuid"
 )
@@ -254,12 +255,11 @@ func (r *Renter) ListFiles() ([]*core.File, error) {
 }
 
 func (r *Renter) Lookup(fileId string) (*core.File, error) {
-	for _, file := range r.files {
-		if file.ID == fileId {
-			return file, nil
-		}
+	_, f := r.findFile(fileId)
+	if f == nil {
+		return nil, fmt.Errorf("Cannot find file with ID %s", fileId)
 	}
-	return nil, fmt.Errorf("Cannot find file with ID %s", fileId)
+	return f, nil
 }
 
 func (r *Renter) Download(f *core.File, destpath string) error {
@@ -296,15 +296,12 @@ func (r *Renter) ShareFile(f *core.File, userId string) error {
 }
 
 func (r *Renter) Remove(fileId string) error {
-	var idx int
-	var f *core.File
-	for idx, f = range r.files {
-		if f.ID == fileId {
-			break
-		}
-	}
-	if idx == len(r.files) {
+	idx, f := r.findFile(fileId)
+	if f == nil {
 		return fmt.Errorf("Cannot find file with ID %s", fileId)
+	}
+	if f.IsDir && len(r.findChildren(f)) > 0 {
+		return errors.New("Cannot remove non-empty folder")
 	}
 	r.files = append(r.files[:idx], r.files[idx+1:]...)
 	err := r.saveSnapshot()
@@ -312,13 +309,11 @@ func (r *Renter) Remove(fileId string) error {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
 	for _, block := range f.Blocks {
-		for _, location := range block.Locations {
-			pvdr := provider.NewClient(location.Addr, &http.Client{})
-			err := pvdr.RemoveBlock(block.ID)
-			if err != nil {
-				return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
-			}
+		err := removeBlock(&block)
+		if err != nil {
+			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
 		}
+
 	}
 	return nil
 }
@@ -331,6 +326,25 @@ func (r *Renter) addFile(f *core.File) error {
 		return fmt.Errorf("Unable to save snapshot. Error %s", err)
 	}
 	return nil
+}
+
+func (r *Renter) findFile(fileId string) (idx int, f *core.File) {
+	for idx, f = range r.files {
+		if f.ID == fileId {
+			return
+		}
+	}
+	return -1, nil
+}
+
+func (r *Renter) findChildren(dir *core.File) []*core.File {
+	var children []*core.File
+	for _, f := range r.files {
+		if f != dir && strings.HasPrefix(f.Name, dir.Name) {
+			children = append(children, f)
+		}
+	}
+	return children
 }
 
 func (r *Renter) saveSnapshot() error {
@@ -362,4 +376,15 @@ func downloadBlock(block *core.Block, out io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("Unable to download file block %s. Cannot connect to providers.", block.ID)
+}
+
+func removeBlock(block *core.Block) error {
+	for _, location := range block.Locations {
+		pvdr := provider.NewClient(location.Addr, &http.Client{})
+		err := pvdr.RemoveBlock(block.ID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

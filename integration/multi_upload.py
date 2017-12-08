@@ -12,7 +12,7 @@ import string
 import sys
 
 MIN_SIZE = 10 * 1024
-MAX_SIZE = 5 * 1024 * 1024
+MAX_SIZE = 2 * 1024 * 1024
 
 files = [
     'school/WarAndPeace.txt',

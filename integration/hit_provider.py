@@ -45,7 +45,7 @@ class Provider:
         resp = requests.get(url)
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        msg = json.loads(resp.content)
+        msg = json.loads(resp.content.decode('utf-8'))
         return msg['data']
 
     def delete_block(self, id):

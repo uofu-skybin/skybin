@@ -253,11 +253,12 @@ func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Reques
 }
 
 type getInfoResp struct {
-	TotalStorage    int64 `json:"providerAllocated"`
-	ReservedStorage int64 `json:"providerReserved"`
-	UsedStorage     int64 `json:"providerUsed"`
-	FreeStorage     int64 `json:"providerFree"`
-	TotalContracts  int   `json:"providerContracts"`
+	ProviderId      string `json:"providerId"`
+	TotalStorage    int64  `json:"providerAllocated"`
+	ReservedStorage int64  `json:"providerReserved"`
+	UsedStorage     int64  `json:"providerUsed"`
+	FreeStorage     int64  `json:"providerFree"`
+	TotalContracts  int    `json:"providerContracts"`
 }
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
@@ -267,6 +268,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	free := reserved - used
 
 	info := getInfoResp{
+		ProviderId:      server.provider.Config.ProviderID,
 		TotalStorage:    1 << 30,
 		ReservedStorage: reserved,
 		UsedStorage:     used,

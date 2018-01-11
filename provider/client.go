@@ -32,6 +32,7 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	var respMsg postContractResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
@@ -46,6 +47,7 @@ func (client *Client) PutBlock(blockID string, renterID string, data io.Reader) 
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	var respMsg postContractResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
@@ -77,6 +79,7 @@ func (client *Client) RemoveBlock(blockID string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return errors.New("bad status code")
 	}

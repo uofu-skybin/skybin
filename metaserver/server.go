@@ -1,9 +1,11 @@
 package metaserver
 
 import (
-	"crypto/rand"
+	"crypto"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
@@ -112,7 +114,7 @@ type getAuthChallengeResp struct {
 }
 
 func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Request) {
-	providerID := r.FormValue("providerID")
+	providerID := r.URL.Query()["providerID"][0]
 
 	if _, ok := server.handshakes[providerID]; ok {
 		w.WriteHeader(http.StatusBadRequest)
@@ -120,7 +122,35 @@ func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Use the user's public key to decrypt the signed nonce
+	// Generate a nonce signed by the provider's public key
+	nonce := randString(8)
+
+	// Record the outstanding handshake
+	handshake := handshake{providerID: providerID, nonce: nonce}
+	server.handshakes[providerID] = handshake
+
+	// Return the nonce to the requester
+	resp := getAuthChallengeResp{Nonce: nonce}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Request) {
+	providerID := r.FormValue("providerID")
+	signedNonce := r.FormValue("signedNonce")
+
+	// Make sure the user provided the "providerID" and "signedNonce" arguments
+	if providerID == "" || signedNonce == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Make sure there is an outstanding handshake with the given provider ID
+	if _, ok := server.handshakes[providerID]; !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Retrieve the user's public key.
 	var provider core.Provider
 	foundProvider := false
 	for _, item := range server.providers {
@@ -135,81 +165,31 @@ func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Generate a nonce signed by the provider's public key
-	nonce := randString(8)
-
 	block, _ := pem.Decode([]byte(provider.PublicKey))
 	if block == nil {
 		panic("Could not decode PEM.")
 	}
-	server.logger.Println(block.Type)
 
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		panic(err)
 	}
 
-	encryptedNonce, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), []byte(nonce))
+	// Convert the Nonce from base64 to bytes
+	decoded, err := base64.StdEncoding.DecodeString(signedNonce)
 	if err != nil {
 		panic(err)
 	}
 
-	// Record the outstanding handshake
-	handshake := handshake{providerID: providerID, nonce: nonce}
-	server.handshakes[providerID] = handshake
+	// Verify the Nonce
+	hashed := sha256.Sum256([]byte(server.handshakes[providerID].nonce))
 
-	// Return the nonce to the requester
-	resp := getAuthChallengeResp{Nonce: string(encryptedNonce)}
-	json.NewEncoder(w).Encode(resp)
-}
-
-func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-
-	// Make sure the user provided the "providerID" and "signedNonce" arguments
-	if _, ok := params["providerID"]; !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	} else if _, ok := params["signedNonce"]; !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	} else {
+		w.WriteHeader(http.StatusAccepted)
 	}
-
-	// Make sure there is an outstanding handshake with the given provider ID
-	if _, ok := server.handshakes[params["signedNonce"]]; !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Use the user's public key to decrypt the signed nonce
-	// var provider core.Provider
-	// foundProvider := false
-	// for _, item := range server.providers {
-	// 	if item.ID == params["providerID"] {
-	// 		provider = item
-	// 		foundProvider = true
-	// 	}
-	// }
-	// if !foundProvider {
-	// 	w.WriteHeader(http.StatusBadRequest)
-	// 	return
-	// }
-	return
-	// Compare the signed nonce against the one in the outstanding handshakes
-	// output, err := rsa.DecryptPKCS1v15(nil, provider.PublicKey, params["signedNonce"])
-	// if err != nil {
-	// w.WriteHeader(http.StatusInternalServerError)
-	// return
-	// }
-
-	// If it's good, generate a JWT and return it.
-	// if output == server.handshakes[params["providerID"]] {
-	// w.WriteHeader(http.StatusAccepted)
-	// return
-	// } else {
-	// w.WriteHeader(http.StatusConflict)
-	// return
-	// }
 }
 
 type getProvidersResp struct {

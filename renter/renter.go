@@ -159,7 +159,7 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	file := &core.File{
-		ID:         uuid.NewV4().String(),
+		ID:         uuid.Must(uuid.NewV4()).String(),
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
@@ -204,7 +204,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 	defer f.Close()
 
-	blockId := uuid.NewV4().String()
+	blockId := uuid.Must(uuid.NewV4()).String()
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
 	err = pvdr.PutBlock(blockId, r.Config.RenterId, f)
@@ -232,7 +232,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 
 	file := &core.File{
-		ID:         uuid.NewV4().String(),
+		ID:         uuid.Must(uuid.NewV4()).String(),
 		Name:       destPath,
 		IsDir:      false,
 		Size:       finfo.Size(),

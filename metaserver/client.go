@@ -2,10 +2,16 @@ package metaserver
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"skybin/core"
 )
 
@@ -19,6 +25,38 @@ func NewClient(addr string, client *http.Client) *Client {
 type Client struct {
 	addr   string
 	client *http.Client
+}
+
+func (client *Client) authorize(privateKey *rsa.PrivateKey) (bool, error) {
+	challengeURL := fmt.Sprintf("http://%s/auth?providerID=1", client.addr)
+
+	// Get a challenge token
+	resp, err := client.client.Get(challengeURL)
+	if err != nil {
+		return false, err
+	}
+	var respMsg getAuthChallengeResp
+	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
+	token := respMsg.Nonce
+
+	// Sign the token
+	hashed := sha256.Sum256([]byte(token))
+
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return false, err
+	}
+
+	// Encode the token and send it back to the server.
+	encoded := base64.StdEncoding.EncodeToString(signature)
+
+	respondURL := fmt.Sprintf("http://%s/auth", client.addr)
+	resp, err = client.client.PostForm(respondURL, url.Values{"providerID": {"1"}, "signedNonce": {encoded}})
+	if err != nil {
+		return false, err
+	} else {
+		return true, nil
+	}
 }
 
 func (client *Client) GetProviders() ([]core.Provider, error) {

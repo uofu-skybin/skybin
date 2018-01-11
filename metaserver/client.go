@@ -27,7 +27,7 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) authorize(privateKey *rsa.PrivateKey) (bool, error) {
+func (client *Client) Authorize(privateKey *rsa.PrivateKey) (bool, error) {
 	challengeURL := fmt.Sprintf("http://%s/auth?providerID=1", client.addr)
 
 	// Get a challenge token
@@ -48,7 +48,7 @@ func (client *Client) authorize(privateKey *rsa.PrivateKey) (bool, error) {
 	}
 
 	// Encode the token and send it back to the server.
-	encoded := base64.StdEncoding.EncodeToString(signature)
+	encoded := base64.URLEncoding.EncodeToString(signature)
 
 	respondURL := fmt.Sprintf("http://%s/auth", client.addr)
 	resp, err = client.client.PostForm(respondURL, url.Values{"providerID": {"1"}, "signedNonce": {encoded}})

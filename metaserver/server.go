@@ -176,7 +176,7 @@ func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Re
 	}
 
 	// Convert the Nonce from base64 to bytes
-	decoded, err := base64.StdEncoding.DecodeString(signedNonce)
+	decoded, err := base64.URLEncoding.DecodeString(signedNonce)
 	if err != nil {
 		panic(err)
 	}

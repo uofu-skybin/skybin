@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -38,10 +39,17 @@ func runProvider(args ...string) {
 		addr = p.Config.Addr
 	}
 
+	// Read in the provider's public key.
+	b, err := ioutil.ReadFile(path.Join(p.Config.IdentityFile + ".pub"))
+	if err != nil {
+		panic("Could not read identity file.")
+	}
+	publicKey := string(b)
+
 	// Register with metadata service.
 	info := core.Provider{
 		ID:         p.Config.ProviderID,
-		PublicKey:  "read public key in here",
+		PublicKey:  publicKey,
 		Addr:       addr,
 		SpaceAvail: 1 << 32,
 	}

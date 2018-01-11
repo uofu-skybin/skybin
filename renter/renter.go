@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -199,14 +198,16 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 
 	// Upload the file to the provider
-	data, err := ioutil.ReadFile(srcPath)
+	f, err := os.Open(srcPath)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot read file. Error: %s", err)
+		return nil, fmt.Errorf("Cannot open file. Error: %s", err)
 	}
+	defer f.Close()
+
 	blockId := uuid.NewV4().String()
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
-	err = pvdr.PutBlock(blockId, r.Config.RenterId, data)
+	err = pvdr.PutBlock(blockId, r.Config.RenterId, f)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot upload block to provider. Error: %s", err)
 	}
@@ -360,15 +361,16 @@ func downloadBlock(block *core.Block, out io.Writer) error {
 	for _, location := range block.Locations {
 		client := provider.NewClient(location.Addr, &http.Client{})
 
-		data, err := client.GetBlock(block.ID)
+		blockReader, err := client.GetBlock(block.ID)
 		if err != nil {
 
 			// TODO: Check that failure is due to a network error, not because
 			// provider didn't return the block.
 			continue
 		}
+		defer blockReader.Close()
 
-		_, err = out.Write(data)
+		_, err = io.Copy(out, blockReader)
 		if err != nil {
 			return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
 		}

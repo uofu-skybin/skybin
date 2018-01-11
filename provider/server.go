@@ -2,16 +2,15 @@ package provider
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"skybin/core"
 	"time"
-
 	"fmt"
 	"github.com/gorilla/mux"
+	"io"
 )
 
 func NewServer(provider *Provider, logger *log.Logger) http.Handler {
@@ -124,21 +123,7 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 	server.addActivity(activity)
 }
 
-type postBlockParams struct {
-	RenterID string `json:"renterId"`
-	Data     []byte `json:"data"`
-}
-
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
-	var params postBlockParams
-	err := json.NewDecoder(r.Body).Decode(&params)
-	if err != nil {
-		server.logger.Println(err)
-		server.writeResp(w, http.StatusBadRequest,
-			errorResp{Error: "Bad json"})
-		return
-	}
-
 	blockID, exists := mux.Vars(r)["blockID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
@@ -147,10 +132,26 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	path := path.Join(server.provider.Homedir, "blocks", blockID)
-	ioutil.WriteFile(path, params.Data, 0666)
+
+	f, err := os.Create(path)
+	if err != nil {
+		server.logger.Println("Unable to create block file. Error: ", err)
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Unable to save block"})
+		return
+	}
+	defer f.Close()
+
+	n, err := io.Copy(f, r.Body)
+	if err != nil {
+		server.logger.Println("Unable to write block. Error: ", err)
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Unable to save block"})
+		return
+	}
 
 	// Update stats
-	server.provider.stats.StorageUsed += int64(len(params.Data))
+	server.provider.stats.StorageUsed += int64(n)
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
@@ -161,14 +162,10 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	activity := Activity{
 		RequestType: postBlockType,
 		BlockId:     blockID,
-		RenterId:    params.RenterID,
+//		RenterId:    params.RenterID,
 		TimeStamp:   time.Now(),
 	}
 	server.addActivity(activity)
-}
-
-type getBlockResp struct {
-	Data []byte `json:"data"`
 }
 
 func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
@@ -186,16 +183,22 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := ioutil.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		msg := fmt.Sprintf("Error reading block %s: %s\n", blockID, err)
-		server.logger.Println(msg)
+		server.logger.Println("Unable to open block file. Error: ", err)
 		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: msg})
+			&errorResp{Error: "IO Error: unable to retrieve block"})
 		return
 	}
+	defer f.Close()
 
-	server.writeResp(w, http.StatusOK, &getBlockResp{Data: data})
+	w.WriteHeader(http.StatusOK)
+
+	_, err = io.Copy(w, f)
+	if err != nil {
+		server.logger.Println("Unable to write block to ResponseWriter. Error: ", err)
+		return
+	}
 
 	activity := Activity{
 		RequestType: getBlockType,

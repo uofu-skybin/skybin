@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"skybin/core"
+	"io"
 )
 
 type Client struct {
@@ -39,13 +40,9 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 	return respMsg.Contract, nil
 }
 
-func (client *Client) PutBlock(blockID string, renterID string, data []byte) error {
+func (client *Client) PutBlock(blockID string, renterID string, data io.Reader) error {
 	url := fmt.Sprintf("http://%s/blocks/%s", client.addr, blockID)
-	body, err := json.Marshal(&postBlockParams{RenterID: renterID, Data: data})
-	if err != nil {
-		return err
-	}
-	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(body))
+	resp, err := client.client.Post(url, "application/octet-stream", data)
 	if err != nil {
 		return err
 	}
@@ -57,18 +54,17 @@ func (client *Client) PutBlock(blockID string, renterID string, data []byte) err
 	return nil
 }
 
-func (client *Client) GetBlock(blockID string) ([]byte, error) {
+func (client *Client) GetBlock(blockID string) (io.ReadCloser, error) {
 	url := fmt.Sprintf("http://%s/blocks/%s", client.addr, blockID)
 	resp, err := client.client.Get(url)
 	if err != nil {
 		return nil, err
 	}
-	var respMsg getBlockResp
-	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
 		return nil, errors.New("bad status code")
 	}
-	return respMsg.Data, nil
+	return resp.Body, nil
 }
 
 func (client *Client) RemoveBlock(blockID string) error {

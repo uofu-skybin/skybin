@@ -93,7 +93,7 @@ func savePrivateKey(key *rsa.PrivateKey, path string) {
 }
 
 func savePublicKey(key rsa.PublicKey, path string) {
-	bytes, err := asn1.Marshal(key)
+	bytes, err := x509.MarshalPKIXPublicKey(&key)
 	checkErr(err)
 	keyBlock := &pem.Block{
 		Type:  "RSA PUBLIC KEY",

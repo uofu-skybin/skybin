@@ -1,14 +1,18 @@
 package metaserver
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"skybin/core"
 	"strconv"
-	"log"
 
 	"github.com/gorilla/mux"
 )
@@ -18,16 +22,20 @@ func NewServer(homedir string, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
 	server := &metaServer{
-		homedir: homedir,
-		dbpath: path.Join(homedir, "metaDB.json"),
-		router: router,
-		logger: logger,
+		homedir:    homedir,
+		dbpath:     path.Join(homedir, "metaDB.json"),
+		router:     router,
+		logger:     logger,
+		handshakes: make(map[string]handshake),
 	}
 
 	// If the database exists, load it into memory.
 	if _, err := os.Stat(server.dbpath); !os.IsNotExist(err) {
 		server.loadDbFromFile()
 	}
+
+	router.HandleFunc("/auth", server.getAuthChallenge).Methods("GET")
+	router.HandleFunc("/auth", server.respondAuthChallenge).Methods("POST")
 
 	router.HandleFunc("/providers", server.getProviders).Methods("GET")
 	router.HandleFunc("/providers", server.postProvider).Methods("POST")
@@ -43,13 +51,19 @@ func NewServer(homedir string, logger *log.Logger) http.Handler {
 	return server
 }
 
+type handshake struct {
+	nonce      string
+	providerID string
+}
+
 type metaServer struct {
-	homedir   string
-	dbpath    string
-	providers []core.Provider
-	renters   []core.Renter
-	logger    *log.Logger
-	router    *mux.Router
+	homedir    string
+	dbpath     string
+	providers  []core.Provider
+	renters    []core.Renter
+	logger     *log.Logger
+	router     *mux.Router
+	handshakes map[string]handshake
 }
 
 func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +105,111 @@ func (server *metaServer) loadDbFromFile() {
 
 	server.providers = db.Providers
 	server.renters = db.Renters
+}
+
+type getAuthChallengeResp struct {
+	Nonce string `json:"nonce"`
+}
+
+func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Request) {
+	providerID := r.FormValue("providerID")
+
+	if _, ok := server.handshakes[providerID]; ok {
+		w.WriteHeader(http.StatusBadRequest)
+		server.logger.Println("Already an outstanding handshake with this provider.")
+		return
+	}
+
+	// Use the user's public key to decrypt the signed nonce
+	var provider core.Provider
+	foundProvider := false
+	for _, item := range server.providers {
+		if item.ID == providerID {
+			provider = item
+			foundProvider = true
+		}
+	}
+	if !foundProvider {
+		w.WriteHeader(http.StatusBadRequest)
+		server.logger.Println("Could not locate provider.")
+		return
+	}
+
+	// Generate a nonce signed by the provider's public key
+	nonce := randString(8)
+
+	block, _ := pem.Decode([]byte(provider.PublicKey))
+	if block == nil {
+		panic("Could not decode PEM.")
+	}
+	server.logger.Println(block.Type)
+
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		panic(err)
+	}
+
+	encryptedNonce, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), []byte(nonce))
+	if err != nil {
+		panic(err)
+	}
+
+	// Record the outstanding handshake
+	handshake := handshake{providerID: providerID, nonce: nonce}
+	server.handshakes[providerID] = handshake
+
+	// Return the nonce to the requester
+	resp := getAuthChallengeResp{Nonce: string(encryptedNonce)}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	// Make sure the user provided the "providerID" and "signedNonce" arguments
+	if _, ok := params["providerID"]; !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	} else if _, ok := params["signedNonce"]; !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Make sure there is an outstanding handshake with the given provider ID
+	if _, ok := server.handshakes[params["signedNonce"]]; !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Use the user's public key to decrypt the signed nonce
+	// var provider core.Provider
+	// foundProvider := false
+	// for _, item := range server.providers {
+	// 	if item.ID == params["providerID"] {
+	// 		provider = item
+	// 		foundProvider = true
+	// 	}
+	// }
+	// if !foundProvider {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	return
+	// }
+	return
+	// Compare the signed nonce against the one in the outstanding handshakes
+	// output, err := rsa.DecryptPKCS1v15(nil, provider.PublicKey, params["signedNonce"])
+	// if err != nil {
+	// w.WriteHeader(http.StatusInternalServerError)
+	// return
+	// }
+
+	// If it's good, generate a JWT and return it.
+	// if output == server.handshakes[params["providerID"]] {
+	// w.WriteHeader(http.StatusAccepted)
+	// return
+	// } else {
+	// w.WriteHeader(http.StatusConflict)
+	// return
+	// }
 }
 
 type getProvidersResp struct {

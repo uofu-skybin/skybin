@@ -20,7 +20,7 @@ var providerCmd = Cmd{
 
 func runProvider(args ...string) {
 	fs := flag.NewFlagSet("provider", flag.ExitOnError)
-	addrFlag := flag.String("addr", "", "address to listen at (host:port)")
+	addrFlag := fs.String("addr", "", "address to listen at (host:port)")
 	fs.Parse(args)
 
 	homedir, err := findHomeDir()

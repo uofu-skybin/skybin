@@ -1,4 +1,4 @@
-package metaserver
+package authorization
 
 import (
 	"math/rand"

@@ -1,24 +1,17 @@
 package metaserver
 
 import (
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path"
+	"skybin/authorization"
 	"skybin/core"
 	"strconv"
-	"time"
 
-	"github.com/auth0/go-jwt-middleware"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 )
 
@@ -45,19 +38,21 @@ func InitServer(home string, log *log.Logger) http.Handler {
 		loadDbFromFile()
 	}
 
-	router.Handle("/auth", getAuthChallengeHandler).Methods("GET")
-	router.Handle("/auth", respondAuthChallengeHandler).Methods("POST")
+	authorization.InitAuth()
+
+	router.Handle("/auth/provider", authorization.GetAuthChallengeHandler("providerID", logger)).Methods("GET")
+	router.Handle("/auth/provider", authorization.GetRespondAuthChallengeHandler("providerID", logger, mySigningKey, getProviderPublicKey)).Methods("POST")
 
 	router.Handle("/providers", getProvidersHandler).Methods("GET")
 	router.Handle("/providers", postProviderHandler).Methods("POST")
-	router.Handle("/providers/{id}", jwtMiddleware.Handler(getProviderHandler)).Methods("GET")
+	router.Handle("/providers/{id}", authMiddleware.Handler(getProviderHandler)).Methods("GET")
 
 	router.Handle("/renters", postRenterHandler).Methods("POST")
-	router.Handle("/renters/{id}", jwtMiddleware.Handler(getRenterHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files", jwtMiddleware.Handler(getRenterFilesHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files", jwtMiddleware.Handler(postRenterFileHandler)).Methods("POST")
-	router.Handle("/renters/{id}/files/{fileId}", jwtMiddleware.Handler(getRenterFileHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files/{fileId}", jwtMiddleware.Handler(deleteRenterFileHandler)).Methods("DELETE")
+	router.Handle("/renters/{id}", authMiddleware.Handler(getRenterHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files", authMiddleware.Handler(getRenterFilesHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files", authMiddleware.Handler(postRenterFileHandler)).Methods("POST")
+	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(getRenterFileHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(deleteRenterFileHandler)).Methods("DELETE")
 
 	return router
 }
@@ -108,111 +103,16 @@ func loadDbFromFile() {
 	renters = db.Renters
 }
 
-var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
-	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-		return mySigningKey, nil
-	},
-	SigningMethod: jwt.SigningMethodHS256,
-})
-
-type getAuthChallengeResp struct {
-	Nonce string `json:"nonce"`
-}
-
-var getAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	providerID := r.URL.Query()["providerID"][0]
-
-	if _, ok := handshakes[providerID]; ok {
-		w.WriteHeader(http.StatusBadRequest)
-		logger.Println("Already an outstanding handshake with this provider.")
-		return
-	}
-
-	// Generate a nonce signed by the provider's public key
-	nonce := randString(8)
-
-	// Record the outstanding handshake
-	handshake := handshake{providerID: providerID, nonce: nonce}
-	handshakes[providerID] = handshake
-
-	// Return the nonce to the requester
-	resp := getAuthChallengeResp{Nonce: nonce}
-	json.NewEncoder(w).Encode(resp)
-})
-
-var respondAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	providerID := r.FormValue("providerID")
-	signedNonce := r.FormValue("signedNonce")
-
-	// Make sure the user provided the "providerID" and "signedNonce" arguments
-	if providerID == "" || signedNonce == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Make sure there is an outstanding handshake with the given provider ID
-	if _, ok := handshakes[providerID]; !ok {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Retrieve the user's public key.
-	var provider core.Provider
-	foundProvider := false
+func getProviderPublicKey(providerID string) (string, error) {
 	for _, item := range providers {
 		if item.ID == providerID {
-			provider = item
-			foundProvider = true
+			return item.PublicKey, nil
 		}
 	}
-	if !foundProvider {
-		w.WriteHeader(http.StatusBadRequest)
-		logger.Println("Could not locate provider.")
-		return
-	}
+	return "", errors.New("Could not locate provider with given ID.")
+}
 
-	block, _ := pem.Decode([]byte(provider.PublicKey))
-	if block == nil {
-		logger.Fatal("Could not decode PEM.")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		logger.Fatal("Could not parse public key for provider.")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	// Convert the Nonce from base64 to bytes
-	decoded, err := base64.URLEncoding.DecodeString(signedNonce)
-	if err != nil {
-		logger.Fatal("Could not decode signed nonce.")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	// Verify the Nonce
-	hashed := sha256.Sum256([]byte(handshakes[providerID].nonce))
-
-	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-	} else {
-		token := jwt.New(jwt.SigningMethodHS256)
-
-		claims := token.Claims.(jwt.MapClaims)
-		claims["providerID"] = provider.ID
-		claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
-
-		tokenString, err := token.SignedString(mySigningKey)
-		if err != nil {
-			panic(err)
-		}
-		w.Write([]byte(tokenString))
-	}
-})
+var authMiddleware = authorization.GetAuthMiddleware(mySigningKey)
 
 type getProvidersResp struct {
 	Providers []core.Provider `json:"providers"`

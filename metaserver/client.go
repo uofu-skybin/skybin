@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"skybin/authorization"
 	"skybin/core"
 )
 
@@ -28,15 +29,15 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) Authorize(privateKey *rsa.PrivateKey) (string, error) {
-	challengeURL := fmt.Sprintf("http://%s/auth?providerID=1", client.addr)
+func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey) (string, error) {
+	challengeURL := fmt.Sprintf("http://%s/auth/provider?providerID=1", client.addr)
 
 	// Get a challenge token
 	resp, err := client.client.Get(challengeURL)
 	if err != nil {
 		return "", err
 	}
-	var respMsg getAuthChallengeResp
+	var respMsg authorization.GetAuthChallengeResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	token := respMsg.Nonce
 
@@ -51,7 +52,7 @@ func (client *Client) Authorize(privateKey *rsa.PrivateKey) (string, error) {
 	// Encode the token and send it back to the server.
 	encoded := base64.URLEncoding.EncodeToString(signature)
 
-	respondURL := fmt.Sprintf("http://%s/auth", client.addr)
+	respondURL := fmt.Sprintf("http://%s/auth/provider", client.addr)
 	resp, err = client.client.PostForm(respondURL, url.Values{"providerID": {"1"}, "signedNonce": {encoded}})
 	if err != nil {
 		return "", err

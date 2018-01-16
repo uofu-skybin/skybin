@@ -59,6 +59,8 @@ type File struct {
 	Size       int64        `json:"size"`
 	ModTime    time.Time    `json:"modTime"`
 	AccessList []Permission `json:"accessList"`
+	EncryptionKey string    `json: "encryptionKey"`
+	EncryptionIV string     `json: "encryptionIV"`
 	Blocks     []Block      `json:"blocks"`
 }
 

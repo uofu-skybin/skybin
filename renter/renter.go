@@ -12,8 +12,14 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-
+	"crypto/aes"
+	"crypto/rand"
 	"github.com/satori/go.uuid"
+	"io/ioutil"
+	"net"
+	"time"
+	"compress/zlib"
+	"crypto/cipher"
 )
 
 type Config struct {
@@ -28,6 +34,10 @@ type Renter struct {
 	Homedir   string
 	files     []*core.File
 	contracts []*core.Contract
+
+	// All free storage blobs available for uploads.
+	// Each provider with whom we have a contract
+	// should have at most one blob in this list.
 	freelist  []*storageBlob
 }
 
@@ -106,8 +116,16 @@ func (r *Renter) Info() (*Info, error) {
 	}, nil
 }
 
-func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
+func (r *Renter) findBlobWithProvider(providerId string) (*storageBlob, bool) {
+	for _, blob := range r.freelist {
+		if blob.ProviderId == providerId {
+			return blob, true
+		}
+	}
+	return nil, false
+}
 
+func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
 	providers, err := metaService.GetProviders()
 	if err != nil {
@@ -134,13 +152,20 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		}
 
 		contracts = append(contracts, signedContract)
-
 		r.contracts = append(r.contracts, signedContract)
-		r.freelist = append(r.freelist, &storageBlob{
-			ProviderId: pinfo.ID,
-			Addr:       pinfo.Addr,
-			Amount:     contract.StorageSpace,
-		})
+
+		// Do we already have storage with this provider?
+		blob, exists := r.findBlobWithProvider(signedContract.ProviderId)
+		if exists {
+			blob.Amount += contract.StorageSpace
+		} else {
+			blob = &storageBlob{
+				ProviderId: pinfo.ID,
+				Addr:       pinfo.Addr,
+				Amount:     contract.StorageSpace,
+			}
+			r.freelist = append(r.freelist, blob)
+		}
 		break
 	}
 	if len(contracts) == 0 {
@@ -149,8 +174,6 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 	err = r.saveSnapshot()
 	if err != nil {
-
-		// Implicitly cancel any formed contracts.
 		return nil, fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
 
@@ -184,63 +207,158 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	if finfo.IsDir() {
 		return nil, errors.New("Folder uploads not supported yet")
 	}
-	if finfo.Size() > (1 << 28) {
-		return nil, errors.New("Large file uploads not supported yet")
-	}
 
 	// Find storage
-	var blobIdx int
-	var blob *storageBlob
-	for blobIdx, blob = range r.freelist {
-		if blob.Amount >= finfo.Size() {
+	var blobIndices []int
+	var blobs []*storageBlob
+	var storageFound int64 = 0
+	for idx, blob := range r.freelist {
+
+		// Check if the provider is online
+		conn, err := net.DialTimeout("tcp", blob.Addr, 3*time.Second)
+		if err != nil {
+			continue
+		}
+		conn.Close()
+		blobIndices = append(blobIndices, idx)
+		blobs = append(blobs, blob)
+		storageFound += blob.Amount
+		if storageFound >= finfo.Size() {
 			break
 		}
 	}
-	if blob == nil {
-		return nil, errors.New("Cannot find enough storage. " +
-			"Be sure to reserve storage before uploading files.")
+	if storageFound < finfo.Size() {
+		return nil, errors.New("Cannot find enough storage")
 	}
 
-	// Upload the file to the provider
-	f, err := os.Open(srcPath)
+	// Compress the file
+	compressTemp, err := ioutil.TempFile("", "skybin_upload")
 	if err != nil {
-		return nil, fmt.Errorf("Cannot open file. Error: %s", err)
+		return nil, errors.New("Unable to create temp file to prepare upload")
 	}
-	defer f.Close()
-
-	blockId, err := genId()
+	defer compressTemp.Close()
+	defer os.Remove(compressTemp.Name())
+	cw := zlib.NewWriter(compressTemp)
+	srcFile, err := os.Open(srcPath)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot generate block ID. Error: %s", err)
+		return nil, fmt.Errorf("Unable to open file. Error: %s", err)
 	}
-
-	pvdr := provider.NewClient(blob.Addr, &http.Client{})
-	err = pvdr.PutBlock(blockId, r.Config.RenterId, f)
+	defer srcFile.Close()
+	_, err = io.Copy(cw, srcFile)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot upload block to provider. Error: %s", err)
+		return nil, fmt.Errorf("Unable to compress file. Error: %s", err)
+	}
+	cw.Close()
+	_, err = compressTemp.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to seek to start of temp file. Error: %s", err)
 	}
 
-	// Remove the used storage from the freelist
-	r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx+1:]...)
-	remaining := blob.Amount - finfo.Size()
-	if remaining > kMinBlobSize {
-		leftover := &storageBlob{
-			ProviderId: blob.ProviderId,
-			Addr:       blob.Addr,
-			Amount:     remaining,
+	// Encrypt
+	aesKey := make([]byte, 32)
+	_, err = rand.Reader.Read(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create encryption key. Error: %s", err)
+	}
+	aesBlock, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create block cipher for encryption. Error: %s", err)
+	}
+	aesIv := make([]byte, aes.BlockSize)
+	_, err = rand.Reader.Read(aesIv)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read initialization vector. Error: %s", err)
+	}
+	stream := cipher.NewCFBEncrypter(aesBlock, aesIv)
+	encryptTemp, err := ioutil.TempFile("", "skybin_upload")
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create temp file for encrypting upload. Error: %s", err)
+	}
+	defer encryptTemp.Close()
+	defer os.Remove(encryptTemp.Name())
+	streamWriter := cipher.StreamWriter{S: stream, W: encryptTemp}
+	_, err = io.Copy(streamWriter, compressTemp)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt upload. Error: %s", err)
+	}
+	_, err = encryptTemp.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to seek to start of temp file. Error: %s", err)
+	}
+
+	// Upload
+	tempInfo, err := encryptTemp.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to stat encrypted file. Error: %s", err)
+	}
+	bytesRemaining := tempInfo.Size()
+	var blocks []core.Block
+	for _, blob := range blobs {
+		pvdr := provider.NewClient(blob.Addr, &http.Client{})
+		var blockId string
+		blockId, err = genId()
+		if err != nil {
+			err = fmt.Errorf("Unable to generate block ID. Error: %s", err)
+			break
 		}
-		r.freelist = append(r.freelist, leftover)
+		blockSize := blob.Amount
+		if blockSize > bytesRemaining {
+			blockSize = bytesRemaining
+		}
+		lr := io.LimitReader(encryptTemp, blockSize)
+		err = pvdr.PutBlock(blockId, r.Config.RenterId, lr)
+		if err != nil {
+			err = fmt.Errorf("Unable to upload block. Error: %s", err)
+			break
+		}
+		blocks = append(blocks, core.Block{
+			ID: blockId,
+			Locations: []core.BlockLocation{
+				{ProviderId: blob.ProviderId, Addr: blob.Addr},
+			},
+		})
+		bytesRemaining -= blockSize
+		if bytesRemaining == 0 {
+			break
+		}
+	}
+	if err != nil {
+		// Upload failed. Unwind
+		for _, block := range blocks {
+			err := removeBlock(&block)
+			if err != nil {
+				// TODO: append block to list to be removed later...
+			}
+		}
+		return nil, err
 	}
 
-	block := core.Block{
-		ID: blockId,
-		Locations: []core.BlockLocation{
-			{ProviderId: blob.ProviderId, Addr: blob.Addr},
-		},
+	// We're done. Split remaining storage blobs
+	var bytesUsed int64 = 0
+	for _, blob := range(blobs) {
+		n := blob.Amount
+		if n + bytesUsed > tempInfo.Size() {
+			n = tempInfo.Size() - bytesUsed
+			remaining := blob.Amount - n
+			if remaining >= kMinBlobSize {
+				r.freelist = append(r.freelist, &storageBlob{
+					ProviderId: blob.ProviderId,
+					Addr: blob.Addr,
+					Amount: remaining,
+				})
+			}
+		}
+		bytesUsed += n
+	}
+	// And remove old blobs
+	for i := len(blobIndices) - 1; i >= 0; i-- {
+		blobIdx := blobIndices[i]
+		r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx+1:]...)
 	}
 
 	fileId, err := genId()
 	if err != nil {
-		return nil, fmt.Errorf("Cannot generate file ID. Error: %s", err)
+		return nil, fmt.Errorf("Unable to generate file ID. Error: %s", err)
 	}
 	file := &core.File{
 		ID:         fileId,
@@ -249,16 +367,15 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		Size:       finfo.Size(),
 		ModTime:    finfo.ModTime(),
 		AccessList: []core.Permission{},
-		Blocks: []core.Block{
-			block,
-		},
+		EncryptionKey: string(aesKey),
+		EncryptionIV: string(aesIv),
+		Blocks:     blocks,
 	}
 
 	err = r.addFile(file)
 	if err != nil {
 		return nil, err
 	}
-
 	return file, nil
 }
 
@@ -279,18 +396,63 @@ func (r *Renter) Download(f *core.File, destpath string) error {
 		return errors.New("Folder downloads not supported yet")
 	}
 
-	outFile, err := os.Create(destpath)
+	// Download
+	encryptTemp, err := ioutil.TempFile("", "skybin_download")
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to create temp file for download. Error: %s", err)
 	}
-	defer outFile.Close()
-
+	defer encryptTemp.Close()
+	defer os.Remove(encryptTemp.Name())
 	for _, block := range f.Blocks {
-		err = downloadBlock(&block, outFile)
+		err = downloadBlock(&block, encryptTemp)
 		if err != nil {
 			_ = os.Remove(destpath)
 			return err
 		}
+	}
+	_, err = encryptTemp.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return fmt.Errorf("Unable to seek to beginning of temp file. Error: %s", err)
+	}
+
+	// Decrypt
+	aesKey := []byte(f.EncryptionKey)
+	aesCipher, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return fmt.Errorf("Unable to create aes cipher. Error: %s", err)
+	}
+	iv := []byte(f.EncryptionIV)
+	stream := cipher.NewCFBDecrypter(aesCipher, iv)
+	streamReader := cipher.StreamReader{S: stream, R: encryptTemp}
+	compressTemp, err := ioutil.TempFile("", "skybin_download")
+	if err != nil {
+		return fmt.Errorf("Unable to create temp file to decrypt download. Error: %s", err)
+	}
+	defer compressTemp.Close()
+	defer os.Remove(compressTemp.Name())
+	_, err = io.Copy(compressTemp, streamReader)
+	if err != nil {
+		return fmt.Errorf("Unable to decrypt file. Error: %s", err)
+	}
+	_, err = compressTemp.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return fmt.Errorf("Unable to seek to beginning of decrypted temp. Error: %s", err)
+	}
+
+	// Decompress
+	zr, err := zlib.NewReader(compressTemp)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize decompression reader. Error: %s", err)
+	}
+	defer zr.Close()
+	outFile, err := os.Create(destpath)
+	if err != nil {
+		return fmt.Errorf("Unable to create destination file. Error: %s", err)
+	}
+	defer outFile.Close()
+	_, err = io.Copy(outFile, zr)
+	if err != nil {
+		return fmt.Errorf("Unable to decompress file. Error: %s", err)
 	}
 
 	return nil

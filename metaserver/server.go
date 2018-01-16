@@ -13,20 +13,26 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var mySigningKey = []byte("secret")
+// Directory where DB and error logs are dumped.
+var dataDir string
 
-var homedir string
+// Path in dataDir where database is stored
 var dbpath string
+
 var logger *log.Logger
 var router *mux.Router
 
-var authMiddleware = authorization.GetAuthMiddleware(mySigningKey)
+// Key used to sign JWTs
+// BUG(Kincaid): Signing key is still a test key.
+var signingKey = []byte("secret")
+var authMiddleware = authorization.GetAuthMiddleware(signingKey)
 
-func InitServer(home string, log *log.Logger) http.Handler {
+// InitServer prepares a handler for the server.
+func InitServer(dataDirectory string, log *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
-	homedir = home
-	dbpath = path.Join(homedir, "metaDB.json")
+	dataDir = dataDirectory
+	dbpath = path.Join(dataDir, "metaDB.json")
 	logger = log
 
 	// If the database exists, load it into memory.
@@ -37,7 +43,7 @@ func InitServer(home string, log *log.Logger) http.Handler {
 	authorization.InitAuth()
 
 	router.Handle("/auth/provider", authorization.GetAuthChallengeHandler("providerID", logger)).Methods("GET")
-	router.Handle("/auth/provider", authorization.GetRespondAuthChallengeHandler("providerID", logger, mySigningKey, getProviderPublicKey)).Methods("POST")
+	router.Handle("/auth/provider", authorization.GetRespondAuthChallengeHandler("providerID", logger, signingKey, getProviderPublicKey)).Methods("POST")
 
 	router.Handle("/providers", getProvidersHandler).Methods("GET")
 	router.Handle("/providers", postProviderHandler).Methods("POST")
@@ -53,6 +59,7 @@ func InitServer(home string, log *log.Logger) http.Handler {
 	return router
 }
 
+// ServeHTTP begins serving requests from the server's router.
 func ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger.Println(r.Method, r.URL)
 	router.ServeHTTP(w, r)
@@ -71,15 +78,14 @@ func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 		panic(err)
 	}
 
-	writeErr := ioutil.WriteFile(path.Join(homedir, dbpath), dbBytes, 0644)
+	writeErr := ioutil.WriteFile(path.Join(dataDir, dbpath), dbBytes, 0644)
 	if writeErr != nil {
 		panic(err)
 	}
 }
 
 func loadDbFromFile() {
-
-	contents, err := ioutil.ReadFile(path.Join(homedir, dbpath))
+	contents, err := ioutil.ReadFile(path.Join(dataDir, dbpath))
 	if err != nil {
 		panic(err)
 	}

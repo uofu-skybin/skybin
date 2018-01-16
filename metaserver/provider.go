@@ -10,15 +10,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// List of providers registered with the server.
 var providers []core.Provider
 
+// Retrieves the given provider's public RSA key.
 func getProviderPublicKey(providerID string) (string, error) {
 	for _, item := range providers {
 		if item.ID == providerID {
 			return item.PublicKey, nil
 		}
 	}
-	return "", errors.New("Could not locate provider with given ID.")
+	return "", errors.New("could not locate provider with given ID")
 }
 
 type getProvidersResp struct {

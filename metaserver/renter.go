@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Renters registered with the server.
 var renters []core.Renter
 
 var postRenterHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

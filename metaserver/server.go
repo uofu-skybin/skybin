@@ -22,7 +22,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const mySigningKey = "secret"
+var mySigningKey = []byte("secret")
 
 var homedir string
 var dbpath string
@@ -32,13 +32,12 @@ var logger *log.Logger
 var router *mux.Router
 var handshakes map[string]handshake
 
-func InitServer(homedir string, logger *log.Logger) http.Handler {
+func InitServer(home string, log *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
-	homedir = homedir
+	homedir = home
 	dbpath = path.Join(homedir, "metaDB.json")
-	router = router
-	logger = logger
+	logger = log
 	handshakes = make(map[string]handshake)
 
 	// If the database exists, load it into memory.
@@ -176,12 +175,14 @@ var respondAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r
 	if block == nil {
 		logger.Fatal("Could not decode PEM.")
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		logger.Fatal("Could not parse public key for provider.")
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	// Convert the Nonce from base64 to bytes
@@ -189,6 +190,7 @@ var respondAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r
 	if err != nil {
 		logger.Fatal("Could not decode signed nonce.")
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	// Verify the Nonce
@@ -204,7 +206,10 @@ var respondAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r
 		claims["providerID"] = provider.ID
 		claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
 
-		tokenString, _ := token.SignedString(mySigningKey)
+		tokenString, err := token.SignedString(mySigningKey)
+		if err != nil {
+			panic(err)
+		}
 		w.Write([]byte(tokenString))
 	}
 })

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"skybin/core"
@@ -27,13 +28,13 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) Authorize(privateKey *rsa.PrivateKey) (bool, error) {
+func (client *Client) Authorize(privateKey *rsa.PrivateKey) (string, error) {
 	challengeURL := fmt.Sprintf("http://%s/auth?providerID=1", client.addr)
 
 	// Get a challenge token
 	resp, err := client.client.Get(challengeURL)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	var respMsg getAuthChallengeResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
@@ -44,7 +45,7 @@ func (client *Client) Authorize(privateKey *rsa.PrivateKey) (bool, error) {
 
 	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hashed[:])
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
 	// Encode the token and send it back to the server.
@@ -53,9 +54,19 @@ func (client *Client) Authorize(privateKey *rsa.PrivateKey) (bool, error) {
 	respondURL := fmt.Sprintf("http://%s/auth", client.addr)
 	resp, err = client.client.PostForm(respondURL, url.Values{"providerID": {"1"}, "signedNonce": {encoded}})
 	if err != nil {
-		return false, err
+		return "", err
 	} else {
-		return true, nil
+		println(resp.StatusCode)
+		var b []byte
+		defer resp.Body.Close()
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+		if resp.StatusCode != 200 {
+			panic("Bad status: " + resp.Status)
+		}
+		return string(b), nil
 	}
 }
 

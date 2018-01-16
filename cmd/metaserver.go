@@ -4,10 +4,10 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"skybin/core"
-	"skybin/metaserver"
 	"os"
 	"path"
+	"skybin/core"
+	"skybin/metaserver"
 )
 
 var metaServerCmd = Cmd{
@@ -35,7 +35,7 @@ func runMetaServer(args ...string) {
 	defer logfile.Close()
 	logger := log.New(logfile, "", log.LstdFlags)
 
-	server := metaserver.NewServer(".", logger)
+	server := metaserver.InitServer(".", logger)
 
 	log.Println("starting metaserver server at", addr)
 	log.Fatal(http.ListenAndServe(addr, server))

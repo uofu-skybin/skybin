@@ -15,42 +15,52 @@ import (
 	"path"
 	"skybin/core"
 	"strconv"
+	"time"
 
+	"github.com/auth0/go-jwt-middleware"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 )
 
-func NewServer(homedir string, logger *log.Logger) http.Handler {
+const mySigningKey = "secret"
 
+var homedir string
+var dbpath string
+var providers []core.Provider
+var renters []core.Renter
+var logger *log.Logger
+var router *mux.Router
+var handshakes map[string]handshake
+
+func InitServer(homedir string, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
-	server := &metaServer{
-		homedir:    homedir,
-		dbpath:     path.Join(homedir, "metaDB.json"),
-		router:     router,
-		logger:     logger,
-		handshakes: make(map[string]handshake),
-	}
+	homedir = homedir
+	dbpath = path.Join(homedir, "metaDB.json")
+	router = router
+	logger = logger
+	handshakes = make(map[string]handshake)
 
 	// If the database exists, load it into memory.
-	if _, err := os.Stat(server.dbpath); !os.IsNotExist(err) {
-		server.loadDbFromFile()
+	if _, err := os.Stat(dbpath); !os.IsNotExist(err) {
+		loadDbFromFile()
 	}
 
-	router.HandleFunc("/auth", server.getAuthChallenge).Methods("GET")
-	router.HandleFunc("/auth", server.respondAuthChallenge).Methods("POST")
+	router.Handle("/auth", getAuthChallengeHandler).Methods("GET")
+	router.Handle("/auth", respondAuthChallengeHandler).Methods("POST")
 
-	router.HandleFunc("/providers", server.getProviders).Methods("GET")
-	router.HandleFunc("/providers", server.postProvider).Methods("POST")
-	router.HandleFunc("/providers/{id}", server.getProvider).Methods("GET")
+	router.Handle("/providers", getProvidersHandler).Methods("GET")
+	router.Handle("/providers", postProviderHandler).Methods("POST")
+	router.Handle("/providers/{id}", jwtMiddleware.Handler(getProviderHandler)).Methods("GET")
 
-	router.HandleFunc("/renters", server.postRenter).Methods("POST")
-	router.HandleFunc("/renters/{id}", server.getRenter).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", server.getRenterFiles).Methods("GET")
-	router.HandleFunc("/renters/{id}/files", server.postRenterFile).Methods("POST")
-	router.HandleFunc("/renters/{id}/files/{fileId}", server.getRenterFile).Methods("GET")
-	router.HandleFunc("/renters/{id}/files/{fileId}", server.deleteRenterFile).Methods("DELETE")
+	router.Handle("/renters", postRenterHandler).Methods("POST")
+	router.Handle("/renters/{id}", jwtMiddleware.Handler(getRenterHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files", jwtMiddleware.Handler(getRenterFilesHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files", jwtMiddleware.Handler(postRenterFileHandler)).Methods("POST")
+	router.Handle("/renters/{id}/files/{fileId}", jwtMiddleware.Handler(getRenterFileHandler)).Methods("GET")
+	router.Handle("/renters/{id}/files/{fileId}", jwtMiddleware.Handler(deleteRenterFileHandler)).Methods("DELETE")
 
-	return server
+	return router
 }
 
 type handshake struct {
@@ -58,19 +68,9 @@ type handshake struct {
 	providerID string
 }
 
-type metaServer struct {
-	homedir    string
-	dbpath     string
-	providers  []core.Provider
-	renters    []core.Renter
-	logger     *log.Logger
-	router     *mux.Router
-	handshakes map[string]handshake
-}
-
-func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	server.logger.Println(r.Method, r.URL)
-	server.router.ServeHTTP(w, r)
+func ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger.Println(r.Method, r.URL)
+	router.ServeHTTP(w, r)
 }
 
 type storageFile struct {
@@ -78,7 +78,7 @@ type storageFile struct {
 	Renters   []core.Renter
 }
 
-func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core.Renter) {
+func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 	db := storageFile{Providers: providers, Renters: renters}
 
 	dbBytes, err := json.Marshal(db)
@@ -86,15 +86,15 @@ func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core
 		panic(err)
 	}
 
-	writeErr := ioutil.WriteFile(path.Join(server.homedir, server.dbpath), dbBytes, 0644)
+	writeErr := ioutil.WriteFile(path.Join(homedir, dbpath), dbBytes, 0644)
 	if writeErr != nil {
 		panic(err)
 	}
 }
 
-func (server *metaServer) loadDbFromFile() {
+func loadDbFromFile() {
 
-	contents, err := ioutil.ReadFile(path.Join(server.homedir, server.dbpath))
+	contents, err := ioutil.ReadFile(path.Join(homedir, dbpath))
 	if err != nil {
 		panic(err)
 	}
@@ -105,20 +105,27 @@ func (server *metaServer) loadDbFromFile() {
 		panic(parseErr)
 	}
 
-	server.providers = db.Providers
-	server.renters = db.Renters
+	providers = db.Providers
+	renters = db.Renters
 }
+
+var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
+	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+		return mySigningKey, nil
+	},
+	SigningMethod: jwt.SigningMethodHS256,
+})
 
 type getAuthChallengeResp struct {
 	Nonce string `json:"nonce"`
 }
 
-func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Request) {
+var getAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	providerID := r.URL.Query()["providerID"][0]
 
-	if _, ok := server.handshakes[providerID]; ok {
+	if _, ok := handshakes[providerID]; ok {
 		w.WriteHeader(http.StatusBadRequest)
-		server.logger.Println("Already an outstanding handshake with this provider.")
+		logger.Println("Already an outstanding handshake with this provider.")
 		return
 	}
 
@@ -127,14 +134,14 @@ func (server *metaServer) getAuthChallenge(w http.ResponseWriter, r *http.Reques
 
 	// Record the outstanding handshake
 	handshake := handshake{providerID: providerID, nonce: nonce}
-	server.handshakes[providerID] = handshake
+	handshakes[providerID] = handshake
 
 	// Return the nonce to the requester
 	resp := getAuthChallengeResp{Nonce: nonce}
 	json.NewEncoder(w).Encode(resp)
-}
+})
 
-func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Request) {
+var respondAuthChallengeHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	providerID := r.FormValue("providerID")
 	signedNonce := r.FormValue("signedNonce")
 
@@ -145,7 +152,7 @@ func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Re
 	}
 
 	// Make sure there is an outstanding handshake with the given provider ID
-	if _, ok := server.handshakes[providerID]; !ok {
+	if _, ok := handshakes[providerID]; !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -153,7 +160,7 @@ func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Re
 	// Retrieve the user's public key.
 	var provider core.Provider
 	foundProvider := false
-	for _, item := range server.providers {
+	for _, item := range providers {
 		if item.ID == providerID {
 			provider = item
 			foundProvider = true
@@ -161,124 +168,134 @@ func (server *metaServer) respondAuthChallenge(w http.ResponseWriter, r *http.Re
 	}
 	if !foundProvider {
 		w.WriteHeader(http.StatusBadRequest)
-		server.logger.Println("Could not locate provider.")
+		logger.Println("Could not locate provider.")
 		return
 	}
 
 	block, _ := pem.Decode([]byte(provider.PublicKey))
 	if block == nil {
-		panic("Could not decode PEM.")
+		logger.Fatal("Could not decode PEM.")
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		panic(err)
+		logger.Fatal("Could not parse public key for provider.")
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 
 	// Convert the Nonce from base64 to bytes
 	decoded, err := base64.URLEncoding.DecodeString(signedNonce)
 	if err != nil {
-		panic(err)
+		logger.Fatal("Could not decode signed nonce.")
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 
 	// Verify the Nonce
-	hashed := sha256.Sum256([]byte(server.handshakes[providerID].nonce))
+	hashed := sha256.Sum256([]byte(handshakes[providerID].nonce))
 
 	err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 	} else {
-		w.WriteHeader(http.StatusAccepted)
+		token := jwt.New(jwt.SigningMethodHS256)
+
+		claims := token.Claims.(jwt.MapClaims)
+		claims["providerID"] = provider.ID
+		claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+
+		tokenString, _ := token.SignedString(mySigningKey)
+		w.Write([]byte(tokenString))
 	}
-}
+})
 
 type getProvidersResp struct {
 	Providers []core.Provider `json:"providers"`
 	Error     string          `json:"error,omitempty"`
 }
 
-func (server *metaServer) getProviders(w http.ResponseWriter, r *http.Request) {
+var getProvidersHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	resp := getProvidersResp{
-		Providers: server.providers,
+		Providers: providers,
 	}
 	json.NewEncoder(w).Encode(resp)
-}
+})
 
 type postProviderResp struct {
 	Provider core.Provider `json:"provider"`
 	Error    string        `json:"error,omitempty"`
 }
 
-func (server *metaServer) postProvider(w http.ResponseWriter, r *http.Request) {
+var postProviderHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	var provider core.Provider
 	_ = json.NewDecoder(r.Body).Decode(&provider)
-	provider.ID = strconv.Itoa(len(server.providers) + 1)
-	server.providers = append(server.providers, provider)
+	provider.ID = strconv.Itoa(len(providers) + 1)
+	providers = append(providers, provider)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(provider)
-	server.dumpDbToFile(server.providers, server.renters)
-}
+	dumpDbToFile(providers, renters)
+})
 
-func (server *metaServer) getProvider(w http.ResponseWriter, r *http.Request) {
+var getProviderHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range server.providers {
+	for _, item := range providers {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})
 
-func (server *metaServer) postRenter(w http.ResponseWriter, r *http.Request) {
+var postRenterHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	var renter core.Renter
 	_ = json.NewDecoder(r.Body).Decode(&renter)
-	renter.ID = strconv.Itoa(len(server.renters) + 1)
-	server.renters = append(server.renters, renter)
+	renter.ID = strconv.Itoa(len(renters) + 1)
+	renters = append(renters, renter)
 	json.NewEncoder(w).Encode(renter)
-	server.dumpDbToFile(server.providers, server.renters)
-}
+	dumpDbToFile(providers, renters)
+})
 
-func (server *metaServer) getRenter(w http.ResponseWriter, r *http.Request) {
+var getRenterHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range server.renters {
+	for _, item := range renters {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})
 
-func (server *metaServer) getRenterFiles(w http.ResponseWriter, r *http.Request) {
+var getRenterFilesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range server.renters {
+	for _, item := range renters {
 		if item.ID == params["id"] {
 			json.NewEncoder(w).Encode(item.Files)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})
 
-func (server *metaServer) postRenterFile(w http.ResponseWriter, r *http.Request) {
+var postRenterFileHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for i, item := range server.renters {
+	for i, item := range renters {
 		if item.ID == params["id"] {
 			var file core.File
 			_ = json.NewDecoder(r.Body).Decode(&file)
-			server.renters[i].Files = append(item.Files, file)
+			renters[i].Files = append(item.Files, file)
 			json.NewEncoder(w).Encode(item.Files)
-			server.dumpDbToFile(server.providers, server.renters)
+			dumpDbToFile(providers, renters)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})
 
-func (server *metaServer) getRenterFile(w http.ResponseWriter, r *http.Request) {
+var getRenterFileHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range server.renters {
+	for _, item := range renters {
 		if item.ID == params["id"] {
 			for _, file := range item.Files {
 				if file.ID == params["fileId"] {
@@ -289,21 +306,21 @@ func (server *metaServer) getRenterFile(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})
 
-func (server *metaServer) deleteRenterFile(w http.ResponseWriter, r *http.Request) {
+var deleteRenterFileHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	for _, item := range server.renters {
+	for _, item := range renters {
 		if item.ID == params["id"] {
 			for i, file := range item.Files {
 				if file.ID == params["fileId"] {
 					item.Files = append(item.Files[:i], item.Files[i+1:]...)
 					json.NewEncoder(w).Encode(file)
-					server.dumpDbToFile(server.providers, server.renters)
+					dumpDbToFile(providers, renters)
 					return
 				}
 			}
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-}
+})

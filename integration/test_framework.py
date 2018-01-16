@@ -18,6 +18,9 @@ DEFAULT_REPOS_DIR = './repos'
 # Default location for test files
 DEFAULT_TEST_FILE_DIR = './files'
 
+# Whether test logging is enabled by default
+LOG_ENABLED = False
+
 SKYBIN_CMD = '../skybin'
 
 def rand_port():
@@ -247,7 +250,7 @@ def create_provider(metaserver_addr, repo_dir):
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,
                test_file_dir=DEFAULT_TEST_FILE_DIR,
-               log_enabled=False):
+               log_enabled=LOG_ENABLED):
     """Create a test context.
 
     Args:

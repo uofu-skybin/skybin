@@ -26,11 +26,13 @@ type Handshake struct {
 type Authorizer struct {
 	handshakes map[string]Handshake
 	mutex      sync.Mutex
+	logger     *log.Logger
 }
 
-func NewAuthorizer() Authorizer {
+func NewAuthorizer(logger *log.Logger) Authorizer {
 	var authorizer Authorizer
 	authorizer.handshakes = make(map[string]Handshake)
+	authorizer.logger = logger
 	return authorizer
 }
 
@@ -42,7 +44,7 @@ type AuthChallengeError struct {
 	Error string `json:"error"`
 }
 
-func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
+func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userIDs, present := r.URL.Query()[userIDString]
 		if !present {
@@ -79,7 +81,7 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logge
 	})
 }
 
-func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
+func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.FormValue(userIDString)
 		signedNonce := r.FormValue("signedNonce")
@@ -107,21 +109,21 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		// Retrieve the user's public key.
 		publicKeyString, err := getUserPublicKey(userID)
 		if err != nil {
-			logger.Println(err)
+			authorizer.logger.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
 		block, _ := pem.Decode([]byte(publicKeyString))
 		if block == nil {
-			logger.Println("Could not decode PEM.")
+			authorizer.logger.Println("Could not decode PEM.")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
 		publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
-			logger.Println("Could not parse public key for user.")
+			authorizer.logger.Println("Could not parse public key for user.")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -129,7 +131,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		// Convert the Nonce from base64 to bytes
 		decoded, err := base64.URLEncoding.DecodeString(signedNonce)
 		if err != nil {
-			logger.Println("Could not decode signed nonce.")
+			authorizer.logger.Println("Could not decode signed nonce.")
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := AuthChallengeError{Error: "could not decode signed nonce"}
 			json.NewEncoder(w).Encode(resp)
@@ -139,7 +141,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		// Verify the Nonce
 		decodedNonce, err := base64.URLEncoding.DecodeString(handshake.nonce)
 		if err != nil {
-			logger.Println("Could not decode stored nonce.")
+			authorizer.logger.Println("Could not decode stored nonce.")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

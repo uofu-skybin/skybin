@@ -10,12 +10,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// List of providers registered with the server.
-var providers []core.Provider
-
 // Retrieves the given provider's public RSA key.
-func getProviderPublicKey(providerID string) (string, error) {
-	for _, item := range providers {
+func (server *metaServer) getProviderPublicKey(providerID string) (string, error) {
+	for _, item := range server.providers {
 		if item.ID == providerID {
 			return item.PublicKey, nil
 		}
@@ -28,35 +25,41 @@ type getProvidersResp struct {
 	Error     string          `json:"error,omitempty"`
 }
 
-var getProvidersHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	resp := getProvidersResp{
-		Providers: providers,
-	}
-	json.NewEncoder(w).Encode(resp)
-})
+func (server *metaServer) getProvidersHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := getProvidersResp{
+			Providers: server.providers,
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+}
 
 type postProviderResp struct {
 	Provider core.Provider `json:"provider"`
 	Error    string        `json:"error,omitempty"`
 }
 
-var postProviderHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	var provider core.Provider
-	_ = json.NewDecoder(r.Body).Decode(&provider)
-	provider.ID = strconv.Itoa(len(providers) + 1)
-	providers = append(providers, provider)
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(provider)
-	dumpDbToFile(providers, renters)
-})
+func (server *metaServer) postProviderHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var provider core.Provider
+		_ = json.NewDecoder(r.Body).Decode(&provider)
+		provider.ID = strconv.Itoa(len(server.providers) + 1)
+		server.providers = append(server.providers, provider)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(provider)
+		server.dumpDbToFile(server.providers, server.renters)
+	})
+}
 
-var getProviderHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	for _, item := range providers {
-		if item.ID == params["id"] {
-			json.NewEncoder(w).Encode(item)
-			return
+func (server *metaServer) getProviderHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		for _, item := range server.providers {
+			if item.ID == params["id"] {
+				json.NewEncoder(w).Encode(item)
+				return
+			}
 		}
-	}
-	w.WriteHeader(http.StatusNotFound)
-})
+		w.WriteHeader(http.StatusNotFound)
+	})
+}

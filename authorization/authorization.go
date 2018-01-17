@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	jwtmiddleware "github.com/auth0/go-jwt-middleware"
@@ -21,28 +22,26 @@ type Handshake struct {
 	providerID string
 }
 
-// Outstanding handshakes.
-var handshakes map[string]Handshake
-
-func InitAuth() {
-	handshakes = make(map[string]Handshake)
+type Authorizer struct {
+	handshakes map[string]Handshake
+	mutex      sync.Mutex
 }
 
-// This should likely be replaced by middleware that validates the token's claims.
-func GetAuthMiddleware(signingKey []byte) *jwtmiddleware.JWTMiddleware {
-	return jwtmiddleware.New(jwtmiddleware.Options{
-		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-			return signingKey, nil
-		},
-		SigningMethod: jwt.SigningMethodHS256,
-	})
+func NewAuthorizer() Authorizer {
+	var authorizer Authorizer
+	authorizer.handshakes = make(map[string]Handshake)
+	return authorizer
 }
 
 type GetAuthChallengeResp struct {
 	Nonce string `json:"nonce"`
 }
 
-func GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
+type AuthChallengeError struct {
+	Message string `json:"message"`
+}
+
+func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providerIDs, present := r.URL.Query()[userIDString]
 		if !present {
@@ -70,8 +69,10 @@ func GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.Handl
 		nonce := randString(8)
 
 		// Record the outstanding handshake
+		authorizer.mutex.Lock()
 		handshake := Handshake{providerID: providerID, nonce: nonce}
-		handshakes[providerID] = handshake
+		authorizer.handshakes[providerID] = handshake
+		authorizer.mutex.Unlock()
 
 		// Return the nonce to the requester
 		resp := GetAuthChallengeResp{Nonce: nonce}
@@ -79,11 +80,7 @@ func GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.Handl
 	})
 }
 
-type AuthChallengeError struct {
-	Message string `json:"message"`
-}
-
-func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
+func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.FormValue(userIDString)
 		signedNonce := r.FormValue("signedNonce")
@@ -97,11 +94,14 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 		}
 
 		// Make sure there is an outstanding handshake with the given provider ID
-		if _, ok := handshakes[userID]; !ok {
+		var handshake Handshake
+		if foundHandshake, ok := authorizer.handshakes[userID]; !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := AuthChallengeError{Message: "no outstanding handshake with the specified provider"}
 			json.NewEncoder(w).Encode(resp)
 			return
+		} else {
+			handshake = foundHandshake
 		}
 
 		// Retrieve the user's public key.
@@ -137,7 +137,7 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 		}
 
 		// Verify the Nonce
-		hashed := sha256.Sum256([]byte(handshakes[userID].nonce))
+		hashed := sha256.Sum256([]byte(handshake.nonce))
 
 		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
 		if err != nil {
@@ -156,6 +156,20 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 				panic(err)
 			}
 			w.Write([]byte(tokenString))
+
+			authorizer.mutex.Lock()
+			delete(authorizer.handshakes, userID)
+			authorizer.mutex.Unlock()
 		}
 	}
+}
+
+// This should likely be replaced by middleware that validates the token's claims.
+func GetAuthMiddleware(signingKey []byte) *jwtmiddleware.JWTMiddleware {
+	return jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+			return signingKey, nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
 }

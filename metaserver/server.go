@@ -13,59 +13,61 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Directory where DB and error logs are dumped.
-var dataDir string
-
-// Path in dataDir where database is stored
-var dbpath string
-
-var logger *log.Logger
-var router *mux.Router
-
-// Key used to sign JWTs
-// BUG(Kincaid): Signing key is still a test key.
-var signingKey = []byte("secret")
-var authMiddleware = authorization.GetAuthMiddleware(signingKey)
-
 // InitServer prepares a handler for the server.
-func InitServer(dataDirectory string, log *log.Logger) http.Handler {
+func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
-	dataDir = dataDirectory
-	dbpath = path.Join(dataDir, "metaDB.json")
-	logger = log
-
-	// If the database exists, load it into memory.
-	if _, err := os.Stat(dbpath); !os.IsNotExist(err) {
-		loadDbFromFile()
+	server := &metaServer{
+		dataDir:    dataDirectory,
+		dbpath:     path.Join(dataDirectory, "metaDB.json"),
+		router:     router,
+		logger:     logger,
+		authorizer: authorization.NewAuthorizer(),
+		signingKey: []byte("secret"),
 	}
 
-	authorization.InitAuth()
+	// If the database exists, load it into memory.
+	if _, err := os.Stat(server.dbpath); !os.IsNotExist(err) {
+		server.loadDbFromFile()
+	}
 
-	router.Handle("/auth/provider", authorization.GetAuthChallengeHandler("providerID", logger)).Methods("GET")
-	router.Handle("/auth/provider", authorization.GetRespondAuthChallengeHandler("providerID", logger, signingKey, getProviderPublicKey)).Methods("POST")
+	authMiddleware := authorization.GetAuthMiddleware(server.signingKey)
 
-	router.Handle("/auth/renter", authorization.GetAuthChallengeHandler("renterID", logger)).Methods("GET")
-	router.Handle("/auth/renter", authorization.GetRespondAuthChallengeHandler("renterID", logger, signingKey, getRenterPublicKey)).Methods("POST")
+	router.Handle("/auth/provider", server.authorizer.GetAuthChallengeHandler("providerID", logger)).Methods("GET")
+	router.Handle("/auth/provider", server.authorizer.GetRespondAuthChallengeHandler("providerID", server.logger, server.signingKey, server.getProviderPublicKey)).Methods("POST")
 
-	router.Handle("/providers", getProvidersHandler).Methods("GET")
-	router.Handle("/providers", postProviderHandler).Methods("POST")
-	router.Handle("/providers/{id}", authMiddleware.Handler(getProviderHandler)).Methods("GET")
+	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID", server.logger)).Methods("GET")
+	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.logger, server.signingKey, server.getRenterPublicKey)).Methods("POST")
 
-	router.Handle("/renters", postRenterHandler).Methods("POST")
-	router.Handle("/renters/{id}", authMiddleware.Handler(getRenterHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files", authMiddleware.Handler(getRenterFilesHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files", authMiddleware.Handler(postRenterFileHandler)).Methods("POST")
-	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(getRenterFileHandler)).Methods("GET")
-	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(deleteRenterFileHandler)).Methods("DELETE")
+	router.Handle("/providers", server.getProvidersHandler()).Methods("GET")
+	router.Handle("/providers", server.postProviderHandler()).Methods("POST")
+	router.Handle("/providers/{id}", server.getProviderHandler()).Methods("GET")
+
+	router.Handle("/renters", server.postRenterHandler()).Methods("P()OST")
+	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files", authMiddleware.Handler(server.getRenterFilesHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files", authMiddleware.Handler(server.postRenterFileHandler())).Methods("POST")
+	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(server.getRenterFileHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(server.deleteRenterFileHandler())).Methods("DELETE")
 
 	return router
 }
 
+type metaServer struct {
+	dataDir    string
+	dbpath     string
+	providers  []core.Provider
+	renters    []core.Renter
+	logger     *log.Logger
+	router     *mux.Router
+	authorizer authorization.Authorizer
+	signingKey []byte
+}
+
 // ServeHTTP begins serving requests from the server's router.
-func ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Println(r.Method, r.URL)
-	router.ServeHTTP(w, r)
+func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	server.logger.Println(r.Method, r.URL)
+	server.ServeHTTP(w, r)
 }
 
 type storageFile struct {
@@ -73,7 +75,7 @@ type storageFile struct {
 	Renters   []core.Renter
 }
 
-func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
+func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 	db := storageFile{Providers: providers, Renters: renters}
 
 	dbBytes, err := json.Marshal(db)
@@ -81,14 +83,14 @@ func dumpDbToFile(providers []core.Provider, renters []core.Renter) {
 		panic(err)
 	}
 
-	writeErr := ioutil.WriteFile(path.Join(dataDir, dbpath), dbBytes, 0644)
+	writeErr := ioutil.WriteFile(path.Join(server.dataDir, server.dbpath), dbBytes, 0644)
 	if writeErr != nil {
 		panic(err)
 	}
 }
 
-func loadDbFromFile() {
-	contents, err := ioutil.ReadFile(path.Join(dataDir, dbpath))
+func (server *metaServer) loadDbFromFile() {
+	contents, err := ioutil.ReadFile(path.Join(server.dataDir, server.dbpath))
 	if err != nil {
 		panic(err)
 	}
@@ -99,6 +101,6 @@ func loadDbFromFile() {
 		panic(parseErr)
 	}
 
-	providers = db.Providers
-	renters = db.Renters
+	server.providers = db.Providers
+	server.renters = db.Renters
 }

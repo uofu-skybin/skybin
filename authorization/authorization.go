@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -18,8 +19,8 @@ import (
 )
 
 type Handshake struct {
-	nonce      string
-	providerID string
+	nonce  string
+	userID string
 }
 
 type Authorizer struct {
@@ -43,35 +44,32 @@ type AuthChallengeError struct {
 
 func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		providerIDs, present := r.URL.Query()[userIDString]
+		userIDs, present := r.URL.Query()[userIDString]
 		if !present {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "missing query value: providerID"}
+			errMsg := fmt.Sprintf("missing query value: %s", userIDString)
+			resp := AuthChallengeError{Message: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		if len(providerIDs) < 1 {
+		if len(userIDs) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "must specify a provider"}
-			json.NewEncoder(w).Encode(resp)
-			return
-		} else if len(providerIDs) > 1 {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "must specify only 1 provider"}
+			errMsg := fmt.Sprintf("must specify 1 user with %s", userIDString)
+			resp := AuthChallengeError{Message: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		providerID := providerIDs[0]
+		userID := userIDs[0]
 
-		// Generate a nonce signed by the provider's public key
+		// Generate a nonce signed by the user's public key
 		nonce := randString(8)
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()
-		handshake := Handshake{providerID: providerID, nonce: nonce}
-		authorizer.handshakes[providerID] = handshake
+		handshake := Handshake{userID: userID, nonce: nonce}
+		authorizer.handshakes[userID] = handshake
 		authorizer.mutex.Unlock()
 
 		// Return the nonce to the requester
@@ -85,19 +83,20 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		userID := r.FormValue(userIDString)
 		signedNonce := r.FormValue("signedNonce")
 
-		// Make sure the user provided the "providerID" and "signedNonce" arguments
+		// Make sure the user provided the user ID and "signedNonce" arguments
 		if userID == "" || signedNonce == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "must specify providerID and signedNonce"}
+			errMsg := fmt.Sprintf("must specify %s and signedNonce", userIDString)
+			resp := AuthChallengeError{Message: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		// Make sure there is an outstanding handshake with the given provider ID
+		// Make sure there is an outstanding handshake with the given user ID
 		var handshake Handshake
 		if foundHandshake, ok := authorizer.handshakes[userID]; !ok {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "no outstanding handshake with the specified provider"}
+			resp := AuthChallengeError{Message: "no outstanding handshake for user"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		} else {
@@ -121,7 +120,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 
 		publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
-			logger.Println("Could not parse public key for provider.")
+			logger.Println("Could not parse public key for user.")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

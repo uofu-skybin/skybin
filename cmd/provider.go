@@ -42,7 +42,7 @@ func runProvider(args ...string) {
 	// Read in the provider's public key.
 	b, err := ioutil.ReadFile(path.Join(p.Config.IdentityFile + ".pub"))
 	if err != nil {
-		panic("Could not read identity file.")
+		log.Fatal("Could not read identity file.")
 	}
 	publicKey := string(b)
 

@@ -29,8 +29,8 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string) (string, error) {
-	challengeURL := fmt.Sprintf("http://%[1]s/auth/%[2]s?%[2]sID=1", client.addr, authType)
+func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, userID string) (string, error) {
+	challengeURL := fmt.Sprintf("http://%[1]s/auth/%[2]s?%[2]sID=%[3]s", client.addr, authType, userID)
 
 	// Get a challenge token
 	resp, err := client.client.Get(challengeURL)
@@ -63,7 +63,7 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string) 
 		defer resp.Body.Close()
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		if resp.StatusCode != 200 {
 			panic("Bad status: " + resp.Status)

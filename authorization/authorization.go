@@ -28,6 +28,7 @@ func InitAuth() {
 	handshakes = make(map[string]Handshake)
 }
 
+// This should likely be replaced by middleware that validates the token's claims.
 func GetAuthMiddleware(signingKey []byte) *jwtmiddleware.JWTMiddleware {
 	return jwtmiddleware.New(jwtmiddleware.Options{
 		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {

@@ -45,6 +45,9 @@ func InitServer(dataDirectory string, log *log.Logger) http.Handler {
 	router.Handle("/auth/provider", authorization.GetAuthChallengeHandler("providerID", logger)).Methods("GET")
 	router.Handle("/auth/provider", authorization.GetRespondAuthChallengeHandler("providerID", logger, signingKey, getProviderPublicKey)).Methods("POST")
 
+	router.Handle("/auth/renter", authorization.GetAuthChallengeHandler("renterID", logger)).Methods("GET")
+	router.Handle("/auth/renter", authorization.GetRespondAuthChallengeHandler("renterID", logger, signingKey, getRenterPublicKey)).Methods("POST")
+
 	router.Handle("/providers", getProvidersHandler).Methods("GET")
 	router.Handle("/providers", postProviderHandler).Methods("POST")
 	router.Handle("/providers/{id}", authMiddleware.Handler(getProviderHandler)).Methods("GET")

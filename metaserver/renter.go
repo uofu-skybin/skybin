@@ -2,6 +2,7 @@ package metaserver
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"skybin/core"
 	"strconv"
@@ -11,6 +12,16 @@ import (
 
 // Renters registered with the server.
 var renters []core.Renter
+
+// Retrieves the given renter's public RSA key.
+func getRenterPublicKey(renterID string) (string, error) {
+	for _, item := range renters {
+		if item.ID == renterID {
+			return item.PublicKey, nil
+		}
+	}
+	return "", errors.New("could not locate renter with given ID")
+}
 
 var postRenterHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	var renter core.Renter

@@ -39,7 +39,7 @@ type GetAuthChallengeResp struct {
 }
 
 type AuthChallengeError struct {
-	Message string `json:"message"`
+	Error string `json:"error"`
 }
 
 func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
@@ -48,7 +48,7 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logge
 		if !present {
 			w.WriteHeader(http.StatusBadRequest)
 			errMsg := fmt.Sprintf("missing query value: %s", userIDString)
-			resp := AuthChallengeError{Message: errMsg}
+			resp := AuthChallengeError{Error: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -56,7 +56,7 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logge
 		if len(userIDs) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
 			errMsg := fmt.Sprintf("must specify 1 user with %s", userIDString)
-			resp := AuthChallengeError{Message: errMsg}
+			resp := AuthChallengeError{Error: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -87,7 +87,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if userID == "" || signedNonce == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			errMsg := fmt.Sprintf("must specify %s and signedNonce", userIDString)
-			resp := AuthChallengeError{Message: errMsg}
+			resp := AuthChallengeError{Error: errMsg}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -96,7 +96,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		var handshake Handshake
 		if foundHandshake, ok := authorizer.handshakes[userID]; !ok {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := AuthChallengeError{Message: "no outstanding handshake for user"}
+			resp := AuthChallengeError{Error: "no outstanding handshake for user"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		} else {
@@ -130,7 +130,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if err != nil {
 			logger.Println("Could not decode signed nonce.")
 			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Message: "could not decode signed nonce"}
+			resp := AuthChallengeError{Error: "could not decode signed nonce"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -141,7 +141,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Message: "key verification failed"}
+			resp := AuthChallengeError{Error: "key verification failed"}
 			json.NewEncoder(w).Encode(resp)
 		} else {
 			token := jwt.New(jwt.SigningMethodHS256)

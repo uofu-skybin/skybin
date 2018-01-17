@@ -52,13 +52,7 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 			return
 		}
 
-		renter.ID, err = fingerprintKey(renter.PublicKey)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postRenterResp{Error: "could not generate ID from supplied public key"}
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
+		renter.ID = fingerprintKey(renter.PublicKey)
 
 		server.renters = append(server.renters, renter)
 		json.NewEncoder(w).Encode(renter)

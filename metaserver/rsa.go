@@ -1,9 +1,8 @@
 package metaserver
 
 import (
-	"bytes"
-	"crypto/md5"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
@@ -28,16 +27,8 @@ func parsePublicKey(key string) (*rsa.PublicKey, error) {
 	return publicKey.(*rsa.PublicKey), nil
 }
 
-func fingerprintKey(key string) (string, error) {
-	md5Sum := md5.Sum([]byte(key))
-	fingerprintNoColons := hex.EncodeToString(md5Sum[:])
-	var buf bytes.Buffer
-	for i, item := range fingerprintNoColons {
-		if i%2 == 0 && i != 0 {
-			buf.WriteString(":")
-		}
-		buf.WriteString(string(item))
-	}
-
-	return buf.String(), nil
+func fingerprintKey(key string) string {
+	shaSum := sha256.Sum256([]byte(key))
+	fingerprint := hex.EncodeToString(shaSum[:])
+	return fingerprint
 }

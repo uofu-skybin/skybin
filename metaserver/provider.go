@@ -66,13 +66,7 @@ func (server *metaServer) postProviderHandler() http.HandlerFunc {
 			return
 		}
 
-		provider.ID, err = fingerprintKey(provider.PublicKey)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "could not generate ID from supplied public key"}
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
+		provider.ID = fingerprintKey(provider.PublicKey)
 		server.providers = append(server.providers, provider)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(provider)

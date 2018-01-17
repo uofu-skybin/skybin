@@ -64,7 +64,7 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logge
 		userID := userIDs[0]
 
 		// Generate a nonce signed by the user's public key
-		nonce := randString(8)
+		nonce := randString(32)
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()

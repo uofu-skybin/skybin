@@ -64,7 +64,8 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string, logge
 		userID := userIDs[0]
 
 		// Generate a nonce signed by the user's public key
-		nonce := randString(32)
+		shaSum := sha256.Sum256([]byte(randString(32)))
+		nonce := base64.URLEncoding.EncodeToString(shaSum[:])
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()
@@ -136,9 +137,14 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		}
 
 		// Verify the Nonce
-		hashed := sha256.Sum256([]byte(handshake.nonce))
+		decodedNonce, err := base64.URLEncoding.DecodeString(handshake.nonce)
+		if err != nil {
+			logger.Println("Could not decode stored nonce.")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
+		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, decodedNonce[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := AuthChallengeError{Error: "key verification failed"}

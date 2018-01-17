@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -38,9 +37,12 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, 
 	token := respMsg.Nonce
 
 	// Sign the token
-	hashed := sha256.Sum256([]byte(token))
+	nonce, err := base64.URLEncoding.DecodeString(token)
+	if err != nil {
+		return "", err
+	}
 
-	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hashed[:])
+	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, nonce)
 	if err != nil {
 		return "", err
 	}

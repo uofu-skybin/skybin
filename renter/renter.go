@@ -158,10 +158,10 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
-    id, err := genId()
-    if err != nil {
-        return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
-    }
+	id, err := genId()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
+	}
 	file := &core.File{
 		ID:         id,
 		Name:       name,

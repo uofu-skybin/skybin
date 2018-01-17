@@ -43,13 +43,27 @@ type GetAuthChallengeResp struct {
 
 func GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		providerID := r.URL.Query()[userIDString][0]
-
-		if _, ok := handshakes[providerID]; ok {
+		providerIDs, present := r.URL.Query()[userIDString]
+		if !present {
 			w.WriteHeader(http.StatusBadRequest)
-			logger.Println("Already an outstanding handshake with this provider.")
+			resp := AuthChallengeError{Message: "missing query value: providerID"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
+
+		if len(providerIDs) < 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := AuthChallengeError{Message: "must specify a provider"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if len(providerIDs) > 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := AuthChallengeError{Message: "must specify only 1 provider"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		providerID := providerIDs[0]
 
 		// Generate a nonce signed by the provider's public key
 		nonce := randString(8)
@@ -64,6 +78,10 @@ func GetAuthChallengeHandler(userIDString string, logger *log.Logger) http.Handl
 	})
 }
 
+type AuthChallengeError struct {
+	Message string `json:"message"`
+}
+
 func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.FormValue(userIDString)
@@ -72,12 +90,16 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 		// Make sure the user provided the "providerID" and "signedNonce" arguments
 		if userID == "" || signedNonce == "" {
 			w.WriteHeader(http.StatusBadRequest)
+			resp := AuthChallengeError{Message: "must specify providerID and signedNonce"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
 		// Make sure there is an outstanding handshake with the given provider ID
 		if _, ok := handshakes[userID]; !ok {
 			w.WriteHeader(http.StatusBadRequest)
+			resp := AuthChallengeError{Message: "no outstanding handshake with the specified provider"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -91,14 +113,14 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 
 		block, _ := pem.Decode([]byte(publicKeyString))
 		if block == nil {
-			logger.Fatal("Could not decode PEM.")
+			logger.Println("Could not decode PEM.")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
 		publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
-			logger.Fatal("Could not parse public key for provider.")
+			logger.Println("Could not parse public key for provider.")
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -106,8 +128,10 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 		// Convert the Nonce from base64 to bytes
 		decoded, err := base64.URLEncoding.DecodeString(signedNonce)
 		if err != nil {
-			logger.Fatal("Could not decode signed nonce.")
+			logger.Println("Could not decode signed nonce.")
 			w.WriteHeader(http.StatusUnauthorized)
+			resp := AuthChallengeError{Message: "could not decode signed nonce"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -117,6 +141,8 @@ func GetRespondAuthChallengeHandler(userIDString string, logger *log.Logger, sig
 		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
+			resp := AuthChallengeError{Message: "key verification failed"}
+			json.NewEncoder(w).Encode(resp)
 		} else {
 			token := jwt.New(jwt.SigningMethodHS256)
 

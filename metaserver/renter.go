@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"skybin/core"
-	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -20,11 +19,47 @@ func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
 	return "", errors.New("could not locate renter with given ID")
 }
 
+type postRenterResp struct {
+	Renter core.Renter `json:"provider,omitempty"`
+	Error  string      `json:"error,omitempty"`
+}
+
 func (server *metaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var renter core.Renter
-		_ = json.NewDecoder(r.Body).Decode(&renter)
-		renter.ID = strconv.Itoa(len(server.renters) + 1)
+		err := json.NewDecoder(r.Body).Decode(&renter)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "unable to parse payload"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Make sure the user supplied a public key for the provider.
+		if renter.PublicKey == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: "must specify RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		_, err = parsePublicKey(renter.PublicKey)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: "invalid RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		renter.ID, err = fingerprintKey(renter.PublicKey)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: "could not generate ID from supplied public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
 		server.renters = append(server.renters, renter)
 		json.NewEncoder(w).Encode(renter)
 		server.dumpDbToFile(server.providers, server.renters)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"skybin/core"
-	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -35,15 +34,45 @@ func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 }
 
 type postProviderResp struct {
-	Provider core.Provider `json:"provider"`
+	Provider core.Provider `json:"provider,omitempty"`
 	Error    string        `json:"error,omitempty"`
 }
 
 func (server *metaServer) postProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var provider core.Provider
-		_ = json.NewDecoder(r.Body).Decode(&provider)
-		provider.ID = strconv.Itoa(len(server.providers) + 1)
+		err := json.NewDecoder(r.Body).Decode(&provider)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "unable to parse payload"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Make sure the user supplied a public key for the provider.
+		if provider.PublicKey == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "must specify RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		_, err = parsePublicKey(provider.PublicKey)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "invalid RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		provider.ID, err = fingerprintKey(provider.PublicKey)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "could not generate ID from supplied public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
 		server.providers = append(server.providers, provider)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(provider)

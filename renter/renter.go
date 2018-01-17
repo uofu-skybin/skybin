@@ -158,14 +158,18 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
+	id, err := genId()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
+	}
 	file := &core.File{
-		ID:         uuid.Must(uuid.NewV4()).String(),
+		ID:         id,
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
 		Blocks:     []core.Block{},
 	}
-	err := r.addFile(file)
+	err = r.addFile(file)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +208,10 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 	defer f.Close()
 
-	blockId := uuid.Must(uuid.NewV4()).String()
+	blockId, err := genId()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot generate block ID. Error: %s", err)
+	}
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
 	err = pvdr.PutBlock(blockId, r.Config.RenterId, f)
@@ -231,8 +238,12 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		},
 	}
 
+	fileId, err := genId()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot generate file ID. Error: %s", err)
+	}
 	file := &core.File{
-		ID:         uuid.Must(uuid.NewV4()).String(),
+		ID:         fileId,
 		Name:       destPath,
 		IsDir:      false,
 		Size:       finfo.Size(),
@@ -389,4 +400,12 @@ func removeBlock(block *core.Block) error {
 		}
 	}
 	return nil
+}
+
+func genId() (string, error) {
+	id, err := uuid.NewV4()
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }

@@ -158,9 +158,7 @@ class TestContext:
         self._remove_test_files = remove_test_files
 
     def _remove_files(self):
-        print('removing files')
         for filename in self._test_files:
-            print('removing', filename)
             os.remove(filename)
 
     def create_test_file(self, size):

@@ -31,7 +31,7 @@ func runRenter(args ...string) {
 		log.Fatal(err)
 	}
 
-	addr := r.Config.Addr
+	addr := r.Config.ApiAddr
 	if len(*addrFlag) > 0 {
 		addr = *addrFlag
 	}

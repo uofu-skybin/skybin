@@ -20,6 +20,7 @@ import (
 	"time"
 	"compress/zlib"
 	"crypto/cipher"
+	"crypto/sha256"
 )
 
 type Config struct {
@@ -286,40 +287,48 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, fmt.Errorf("Unable to seek to start of temp file. Error: %s", err)
 	}
 
-	// Upload
-	tempInfo, err := encryptTemp.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("Unable to stat encrypted file. Error: %s", err)
-	}
-	bytesRemaining := tempInfo.Size()
+	// Prepare blocks for upload
 	var blocks []core.Block
 	for _, blob := range blobs {
-		pvdr := provider.NewClient(blob.Addr, &http.Client{})
-		var blockId string
-		blockId, err = genId()
+		lr := io.LimitReader(encryptTemp, blob.Amount)
+		h := sha256.New()
+		blockSize, err := io.Copy(h, lr)
 		if err != nil {
-			err = fmt.Errorf("Unable to generate block ID. Error: %s", err)
+			return nil, fmt.Errorf("Unable to hash block. Error: %s", err)
+		}
+		if blockSize == 0 {
+			// EOF
 			break
 		}
-		blockSize := blob.Amount
-		if blockSize > bytesRemaining {
-			blockSize = bytesRemaining
-		}
-		lr := io.LimitReader(encryptTemp, blockSize)
-		err = pvdr.PutBlock(blockId, r.Config.RenterId, lr)
+		blockHash := string(h.Sum(nil))
+		blockId, err := genId()
 		if err != nil {
-			err = fmt.Errorf("Unable to upload block. Error: %s", err)
-			break
+			return nil, fmt.Errorf("Unable to generate block ID. Error: %s", err)
 		}
 		blocks = append(blocks, core.Block{
 			ID: blockId,
+			Hash: blockHash,
+			Size: blockSize,
 			Locations: []core.BlockLocation{
 				{ProviderId: blob.ProviderId, Addr: blob.Addr},
 			},
 		})
-		bytesRemaining -= blockSize
-		if bytesRemaining == 0 {
-			break
+	}
+
+	// Upload blocks
+	_, err = encryptTemp.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to seek file. Error: %s", err)
+	}
+	for _, block := range blocks {
+		for _, location := range block.Locations {
+			pvdr := provider.NewClient(location.Addr, &http.Client{})
+			lr := io.LimitReader(encryptTemp, block.Size)
+			err = pvdr.PutBlock(block.ID, r.Config.RenterId, lr)
+			if err != nil {
+				err = fmt.Errorf("Unable to upload block. Error: %s", err)
+				break
+			}
 		}
 	}
 	if err != nil {
@@ -333,7 +342,11 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		return nil, err
 	}
 
-	// We're done. Split remaining storage blobs
+	// We're done. Salvage remaining bytes of blobs that weren't all used
+	tempInfo, err := encryptTemp.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to stat encrypted file. Error: %s", err)
+	}
 	var bytesUsed int64 = 0
 	for _, blob := range(blobs) {
 		n := blob.Amount
@@ -350,7 +363,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 		}
 		bytesUsed += n
 	}
-	// And remove old blobs
+	// And remove blobs that were used up
 	for i := len(blobIndices) - 1; i >= 0; i-- {
 		blobIdx := blobIndices[i]
 		r.freelist = append(r.freelist[:blobIdx], r.freelist[blobIdx+1:]...)

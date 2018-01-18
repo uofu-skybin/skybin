@@ -31,6 +31,14 @@ type BlockLocation struct {
 
 type Block struct {
 	ID        string          `json:"id"`
+
+	// sha256 hash of the block
+	Hash string `json:"hash"`
+
+	// Size of the block in bytes
+	Size int64
+
+	// Locations of providers where the block is stored
 	Locations []BlockLocation `json:"locations"`
 }
 

@@ -30,7 +30,7 @@ type BlockLocation struct {
 }
 
 type Block struct {
-	ID        string          `json:"id"`
+	ID string `json:"id"`
 
 	// sha256 hash of the block
 	Hash string `json:"hash"`

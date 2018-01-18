@@ -21,6 +21,9 @@ DEFAULT_TEST_FILE_DIR = './files'
 # Whether test logging is enabled by default
 LOG_ENABLED = False
 
+# Whether test files are removed by default
+REMOVE_TEST_FILES = True
+
 SKYBIN_CMD = '../skybin'
 
 def rand_port():
@@ -140,18 +143,24 @@ class TestContext:
       renter: renter Service object
       test_file_dir: location where test files are placed
       log_enabled: whether test logging is turned on
+      remove_test_files: whether to remove test files on teardown
     """
 
-    def __init__(self, test_file_dir, log_enabled=False):
+    def __init__(self, test_file_dir,
+                 log_enabled=False,
+                 remove_test_files=True):
         self.metaserver = None
         self.providers = []
         self.renter = None
         self.test_file_dir = test_file_dir
         self.log_enabled = log_enabled
         self._test_files = []
+        self._remove_test_files = remove_test_files
 
     def _remove_files(self):
+        print('removing files')
         for filename in self._test_files:
+            print('removing', filename)
             os.remove(filename)
 
     def create_test_file(self, size):
@@ -178,16 +187,17 @@ class TestContext:
         if self.log_enabled:
             print(*args)
 
-    def teardown(self, remove_files=True):
+    def teardown(self):
         """Stop and clean up all services and files"""
-        if self.metaserver:
-            self.metaserver.teardown(remove_files)
-        for p in self.providers:
-            p.teardown(remove_files)
-        if self.renter:
-            self.renter.teardown(remove_files)
-        if remove_files:
+        rm_files = self._remove_test_files
+        if rm_files:
             self._remove_files()
+        if self.metaserver:
+            self.metaserver.teardown(rm_files)
+        for p in self.providers:
+            p.teardown(rm_files)
+        if self.renter:
+            self.renter.teardown(rm_files)
 
 def create_metaserver():
     """Create and start a new metaserver instance"""
@@ -250,7 +260,8 @@ def create_provider(metaserver_addr, repo_dir):
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,
                test_file_dir=DEFAULT_TEST_FILE_DIR,
-               log_enabled=LOG_ENABLED):
+               log_enabled=LOG_ENABLED,
+               remove_test_files=REMOVE_TEST_FILES):
     """Create a test context.
 
     Args:
@@ -258,8 +269,15 @@ def setup_test(num_providers=1,
       repo_dir: directory to create test skybin repos in
       test_file_dir: directory to place test files in
       log_enabled: whether test logging is turned on
+      remove_test_files: whether test files are removed on teardown
     """
-    ctxt = TestContext(test_file_dir=test_file_dir, log_enabled=log_enabled)
+    if not os.path.exists(test_file_dir):
+        os.makedirs(test_file_dir)
+    if not os.path.exists(repo_dir):
+        os.makedirs(repo_dir)
+    ctxt = TestContext(test_file_dir=test_file_dir,
+                       log_enabled=log_enabled,
+                       remove_test_files=remove_test_files)
     try:
         ctxt.metaserver = create_metaserver()
         for _ in range(num_providers):

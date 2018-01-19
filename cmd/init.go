@@ -19,13 +19,14 @@ import (
 var initCmd = Cmd{
 	Name:        "init",
 	Description: "Set up a skybin directory",
-	Usage:       "init [-home]",
+	Usage:       "init [-home DIR] [-keyfile FILE]",
 	Run:         runInit,
 }
 
 func runInit(args ...string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	homeFlag := fs.String("home", "", "directory to place skybin files")
+	_ = fs.String("keyfile", "", "file containing renter's key")
 	fs.Parse(args)
 
 	homedir := *homeFlag

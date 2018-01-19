@@ -8,12 +8,18 @@ const (
 	DefaultProviderAddr = ":8003"
 )
 
-type Provider struct {
+type ProviderInfo struct {
 	ID          string `json:"id,omitempty"`
-	PublicKey   string `json:"publicKey,omitempty"`
+	PublicKey   string `json:"publicKey"`
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int    `json:"storageRate,omitempty"`
+}
+
+type RenterInfo struct {
+	ID        string `json:"id"`
+	PublicKey string `json:"publicKey"`
+	Files     []File `json:"files"`
 }
 
 type Contract struct {
@@ -62,8 +68,3 @@ type File struct {
 	Blocks     []Block      `json:"blocks"`
 }
 
-type Renter struct {
-	ID        string `json:"id"`
-	PublicKey string `json:"publicKey"`
-	Files     []File `json:"files"`
-}

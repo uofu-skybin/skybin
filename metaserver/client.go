@@ -21,7 +21,7 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) GetProviders() ([]core.Provider, error) {
+func (client *Client) GetProviders() ([]core.ProviderInfo, error) {
 	url := fmt.Sprintf("http://%s/providers", client.addr)
 	resp, err := client.client.Get(url)
 	if err != nil {
@@ -35,7 +35,7 @@ func (client *Client) GetProviders() ([]core.Provider, error) {
 	return respMsg.Providers, nil
 }
 
-func (client *Client) RegisterProvider(info *core.Provider) error {
+func (client *Client) RegisterProvider(info *core.ProviderInfo) error {
 	url := fmt.Sprintf("http://%s/providers", client.addr)
 	body, err := json.Marshal(info)
 	if err != nil {
@@ -53,5 +53,10 @@ func (client *Client) RegisterProvider(info *core.Provider) error {
 		}
 		return errors.New(respMsg.Error)
 	}
+	return nil
+}
+
+func (client *Client) RegisterRenter(info *core.RenterInfo) error {
+	// TODO: implement
 	return nil
 }

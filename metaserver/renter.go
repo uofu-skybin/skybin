@@ -20,13 +20,13 @@ func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
 }
 
 type postRenterResp struct {
-	Renter core.Renter `json:"provider,omitempty"`
+	Renter core.RenterInfo `json:"provider,omitempty"`
 	Error  string      `json:"error,omitempty"`
 }
 
 func (server *metaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var renter core.Renter
+		var renter core.RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
 
 		if err != nil {

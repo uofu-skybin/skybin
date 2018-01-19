@@ -10,6 +10,7 @@ import (
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/provider"
+	"skybin/util"
 )
 
 var providerCmd = Cmd{
@@ -42,21 +43,28 @@ func runProvider(args ...string) {
 	// Read in the provider's public key.
 	b, err := ioutil.ReadFile(path.Join(p.Config.IdentityFile + ".pub"))
 	if err != nil {
-		log.Fatal("Could not read identity file.")
+		log.Fatal("Could not read public key file.")
 	}
 	publicKey := string(b)
 
 	// Register with metadata service.
-	info := core.Provider{
-		ID:         p.Config.ProviderID,
-		PublicKey:  publicKey,
-		Addr:       addr,
-		SpaceAvail: 1 << 32,
-	}
-	metaService := metaserver.NewClient(p.Config.MetaAddr, &http.Client{})
-	err = metaService.RegisterProvider(&info)
-	if err != nil {
-		log.Fatalf("error: unable to register with metaservice. error: %s", err)
+	if !p.Config.IsRegistered {
+		info := core.Provider{
+			ID:         p.Config.ProviderID,
+			PublicKey:  publicKey,
+			Addr:       addr,
+			SpaceAvail: 1 << 32,
+		}
+		metaService := metaserver.NewClient(p.Config.MetaAddr, &http.Client{})
+		err = metaService.RegisterProvider(&info)
+		if err != nil {
+			log.Fatalf("error: unable to register with metaservice. error: %s", err)
+		}
+		p.Config.IsRegistered = true
+		err = util.SaveJson(path.Join(homedir, "provider", "config.json"), p.Config)
+		if err != nil {
+			log.Fatalf("error: unable to update config after registering with metaserver. error: %s", err)
+		}
 	}
 
 	logfile, err := os.OpenFile(path.Join(homedir, "provider", "provider.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)

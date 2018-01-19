@@ -13,6 +13,7 @@ type Config struct {
 	ApiAddr      string `json:"apiAddress"`
 	MetaAddr     string `json:"metaServerAddress"`
 	IdentityFile string `json:"identityFile"`
+	IsRegistered bool   `json:"isRegistered"`
 }
 
 // Provider node statistics

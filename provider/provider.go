@@ -34,8 +34,9 @@ type Stats struct {
 
 // Mirrors Stats currently, probably want some other information
 type renterStats struct {
-	StorageReserved int64 `json:"storageReserved"`
-	StorageUsed     int64 `json:"storageUsed"`
+	StorageReserved int64            `json:"storageReserved"`
+	StorageUsed     int64            `json:"storageUsed"`
+	contracts       []*core.Contract `json:"contracts"`
 }
 
 type Activity struct {
@@ -72,6 +73,15 @@ func (provider *Provider) saveSnapshot() error {
 		Renters:   provider.renters,
 	}
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
+}
+
+func (provider *Provider) saveConfig() error {
+	// s := snapshot{
+	// 	Contracts: provider.contracts,
+	// 	Stats:     provider.stats,
+	// 	Renters:   provider.renters,
+	// }
+	return util.SaveJson(path.Join(provider.Homedir, "config.json"), &provider.Config)
 }
 
 // Loads configuration and snapshot information
@@ -121,20 +131,18 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 
 	// Sign contract
 	contract.ProviderSignature = "signature"
-
+	renterID := "test" // contract.RenterId
 	// Add storage space to the renter
-	renter := provider.renters["renterid"]
+	renter := provider.renters[renterID]
 	renter.StorageReserved += contract.StorageSpace
-	provider.renters["renterid"] = renter
-
-	fmt.Println(provider.renters)
+	provider.renters[renterID] = renter
 
 	// Record contract and update stats
 	provider.contracts = append(provider.contracts, contract)
 	provider.stats.StorageReserved += contract.StorageSpace
 
 	// Create a new directory for the renters blocks
-	os.MkdirAll(path.Join(provider.Homedir, "blocks", "renterid"), 0700)
+	os.MkdirAll(path.Join(provider.Homedir, "blocks", renterID), 0700)
 
 	activity := Activity{
 		RequestType: negotiateType,
@@ -152,11 +160,11 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	return contract, nil
 }
 
-func (provider *Provider) removeBlock(blockID string) error {
+func (provider *Provider) removeBlock(renterID string, blockID string) error {
 
 	// TODO: we need to get the renter id and authenticate here first
 
-	path := path.Join(provider.Homedir, "blocks", "renterid", blockID)
+	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
 		return fmt.Errorf(msg, err)
@@ -179,7 +187,7 @@ func (provider *Provider) removeBlock(blockID string) error {
 	return nil
 }
 
-// helper that could
+// helper that could be useful for future auditing
 func DirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {

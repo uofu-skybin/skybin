@@ -16,6 +16,8 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+var renterId string = "test"
+
 type Config struct {
 	RenterId     string `json:"renterId"`
 	Addr         string `json:"address"`
@@ -158,10 +160,10 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
-    id, err := genId()
-    if err != nil {
-        return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
-    }
+	id, err := genId()
+	if err != nil {
+		return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
+	}
 	file := &core.File{
 		ID:         id,
 		Name:       name,
@@ -214,7 +216,7 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	}
 
 	pvdr := provider.NewClient(blob.Addr, &http.Client{})
-	err = pvdr.PutBlock(blockId, r.Config.RenterId, f)
+	err = pvdr.PutBlock(renterId, blockId, f)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot upload block to provider. Error: %s", err)
 	}
@@ -372,7 +374,7 @@ func downloadBlock(block *core.Block, out io.Writer) error {
 	for _, location := range block.Locations {
 		client := provider.NewClient(location.Addr, &http.Client{})
 
-		blockReader, err := client.GetBlock(block.ID)
+		blockReader, err := client.GetBlock(renterId, block.ID)
 		if err != nil {
 
 			// TODO: Check that failure is due to a network error, not because
@@ -394,7 +396,7 @@ func downloadBlock(block *core.Block, out io.Writer) error {
 func removeBlock(block *core.Block) error {
 	for _, location := range block.Locations {
 		pvdr := provider.NewClient(location.Addr, &http.Client{})
-		err := pvdr.RemoveBlock(block.ID)
+		err := pvdr.RemoveBlock(renterId, block.ID)
 		if err != nil {
 			return err
 		}

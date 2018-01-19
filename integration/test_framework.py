@@ -242,7 +242,7 @@ def create_provider(metaserver_addr, repo_dir):
     config_path = '{}/provider/config.json'.format(homedir)
     update_config_file(
         config_path,
-        address=api_address,
+        apiAddress=api_address,
         metaServerAddress=metaserver_addr,
     )
 

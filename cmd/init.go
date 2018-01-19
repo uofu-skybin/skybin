@@ -59,7 +59,7 @@ func runInit(args ...string) {
 	checkErr(err)
 	renterConfig := renter.Config{
 		RenterId:     util.Hash(keyBytes),
-		ApiAddr:         core.DefaultRenterAddr,
+		ApiAddr:      core.DefaultRenterAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "renter", "renterid"),
 	}
@@ -77,7 +77,7 @@ func runInit(args ...string) {
 	checkErr(err)
 	providerConfig := provider.Config{
 		ProviderID:   util.Hash(keyBytes),
-		Addr:         core.DefaultProviderAddr,
+		ApiAddr:      core.DefaultProviderAddr,
 		MetaAddr:     core.DefaultMetaAddr,
 		IdentityFile: path.Join(homedir, "provider", "providerid"),
 	}

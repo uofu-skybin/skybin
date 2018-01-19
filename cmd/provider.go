@@ -36,7 +36,7 @@ func runProvider(args ...string) {
 
 	addr := *addrFlag
 	if len(addr) == 0 {
-		addr = p.Config.Addr
+		addr = p.Config.ApiAddr
 	}
 
 	// Read in the provider's public key.

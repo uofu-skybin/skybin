@@ -24,10 +24,14 @@ import (
 )
 
 type Config struct {
-	RenterId     string `json:"renterId"`
-	ApiAddr      string `json:"apiAddress"`
-	MetaAddr     string `json:"metaServerAddress"`
-	IdentityFile string `json:"identityFile"`
+	RenterId       string `json:"renterId"`
+	ApiAddr        string `json:"apiAddress"`
+	MetaAddr       string `json:"metaServerAddress"`
+	PrivateKeyFile string `json:"privateKeyFile"`
+	PublicKeyFile  string `json:"publicKeyFile"`
+
+	// Is this renter node registered with the metaservice?
+	IsRegistered bool `json:"isRegistered"`
 }
 
 type Renter struct {

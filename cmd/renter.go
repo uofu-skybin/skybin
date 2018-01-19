@@ -7,6 +7,11 @@ import (
 	"os"
 	"path"
 	"skybin/renter"
+	"skybin/metaserver"
+	"skybin/core"
+	"skybin/util"
+	"io/ioutil"
+	"fmt"
 )
 
 var renterCmd = Cmd{
@@ -31,12 +36,34 @@ func runRenter(args ...string) {
 		log.Fatal(err)
 	}
 
+	if !r.Config.IsRegistered {
+		pubKeyBytes, err := ioutil.ReadFile(r.Config.PublicKeyFile)
+		if err != nil {
+			log.Fatal("Unable to read public key file. Error: ", err)
+		}
+		info := core.RenterInfo{
+			ID: r.Config.RenterId,
+			PublicKey: string(pubKeyBytes),
+		}
+		metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
+		err = metaService.RegisterRenter(&info)
+		if err != nil {
+			log.Fatal("Unable to register with metaserver. Error: ", err)
+		}
+		r.Config.IsRegistered = true
+		err = util.SaveJson(path.Join(homedir, "renter", "config.json"), r.Config)
+		if err != nil {
+			log.Fatal("Unable to update config file. Error: ", err)
+		}
+	}
+
 	addr := r.Config.ApiAddr
 	if len(*addrFlag) > 0 {
 		addr = *addrFlag
 	}
 
-	logfile, err := os.OpenFile(path.Join(homedir, "renter", "renter.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logfile, err := os.OpenFile(path.Join(homedir, "renter", "renter.log"),
+		os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("Cannot create log file: %s", err)
 	}

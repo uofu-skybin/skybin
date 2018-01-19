@@ -56,8 +56,8 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 type metaServer struct {
 	dataDir    string
 	dbpath     string
-	providers  []core.Provider
-	renters    []core.Renter
+	providers  []core.ProviderInfo
+	renters    []core.RenterInfo
 	logger     *log.Logger
 	router     *mux.Router
 	authorizer authorization.Authorizer
@@ -71,11 +71,11 @@ func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type storageFile struct {
-	Providers []core.Provider
-	Renters   []core.Renter
+	Providers []core.ProviderInfo
+	Renters   []core.RenterInfo
 }
 
-func (server *metaServer) dumpDbToFile(providers []core.Provider, renters []core.Renter) {
+func (server *metaServer) dumpDbToFile(providers []core.ProviderInfo, renters []core.RenterInfo) {
 	db := storageFile{Providers: providers, Renters: renters}
 
 	dbBytes, err := json.Marshal(db)

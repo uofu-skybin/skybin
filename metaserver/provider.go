@@ -20,7 +20,7 @@ func (server *metaServer) getProviderPublicKey(providerID string) (string, error
 }
 
 type getProvidersResp struct {
-	Providers []core.Provider `json:"providers"`
+	Providers []core.ProviderInfo `json:"providers"`
 	Error     string          `json:"error,omitempty"`
 }
 
@@ -34,13 +34,13 @@ func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 }
 
 type postProviderResp struct {
-	Provider core.Provider `json:"provider,omitempty"`
+	Provider core.ProviderInfo `json:"provider,omitempty"`
 	Error    string        `json:"error,omitempty"`
 }
 
 func (server *metaServer) postProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var provider core.Provider
+		var provider core.ProviderInfo
 		err := json.NewDecoder(r.Body).Decode(&provider)
 
 		if err != nil {

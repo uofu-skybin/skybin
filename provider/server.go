@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"skybin/authorization"
 	"skybin/core"
 	"time"
 
@@ -15,10 +16,10 @@ import (
 )
 
 type providerServer struct {
-	provider *Provider
-	logger   *log.Logger
-	router   *mux.Router
-	activity []Activity // Activity feed
+	provider   *Provider
+	logger     *log.Logger
+	router     *mux.Router
+	authorizer authorization.Authorizer
 }
 
 func NewServer(provider *Provider, logger *log.Logger) http.Handler {
@@ -26,35 +27,31 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
 	server := providerServer{
-		provider: provider,
-		logger:   logger,
-		router:   router,
+		provider:   provider,
+		logger:     logger,
+		router:     router,
+		authorizer: authorization.NewAuthorizer(logger),
 	}
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
-	router.HandleFunc("/blocks/{renterID}/{blockID}", server.postBlock).Methods("POST")
-	router.HandleFunc("/blocks/{renterID}/{blockID}", server.getBlock).Methods("GET")
-	router.HandleFunc("/blocks/{renterID}/{blockID}", server.deleteBlock).Methods("DELETE")
+	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
+	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
+	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 
-	// router.HandleFunc("/auth", server.getContracts).Methods("GET")
-	// router.HandleFunc("/auth", server.getContracts).Methods("POST")
-	router.HandleFunc("/renter-info/{renterID}", server.getRenter).Methods("GET")
+	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
+	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.signingKey, server.getProviderPublicKey)).Methods("POST")
+
+	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
 
 	// Local API
 	// TODO: Move these to the local provider server later
-	// router.HandleFunc("/info", server.getInfo).Methods("POST")
+	// router.HandleFunc("/info", server.postInfo).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
-}
-func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
-	renterID, exists := mux.Vars(r)["renterID"]
-	if exists {
-		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])
-	}
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -83,23 +80,25 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
 		return
 	}
+	blockID := blockquery[0]
 
 	// TODO: Replace this with authorization token
-	renterID, exists := mux.Vars(r)["renterID"]
+	renterquery, exists := r.URL.Query()["renterID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
 		return
 	}
+	renterID := renterquery[0]
 
 	renter := server.provider.renters[renterID]
 	avail := renter.StorageReserved - renter.StorageUsed
-	fmt.Println(renter)
-	// check block size using the header
+
+	// first check block size using the http header
 	if r.ContentLength > avail {
 		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", r.ContentLength, avail)
 		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
@@ -123,7 +122,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// check saved file size vs the available storage
+	// Verify that received file is the correct size
 	if int64(n) > avail {
 		os.Remove(path)
 		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", int64(n), avail)
@@ -134,6 +133,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	// Update stats
 	server.provider.stats.StorageUsed += int64(n)
 	renter.StorageUsed += int64(n)
+	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: int64(n)})
 	server.provider.renters[renterID] = renter
 
 	err = server.provider.saveSnapshot()
@@ -153,17 +153,20 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			&errorResp{Error: "No block given"})
 		return
 	}
-	renterID, exists := mux.Vars(r)["renterID"]
+	blockID := blockquery[0]
+
+	renterquery, exists := r.URL.Query()["renterID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
 		return
 	}
+	renterID := renterquery[0]
 
 	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
@@ -185,8 +188,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		RequestType: getBlockType,
 		BlockId:     blockID,
 		TimeStamp:   time.Now(),
-		// TODO: Need this param from renter
-		// RenterId:    params.RenterID,
+		RenterId:    renterID,
 	}
 	server.provider.addActivity(activity)
 
@@ -199,24 +201,20 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "No block given"})
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
 		return
 	}
-	renterID, exists := mux.Vars(r)["renterID"]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renterID given"})
-		return
-	}
+	blockID := blockquery[0]
 
-	// err := server.provider.removeBlock(renterID, blockID)
-	// if err != nil {
-	// 	// TODO: Tune errors and error statusses?
-	// 	server.writeResp(w, http.StatusForbidden, &errorResp{})
-	// 	return
-	// } // TODO: we need to get the renter id and authenticate here first
+	// TODO: Replace this with authorization token
+	renterquery, exists := r.URL.Query()["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
 
 	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
@@ -236,7 +234,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		RequestType: deleteBlockType,
 		BlockId:     blockID,
 		TimeStamp:   time.Now(),
-		// RenterId:    params.RenterID,
+		RenterId:    renterID,
 	}
 	server.provider.addActivity(activity)
 
@@ -267,6 +265,15 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &info)
 }
 
+func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
+	// TODO: authenticate
+	renterID, exists := mux.Vars(r)["renterID"]
+	if exists {
+		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])
+	}
+	server.writeResp(w, http.StatusOK, getRenterResp{renter: server.provider.renters[renterID]})
+}
+
 func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &getActivityResp{Activity: server.provider.activity})
 }
@@ -289,6 +296,7 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 	}
 }
 
+// Responses
 type errorResp struct {
 	Error string `json:"error,omitempty"`
 }
@@ -310,7 +318,7 @@ type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 type getRenterResp struct {
-	renter renterStats `json:"renterstats"`
+	renter RenterInfo `json:"renter-info"`
 }
 type getActivityResp struct {
 	Activity []Activity `json:"activity"`

@@ -17,6 +17,8 @@ type Config struct {
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 
+	TotalStorage int64 `json:"totalStorage"`
+
 	// Is this provider registered with metaservice?
 	IsRegistered bool `json:"isRegistered"`
 }
@@ -27,7 +29,7 @@ type Provider struct {
 	contracts []*core.Contract
 	stats     Stats
 	activity  []Activity
-	renters   map[string]renterStats
+	renters   map[string]RenterInfo
 }
 
 // Provider node statistics
@@ -36,12 +38,15 @@ type Stats struct {
 	StorageUsed     int64 `json:"storageUsed"`
 }
 
-// Mirrors Stats currently, probably want some other information
-type renterStats struct {
+type BlockInfo struct {
+	BlockId string `json:"blockId"`
+	Size    int64  `json:"blockSize"`
+}
+type RenterInfo struct {
 	StorageReserved int64            `json:"storageReserved"`
 	StorageUsed     int64            `json:"storageUsed"`
-	contracts       []*core.Contract `json:"contracts"`
-	blocks          *core.Block      `json:"blocks"`
+	Contracts       []*core.Contract `json:"contracts"`
+	Blocks          []*BlockInfo     `json:"blocks"`
 }
 
 type Activity struct {
@@ -66,9 +71,9 @@ const (
 )
 
 type snapshot struct {
-	Contracts []*core.Contract       `json:"contracts"`
-	Stats     Stats                  `json:"stats"`
-	Renters   map[string]renterStats `json:"renters"`
+	Contracts []*core.Contract      `json:"contracts"`
+	Stats     Stats                 `json:"stats"`
+	Renters   map[string]RenterInfo `json:"renters"`
 }
 
 func (provider *Provider) saveSnapshot() error {
@@ -80,21 +85,12 @@ func (provider *Provider) saveSnapshot() error {
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 
-// func (provider *Provider) saveConfig() error {
-// 	s := snapshot{
-// 		Contracts: provider.contracts,
-// 		Stats:     provider.stats,
-// 		Renters:   provider.renters,
-// 	}
-// 	return util.SaveJson(path.Join(provider.Homedir, "config.json"), &provider.Config)
-// }
-
 // Loads configuration and snapshot information
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir:   homedir,
 		contracts: make([]*core.Contract, 0),
-		renters:   make(map[string]renterStats, 0),
+		renters:   make(map[string]RenterInfo, 0),
 	}
 
 	config := &Config{}
@@ -133,18 +129,25 @@ func (provider *Provider) addActivity(activity Activity) {
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
 
 	// TODO determine if contract is amiable for provider here
+	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
+	// if contract.StorageSpace > avail {
+	// 	msg := fmt.Sprintf("Contract was not accepted.")
+	// 	return nil, fmt.Errorf(msg)
+	// }
 
 	// Sign contract
 	contract.ProviderSignature = "signature"
-	renterID := "test" // contract.RenterId
+
+	// Record contract and update stats
+	renterID := contract.RenterId
 	// Add storage space to the renter
 	renter := provider.renters[renterID]
 	renter.StorageReserved += contract.StorageSpace
-	provider.renters[renterID] = renter
+	renter.Contracts = append(renter.Contracts, contract)
 
-	// Record contract and update stats
-	provider.contracts = append(provider.contracts, contract)
+	provider.renters[renterID] = renter
 	provider.stats.StorageReserved += contract.StorageSpace
+	provider.contracts = append(provider.contracts, contract)
 
 	// Create a new directory for the renters blocks
 	os.MkdirAll(path.Join(provider.Homedir, "blocks", renterID), 0700)
@@ -158,39 +161,8 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	provider.addActivity(activity)
 
 	provider.saveSnapshot()
-	// if err != nil {
-	// 	//TODO log internal server error
-	// 	// server.logger.Println("Unable to save snapshot. Error:", err)
-	// }
 	return contract, nil
 }
-
-// func (provider *Provider) removeBlock(renterID string, blockID string) error {
-
-// 	// TODO: we need to get the renter id and authenticate here first
-
-// 	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
-// 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
-// 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
-// 		return fmt.Errorf(msg, err)
-// 	}
-
-// 	err := os.Remove(path)
-// 	if err != nil {
-// 		msg := fmt.Sprintf("Error deleting block %s: %s", blockID, err)
-// 		return fmt.Errorf(msg)
-// 	}
-
-// 	activity := Activity{
-// 		RequestType: deleteBlockType,
-// 		BlockId:     blockID,
-// 		TimeStamp:   time.Now(),
-// 		// RenterId:    params.RenterID,
-// 	}
-// 	provider.addActivity(activity)
-
-// 	return nil
-// }
 
 // helper that could be useful for future auditing
 func DirSize(path string) (int64, error) {

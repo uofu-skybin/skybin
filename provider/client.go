@@ -42,7 +42,7 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 }
 
 func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) error {
-	url := fmt.Sprintf("http://%s/blocks/%s/%s", client.addr, renterID, blockID)
+	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	resp, err := client.client.Post(url, "application/octet-stream", data)
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) 
 }
 
 func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, error) {
-	url := fmt.Sprintf("http://%s/blocks/%s/%s", client.addr, renterID, blockID)
+	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	resp, err := client.client.Get(url)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 }
 
 func (client *Client) RemoveBlock(renterID string, blockID string) error {
-	url := fmt.Sprintf("http://%s/blocks/%s/%s", client.addr, renterID, blockID)
+	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err

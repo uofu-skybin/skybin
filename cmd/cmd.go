@@ -85,5 +85,5 @@ func getRenterClient() (*renter.Client, error) {
 		return nil, fmt.Errorf("Cannot load renter config. Error: %s", err)
 	}
 
-	return renter.NewClient(config.Addr, &http.Client{}), nil
+	return renter.NewClient(config.ApiAddr, &http.Client{}), nil
 }

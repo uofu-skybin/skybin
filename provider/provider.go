@@ -11,10 +11,14 @@ import (
 )
 
 type Config struct {
-	ProviderID   string `json:"providerId"`
-	Addr         string `json:"address"`
-	MetaAddr     string `json:"metaServerAddress"`
-	IdentityFile string `json:"identityFile"`
+	ProviderID     string `json:"providerId"`
+	ApiAddr        string `json:"apiAddress"`
+	MetaAddr       string `json:"metaServerAddress"`
+	PrivateKeyFile string `json:"privateKeyFile"`
+	PublicKeyFile  string `json:"publicKeyFile"`
+
+	// Is this provider registered with metaservice?
+	IsRegistered bool `json:"isRegistered"`
 }
 
 type Provider struct {

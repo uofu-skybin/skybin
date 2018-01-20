@@ -8,12 +8,18 @@ const (
 	DefaultProviderAddr = ":8003"
 )
 
-type Provider struct {
+type ProviderInfo struct {
 	ID          string `json:"id,omitempty"`
-	PublicKey   string `json:"publicKey,omitempty"`
+	PublicKey   string `json:"publicKey"`
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int    `json:"storageRate,omitempty"`
+}
+
+type RenterInfo struct {
+	ID        string `json:"id"`
+	PublicKey string `json:"publicKey"`
+	Files     []File `json:"files"`
 }
 
 type Contract struct {
@@ -30,7 +36,15 @@ type BlockLocation struct {
 }
 
 type Block struct {
-	ID        string          `json:"id"`
+	ID string `json:"id"`
+
+	// sha256 hash of the block
+	Hash string `json:"hash"`
+
+	// Size of the block in bytes
+	Size int64
+
+	// Locations of providers where the block is stored
 	Locations []BlockLocation `json:"locations"`
 }
 
@@ -54,8 +68,3 @@ type File struct {
 	Blocks     []Block      `json:"blocks"`
 }
 
-type Renter struct {
-	ID        string `json:"id"`
-	PublicKey string `json:"publicKey"`
-	Files     []File `json:"files"`
-}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"skybin/core"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -96,14 +97,14 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	renter := server.provider.renters[renterID]
-	// avail := renter.StorageReserved - renter.StorageUsed
+	avail := renter.StorageReserved - renter.StorageUsed
 	fmt.Println(renter)
 	// check block size using the header
-	// if r.ContentLength < avail {
-	// 	msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", r.ContentLength, avail)
-	// 	server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
-	// 	return
-	// }
+	if r.ContentLength > avail {
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", r.ContentLength, avail)
+		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
+		return
+	}
 
 	// create file
 	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
@@ -123,12 +124,12 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// check saved file size vs the available storage
-	// if int64(n) < avail {
-	// 	os.Remove(path)
-	// 	msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", int64(n), avail)
-	// 	server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
-	// 	return
-	// }
+	if int64(n) > avail {
+		os.Remove(path)
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", int64(n), avail)
+		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
+		return
+	}
 
 	// Update stats
 	server.provider.stats.StorageUsed += int64(n)
@@ -190,7 +191,6 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	server.provider.addActivity(activity)
 
 	w.WriteHeader(http.StatusOK)
-
 	_, err = io.Copy(w, f)
 	if err != nil {
 		server.logger.Println("Unable to write block to ResponseWriter. Error: ", err)
@@ -211,12 +211,34 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := server.provider.removeBlock(renterID, blockID)
-	if err != nil {
-		// TODO: Tune errors and error statusses?
-		server.writeResp(w, http.StatusForbidden, &errorResp{})
+	// err := server.provider.removeBlock(renterID, blockID)
+	// if err != nil {
+	// 	// TODO: Tune errors and error statusses?
+	// 	server.writeResp(w, http.StatusForbidden, &errorResp{})
+	// 	return
+	// } // TODO: we need to get the renter id and authenticate here first
+
+	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
+	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
+		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
+
+	err := os.Remove(path)
+	if err != nil {
+		msg := fmt.Sprintf("Error deleting block with ID %s", blockID)
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
+		return
+	}
+
+	activity := Activity{
+		RequestType: deleteBlockType,
+		BlockId:     blockID,
+		TimeStamp:   time.Now(),
+		// RenterId:    params.RenterID,
+	}
+	server.provider.addActivity(activity)
 
 	server.writeResp(w, http.StatusOK, &errorResp{"Block Deleted"})
 
@@ -265,4 +287,31 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 	} else {
 		server.logger.Println(status)
 	}
+}
+
+type errorResp struct {
+	Error string `json:"error,omitempty"`
+}
+type postContractParams struct {
+	Contract *core.Contract `json:"contract"`
+}
+type postContractResp struct {
+	Contract *core.Contract `json:"contract"`
+}
+type getInfoResp struct {
+	ProviderId      string `json:"providerId"`
+	TotalStorage    int64  `json:"providerAllocated"`
+	ReservedStorage int64  `json:"providerReserved"`
+	UsedStorage     int64  `json:"providerUsed"`
+	FreeStorage     int64  `json:"providerFree"`
+	TotalContracts  int    `json:"providerContracts"`
+}
+type getContractsResp struct {
+	Contracts []*core.Contract `json:"contracts"`
+}
+type getRenterResp struct {
+	renter renterStats `json:"renterstats"`
+}
+type getActivityResp struct {
+	Activity []Activity `json:"activity"`
 }

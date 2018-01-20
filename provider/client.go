@@ -83,5 +83,6 @@ func (client *Client) RemoveBlock(renterID string, blockID string) error {
 	if resp.StatusCode != http.StatusOK {
 		return errors.New("bad status code")
 	}
+
 	return nil
 }

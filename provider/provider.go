@@ -37,6 +37,7 @@ type renterStats struct {
 	StorageReserved int64            `json:"storageReserved"`
 	StorageUsed     int64            `json:"storageUsed"`
 	contracts       []*core.Contract `json:"contracts"`
+	blocks          *core.Block      `json:"blocks"`
 }
 
 type Activity struct {
@@ -75,14 +76,14 @@ func (provider *Provider) saveSnapshot() error {
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 
-func (provider *Provider) saveConfig() error {
-	// s := snapshot{
-	// 	Contracts: provider.contracts,
-	// 	Stats:     provider.stats,
-	// 	Renters:   provider.renters,
-	// }
-	return util.SaveJson(path.Join(provider.Homedir, "config.json"), &provider.Config)
-}
+// func (provider *Provider) saveConfig() error {
+// 	s := snapshot{
+// 		Contracts: provider.contracts,
+// 		Stats:     provider.stats,
+// 		Renters:   provider.renters,
+// 	}
+// 	return util.SaveJson(path.Join(provider.Homedir, "config.json"), &provider.Config)
+// }
 
 // Loads configuration and snapshot information
 func LoadFromDisk(homedir string) (*Provider, error) {
@@ -160,32 +161,32 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	return contract, nil
 }
 
-func (provider *Provider) removeBlock(renterID string, blockID string) error {
+// func (provider *Provider) removeBlock(renterID string, blockID string) error {
 
-	// TODO: we need to get the renter id and authenticate here first
+// 	// TODO: we need to get the renter id and authenticate here first
 
-	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
-	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
-		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
-		return fmt.Errorf(msg, err)
-	}
+// 	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
+// 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
+// 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
+// 		return fmt.Errorf(msg, err)
+// 	}
 
-	err := os.Remove(path)
-	if err != nil {
-		msg := fmt.Sprintf("Error deleting block %s: %s", blockID, err)
-		return fmt.Errorf(msg)
-	}
+// 	err := os.Remove(path)
+// 	if err != nil {
+// 		msg := fmt.Sprintf("Error deleting block %s: %s", blockID, err)
+// 		return fmt.Errorf(msg)
+// 	}
 
-	activity := Activity{
-		RequestType: deleteBlockType,
-		BlockId:     blockID,
-		TimeStamp:   time.Now(),
-		// RenterId:    params.RenterID,
-	}
-	provider.addActivity(activity)
+// 	activity := Activity{
+// 		RequestType: deleteBlockType,
+// 		BlockId:     blockID,
+// 		TimeStamp:   time.Now(),
+// 		// RenterId:    params.RenterID,
+// 	}
+// 	provider.addActivity(activity)
 
-	return nil
-}
+// 	return nil
+// }
 
 // helper that could be useful for future auditing
 func DirSize(path string) (int64, error) {

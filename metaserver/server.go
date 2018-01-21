@@ -1,8 +1,6 @@
 package metaserver
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -19,7 +17,7 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 
 	server := &metaServer{
 		dataDir:    dataDirectory,
-		dbpath:     path.Join(dataDirectory, "metaDB.json"),
+		db:         newJsonDB(path.Join(dataDirectory, "metaDB.json")),
 		router:     router,
 		logger:     logger,
 		authorizer: authorization.NewAuthorizer(logger),
@@ -55,7 +53,7 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 
 type metaServer struct {
 	dataDir    string
-	dbpath     string
+	db         metaDB
 	providers  []core.ProviderInfo
 	renters    []core.RenterInfo
 	logger     *log.Logger
@@ -68,39 +66,4 @@ type metaServer struct {
 func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.Method, r.URL)
 	server.ServeHTTP(w, r)
-}
-
-type storageFile struct {
-	Providers []core.ProviderInfo
-	Renters   []core.RenterInfo
-}
-
-func (server *metaServer) dumpDbToFile(providers []core.ProviderInfo, renters []core.RenterInfo) {
-	db := storageFile{Providers: providers, Renters: renters}
-
-	dbBytes, err := json.Marshal(db)
-	if err != nil {
-		panic(err)
-	}
-
-	writeErr := ioutil.WriteFile(path.Join(server.dataDir, server.dbpath), dbBytes, 0644)
-	if writeErr != nil {
-		panic(err)
-	}
-}
-
-func (server *metaServer) loadDbFromFile() {
-	contents, err := ioutil.ReadFile(path.Join(server.dataDir, server.dbpath))
-	if err != nil {
-		panic(err)
-	}
-
-	var db storageFile
-	parseErr := json.Unmarshal(contents, &db)
-	if parseErr != nil {
-		panic(parseErr)
-	}
-
-	server.providers = db.Providers
-	server.renters = db.Renters
 }

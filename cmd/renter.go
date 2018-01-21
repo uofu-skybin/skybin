@@ -2,16 +2,15 @@ package cmd
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path"
-	"skybin/renter"
-	"skybin/metaserver"
 	"skybin/core"
+	"skybin/metaserver"
+	"skybin/renter"
 	"skybin/util"
-	"io/ioutil"
-	"fmt"
 )
 
 var renterCmd = Cmd{
@@ -42,7 +41,7 @@ func runRenter(args ...string) {
 			log.Fatal("Unable to read public key file. Error: ", err)
 		}
 		info := core.RenterInfo{
-			ID: r.Config.RenterId,
+			ID:        r.Config.RenterId,
 			PublicKey: string(pubKeyBytes),
 		}
 		metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})

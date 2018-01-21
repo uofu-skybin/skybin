@@ -22,9 +22,17 @@ type storageFile struct {
 }
 
 func newJsonDB(dbLocation string) jsonDB {
-	db := jsonDB{}
+	db := jsonDB{
+		path:      dbLocation,
+		providers: make([]core.ProviderInfo, 0),
+		renters:   make([]core.RenterInfo, 0),
+	}
 
 	if _, err := os.Stat(dbLocation); os.IsNotExist(err) {
+		_, err := os.Create(dbLocation)
+		if err != nil {
+			panic(err)
+		}
 		db.dumpDbToFile()
 	} else {
 		db.loadDbFromFile()
@@ -33,7 +41,7 @@ func newJsonDB(dbLocation string) jsonDB {
 	return db
 }
 
-func (db jsonDB) dumpDbToFile() {
+func (db *jsonDB) dumpDbToFile() {
 	storageFile := storageFile{Providers: db.providers, Renters: db.renters}
 
 	dbBytes, err := json.Marshal(storageFile)
@@ -43,11 +51,11 @@ func (db jsonDB) dumpDbToFile() {
 
 	writeErr := ioutil.WriteFile(path.Join(db.path), dbBytes, 0644)
 	if writeErr != nil {
-		panic(err)
+		panic(writeErr)
 	}
 }
 
-func (db jsonDB) loadDbFromFile() {
+func (db *jsonDB) loadDbFromFile() {
 	contents, err := ioutil.ReadFile(path.Join(db.path))
 	if err != nil {
 		panic(err)
@@ -66,11 +74,11 @@ func (db jsonDB) loadDbFromFile() {
 
 // Renter operations
 
-func (db jsonDB) FindAllRenters() []core.RenterInfo {
+func (db *jsonDB) FindAllRenters() []core.RenterInfo {
 	return db.renters
 }
 
-func (db jsonDB) FindRenterByID(id string) (core.RenterInfo, error) {
+func (db *jsonDB) FindRenterByID(id string) (core.RenterInfo, error) {
 	for _, renter := range db.renters {
 		if renter.ID == id {
 			return renter, nil
@@ -79,7 +87,7 @@ func (db jsonDB) FindRenterByID(id string) (core.RenterInfo, error) {
 	return core.RenterInfo{}, errors.New("could not locate renter with given ID")
 }
 
-func (db jsonDB) InsertRenter(newRenter core.RenterInfo) error {
+func (db *jsonDB) InsertRenter(newRenter core.RenterInfo) error {
 	for _, renter := range db.renters {
 		if newRenter.ID == renter.ID {
 			return errors.New("renter with given ID already exists")
@@ -90,7 +98,7 @@ func (db jsonDB) InsertRenter(newRenter core.RenterInfo) error {
 	return nil
 }
 
-func (db jsonDB) UpdateRenter(updateRenter core.RenterInfo) error {
+func (db *jsonDB) UpdateRenter(updateRenter core.RenterInfo) error {
 	foundRenter := false
 	var replaceIndex int
 
@@ -110,7 +118,7 @@ func (db jsonDB) UpdateRenter(updateRenter core.RenterInfo) error {
 	return nil
 }
 
-func (db jsonDB) DeleteRenter(renterID string) error {
+func (db *jsonDB) DeleteRenter(renterID string) error {
 	removeIndex := -1
 	for i, renter := range db.renters {
 		if renterID == renter.ID {
@@ -126,11 +134,11 @@ func (db jsonDB) DeleteRenter(renterID string) error {
 }
 
 // Provider operations
-func (db jsonDB) FindAllProviders() []core.ProviderInfo {
+func (db *jsonDB) FindAllProviders() []core.ProviderInfo {
 	return db.providers
 }
 
-func (db jsonDB) FindProviderByID(id string) (core.ProviderInfo, error) {
+func (db *jsonDB) FindProviderByID(id string) (core.ProviderInfo, error) {
 	for _, provider := range db.providers {
 		if provider.ID == id {
 			return provider, nil
@@ -139,7 +147,7 @@ func (db jsonDB) FindProviderByID(id string) (core.ProviderInfo, error) {
 	return core.ProviderInfo{}, errors.New("could not locate provider with given ID")
 }
 
-func (db jsonDB) InsertProvider(newProvider core.ProviderInfo) error {
+func (db *jsonDB) InsertProvider(newProvider core.ProviderInfo) error {
 	for _, provider := range db.providers {
 		if newProvider.ID == provider.ID {
 			return errors.New("provider with given ID already exists")
@@ -150,7 +158,7 @@ func (db jsonDB) InsertProvider(newProvider core.ProviderInfo) error {
 	return nil
 }
 
-func (db jsonDB) UpdateProvider(updateProvider core.ProviderInfo) error {
+func (db *jsonDB) UpdateProvider(updateProvider core.ProviderInfo) error {
 	foundProvider := false
 	var replaceIndex int
 
@@ -170,7 +178,7 @@ func (db jsonDB) UpdateProvider(updateProvider core.ProviderInfo) error {
 	return nil
 }
 
-func (db jsonDB) DeleteProvider(providerID string) error {
+func (db *jsonDB) DeleteProvider(providerID string) error {
 	removeIndex := -1
 	for i, provider := range db.providers {
 		if providerID == provider.ID {
@@ -187,7 +195,7 @@ func (db jsonDB) DeleteProvider(providerID string) error {
 
 // File operations
 
-func (db jsonDB) FindAllFiles() []core.File {
+func (db *jsonDB) FindAllFiles() []core.File {
 	return db.files
 }
 
@@ -212,7 +220,7 @@ func (db jsonDB) FindFileByID(fileID string) (core.File, error) {
 	return foundFiles[highestVersionIndex], nil
 }
 
-func (db jsonDB) FindFileByIDAndVersion(fileID string, version int) (core.File, error) {
+func (db *jsonDB) FindFileByIDAndVersion(fileID string, version int) (core.File, error) {
 	for _, file := range db.files {
 		if file.ID == fileID && file.VersionNum == version {
 			return file, nil
@@ -221,8 +229,7 @@ func (db jsonDB) FindFileByIDAndVersion(fileID string, version int) (core.File, 
 	return core.File{}, errors.New("no file with specified ID and version")
 }
 
-func (db jsonDB) InsertFile(newFile core.File) error {
-	var renter core.RenterInfo
+func (db *jsonDB) InsertFile(newFile core.File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == newFile.OwnerID {
@@ -242,8 +249,7 @@ func (db jsonDB) InsertFile(newFile core.File) error {
 	return nil
 }
 
-func (db jsonDB) UpdateFile(updateFile core.File) error {
-	var renter core.RenterInfo
+func (db *jsonDB) UpdateFile(updateFile core.File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == updateFile.OwnerID {
@@ -267,7 +273,7 @@ func (db jsonDB) UpdateFile(updateFile core.File) error {
 	return nil
 }
 
-func (db jsonDB) DeleteFile(fileID string) error {
+func (db *jsonDB) DeleteFile(fileID string) error {
 	var keepFiles []core.File
 	for _, file := range db.files {
 		if file.ID != fileID {
@@ -282,7 +288,7 @@ func (db jsonDB) DeleteFile(fileID string) error {
 	return nil
 }
 
-func (db jsonDB) DeleteFileVersion(fileID string, versionNum int) error {
+func (db *jsonDB) DeleteFileVersion(fileID string, versionNum int) error {
 	deleteIndex := -1
 	for i, file := range db.files {
 		if file.ID == fileID && file.VersionNum == versionNum {

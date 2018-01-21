@@ -2,7 +2,6 @@ package metaserver
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"skybin/core"
 
@@ -11,23 +10,22 @@ import (
 
 // Retrieves the given provider's public RSA key.
 func (server *metaServer) getProviderPublicKey(providerID string) (string, error) {
-	for _, item := range server.providers {
-		if item.ID == providerID {
-			return item.PublicKey, nil
-		}
+	provider, err := server.db.FindProviderByID(providerID)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.New("could not locate provider with given ID")
+	return provider.PublicKey, nil
 }
 
 type getProvidersResp struct {
 	Providers []core.ProviderInfo `json:"providers"`
-	Error     string          `json:"error,omitempty"`
+	Error     string              `json:"error,omitempty"`
 }
 
 func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := getProvidersResp{
-			Providers: server.providers,
+			Providers: server.db.FindAllProviders(),
 		}
 		json.NewEncoder(w).Encode(resp)
 	})
@@ -35,7 +33,7 @@ func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 
 type postProviderResp struct {
 	Provider core.ProviderInfo `json:"provider,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Error    string            `json:"error,omitempty"`
 }
 
 func (server *metaServer) postProviderHandler() http.HandlerFunc {
@@ -67,22 +65,27 @@ func (server *metaServer) postProviderHandler() http.HandlerFunc {
 		}
 
 		provider.ID = fingerprintKey(provider.PublicKey)
-		server.providers = append(server.providers, provider)
+		err = server.db.InsertProvider(provider)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(provider)
-		server.dumpDbToFile(server.providers, server.renters)
 	})
 }
 
 func (server *metaServer) getProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		for _, item := range server.providers {
-			if item.ID == params["id"] {
-				json.NewEncoder(w).Encode(item)
-				return
-			}
+		provider, err := server.db.FindProviderByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(provider)
 	})
 }

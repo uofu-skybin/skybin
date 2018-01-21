@@ -3,7 +3,6 @@ package metaserver
 import (
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"skybin/authorization"
 	"skybin/core"
@@ -15,18 +14,15 @@ import (
 func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
+	db := newJsonDB(path.Join(dataDirectory, "metaDB.json"))
+
 	server := &metaServer{
 		dataDir:    dataDirectory,
-		db:         newJsonDB(path.Join(dataDirectory, "metaDB.json")),
+		db:         &db,
 		router:     router,
 		logger:     logger,
 		authorizer: authorization.NewAuthorizer(logger),
 		signingKey: []byte("secret"),
-	}
-
-	// If the database exists, load it into memory.
-	if _, err := os.Stat(server.dbpath); !os.IsNotExist(err) {
-		server.loadDbFromFile()
 	}
 
 	authMiddleware := authorization.GetAuthMiddleware(server.signingKey)
@@ -37,16 +33,21 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
 	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.signingKey, server.getRenterPublicKey)).Methods("POST")
 
+	// BUG(kincaid): Add PUT method for providers.
 	router.Handle("/providers", server.getProvidersHandler()).Methods("GET")
 	router.Handle("/providers", server.postProviderHandler()).Methods("POST")
 	router.Handle("/providers/{id}", server.getProviderHandler()).Methods("GET")
 
+	// BUG(kincaid): Add PUT method for renters.
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
-	router.Handle("/renters/{id}/files", authMiddleware.Handler(server.getRenterFilesHandler())).Methods("GET")
-	router.Handle("/renters/{id}/files", authMiddleware.Handler(server.postRenterFileHandler())).Methods("POST")
-	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(server.getRenterFileHandler())).Methods("GET")
-	router.Handle("/renters/{id}/files/{fileId}", authMiddleware.Handler(server.deleteRenterFileHandler())).Methods("DELETE")
+
+	// BUG(kincaid): Add PUT method for files.
+	router.Handle("/files/{id}", authMiddleware.Handler(server.postFileHandler())).Methods("POST")
+	router.Handle("/files/{id}", authMiddleware.Handler(server.getFileHandler())).Methods("GET")
+	router.Handle("/files/{id}", authMiddleware.Handler(server.deleteFileHandler())).Methods("DELETE")
+	router.Handle("/files/{id}/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
+	router.Handle("/files/{id}/{version}", authMiddleware.Handler(server.deleteFileVersionHandler())).Methods("DELETE")
 
 	return router
 }

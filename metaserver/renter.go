@@ -2,7 +2,6 @@ package metaserver
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"skybin/core"
 
@@ -11,17 +10,16 @@ import (
 
 // Retrieves the given renter's public RSA key.
 func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
-	for _, item := range server.renters {
-		if item.ID == renterID {
-			return item.PublicKey, nil
-		}
+	renter, err := server.db.FindRenterByID(renterID)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.New("could not locate renter with given ID")
+	return renter.PublicKey, nil
 }
 
 type postRenterResp struct {
 	Renter core.RenterInfo `json:"provider,omitempty"`
-	Error  string      `json:"error,omitempty"`
+	Error  string          `json:"error,omitempty"`
 }
 
 func (server *metaServer) postRenterHandler() http.HandlerFunc {
@@ -54,87 +52,25 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 
 		renter.ID = fingerprintKey(renter.PublicKey)
 
-		server.renters = append(server.renters, renter)
+		err = server.db.InsertRenter(renter)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+		}
 		json.NewEncoder(w).Encode(renter)
-		server.dumpDbToFile(server.providers, server.renters)
 	})
 }
 
 func (server *metaServer) getRenterHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				json.NewEncoder(w).Encode(item)
-				return
-			}
+		renter, err := server.db.FindRenterByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) getRenterFilesHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				json.NewEncoder(w).Encode(item.Files)
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) postRenterFileHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for i, item := range server.renters {
-			if item.ID == params["id"] {
-				var file core.File
-				_ = json.NewDecoder(r.Body).Decode(&file)
-				server.renters[i].Files = append(item.Files, file)
-				json.NewEncoder(w).Encode(item.Files)
-				server.dumpDbToFile(server.providers, server.renters)
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) getRenterFileHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				for _, file := range item.Files {
-					if file.ID == params["fileId"] {
-						json.NewEncoder(w).Encode(file)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) deleteRenterFileHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				for i, file := range item.Files {
-					if file.ID == params["fileId"] {
-						item.Files = append(item.Files[:i], item.Files[i+1:]...)
-						json.NewEncoder(w).Encode(file)
-						server.dumpDbToFile(server.providers, server.renters)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(renter)
 	})
 }

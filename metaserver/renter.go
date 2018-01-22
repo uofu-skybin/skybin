@@ -58,6 +58,7 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 			resp := postRenterResp{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
 		}
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(renter)
 	})
 }

@@ -2,18 +2,19 @@ package metaserver
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"skybin/authorization"
 	"skybin/core"
 )
 
-func NewClient(addr string, authToken string, client *http.Client) *Client {
+func NewClient(addr string, client *http.Client) *Client {
 	return &Client{
 		addr:   addr,
 		client: client,
-		token:  authToken,
 	}
 }
 
@@ -21,6 +22,16 @@ type Client struct {
 	addr   string
 	client *http.Client
 	token  string
+}
+
+func (client *Client) Authorize(privateKey *rsa.PrivateKey, renterID string) error {
+	authClient := authorization.NewClient(client.addr, client.client)
+	token, err := authClient.GetAuthToken(privateKey, "renter", renterID)
+	if err != nil {
+		return err
+	}
+	client.token = token
+	return nil
 }
 
 func (client *Client) RegisterProvider(info *core.ProviderInfo) error {
@@ -106,6 +117,10 @@ func (client *Client) RegisterRenter(info *core.RenterInfo) error {
 }
 
 func (client *Client) GetRenter(renterID string) (core.RenterInfo, error) {
+	if client.token == "" {
+		return core.RenterInfo{}, errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/renters/%s", client.addr, renterID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -135,6 +150,10 @@ func (client *Client) GetRenter(renterID string) (core.RenterInfo, error) {
 }
 
 func (client *Client) PostFile(file core.File) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/files", client.addr)
 
 	var buf []byte
@@ -163,6 +182,10 @@ func (client *Client) PostFile(file core.File) error {
 }
 
 func (client *Client) GetFile(fileID string) (core.File, error) {
+	if client.token == "" {
+		return core.File{}, errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -188,6 +211,10 @@ func (client *Client) GetFile(fileID string) (core.File, error) {
 }
 
 func (client *Client) GetFileVersion(fileID string, fileVersion int) (core.File, error) {
+	if client.token == "" {
+		return core.File{}, errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/files/%s/%d", client.addr, fileID, fileVersion)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -213,6 +240,10 @@ func (client *Client) GetFileVersion(fileID string, fileVersion int) (core.File,
 }
 
 func (client *Client) DeleteFile(fileID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
@@ -236,6 +267,10 @@ func (client *Client) DeleteFile(fileID string) error {
 }
 
 func (client *Client) DeleteFileVersion(fileID string, fileVersion int) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
 	url := fmt.Sprintf("http://%s/files/%s/%d", client.addr, fileID, fileVersion)
 
 	req, err := http.NewRequest("DELETE", url, nil)

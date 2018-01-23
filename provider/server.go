@@ -2,87 +2,61 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path"
+	"skybin/authorization"
 	"skybin/core"
 	"time"
-	"fmt"
+
 	"github.com/gorilla/mux"
-	"io"
 )
+
+type providerServer struct {
+	provider   *Provider
+	logger     *log.Logger
+	router     *mux.Router
+	authorizer authorization.Authorizer
+}
 
 func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	router := mux.NewRouter()
 
 	server := providerServer{
-		provider: provider,
-		logger:   logger,
-		router:   router,
-		activity: make([]Activity, 0),
+		provider:   provider,
+		logger:     logger,
+		router:     router,
+		authorizer: authorization.NewAuthorizer(logger),
 	}
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
-	router.HandleFunc("/blocks/{blockID}", server.postBlock).Methods("POST")
-	router.HandleFunc("/blocks/{blockID}", server.getBlock).Methods("GET")
-	router.HandleFunc("/blocks/{blockID}", server.deleteBlock).Methods("DELETE")
+	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
+	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
+	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
+
+	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
+	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.signingKey, server.getProviderPublicKey)).Methods("POST")
+
+	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
 
 	// Local API
 	// TODO: Move these to the local provider server later
-	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+	// router.HandleFunc("/info", server.postInfo).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
+	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
-}
-
-type Activity struct {
-	RequestType string         `json:"requestType,omitempty"`
-	BlockId     string         `json:"blockId,omitempty"`
-	RenterId    string         `json:"renterId,omitempty"`
-	TimeStamp   time.Time      `json:"time,omitempty"`
-	Contract    *core.Contract `json:"contract,omitempty"`
-}
-
-type providerServer struct {
-	provider *Provider
-	logger   *log.Logger
-	router   *mux.Router
-	activity []Activity // Activity feed
-}
-
-const (
-	// Max activity feed size
-	maxActivity = 10
-)
-
-const (
-
-	// Activity types
-	negotiateType   = "NEGOTIATE CONTRACT"
-	postBlockType   = "POST BLOCK"
-	getBlockType    = "GET BLOCK"
-	deleteBlockType = "DELETE BLOCK"
-)
-
-type errorResp struct {
-	Error string `json:"error,omitempty"`
 }
 
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
-}
-
-type postContractParams struct {
-	Contract *core.Contract `json:"contract"`
-}
-
-type postContractResp struct {
-	Contract *core.Contract `json:"contract"`
 }
 
 func (server *providerServer) postContract(w http.ResponseWriter, r *http.Request) {
@@ -101,43 +75,42 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Sign contract
-	contract.ProviderSignature = "signature"
-
-	// Record contract and update stats
-	server.provider.contracts = append(server.provider.contracts, params.Contract)
-	server.provider.stats.StorageReserved += contract.StorageSpace
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Unable to save snapshot. Error:", err)
-	}
-
-	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: contract})
-
-	activity := Activity{
-		RequestType: negotiateType,
-		Contract:    params.Contract,
-		TimeStamp:   time.Now(),
-		RenterId:    params.Contract.RenterId,
-	}
-	server.addActivity(activity)
+	resp, err := server.provider.negotiateContract(contract)
+	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: resp})
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			errorResp{Error: "No block given"})
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	// TODO: Replace this with authorization token
+	renterquery, exists := r.URL.Query()["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	renter := server.provider.renters[renterID]
+	avail := renter.StorageReserved - renter.StorageUsed
+
+	// first check block size using the http header
+	if r.ContentLength > avail {
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", r.ContentLength, avail)
+		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
 		return
 	}
 
-	path := path.Join(server.provider.Homedir, "blocks", blockID)
-
+	// create file
+	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	f, err := os.Create(path)
 	if err != nil {
 		server.logger.Println("Unable to create block file. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Unable to save block"})
+		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: "Unable to save block"})
 		return
 	}
 	defer f.Close()
@@ -145,38 +118,57 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	n, err := io.Copy(f, r.Body)
 	if err != nil {
 		server.logger.Println("Unable to write block. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Unable to save block"})
+		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: "Unable to save block"})
+		return
+	}
+
+	// Verify that received file is the correct size
+	if int64(n) > avail {
+		os.Remove(path)
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", int64(n), avail)
+		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
 		return
 	}
 
 	// Update stats
 	server.provider.stats.StorageUsed += int64(n)
+	renter.StorageUsed += int64(n)
+	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: int64(n)})
+	server.provider.renters[renterID] = renter
+
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
 	}
 
-	server.writeResp(w, http.StatusCreated, &errorResp{})
-
 	activity := Activity{
 		RequestType: postBlockType,
 		BlockId:     blockID,
-//		RenterId:    params.RenterID,
+		RenterId:    renterID,
 		TimeStamp:   time.Now(),
 	}
-	server.addActivity(activity)
+	server.provider.addActivity(activity)
+
+	server.writeResp(w, http.StatusCreated, &errorResp{})
 }
 
 func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			&errorResp{Error: "No block given"})
 		return
 	}
+	blockID := blockquery[0]
 
-	path := path.Join(server.provider.Homedir, "blocks", blockID)
+	renterquery, exists := r.URL.Query()["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
 		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
@@ -187,81 +179,72 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		server.logger.Println("Unable to open block file. Error: ", err)
 		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: "IO Error: unable to retrieve block"})
+			&errorResp{Error: "IOError: unable to retrieve block"})
 		return
 	}
 	defer f.Close()
-
-	w.WriteHeader(http.StatusOK)
-
-	_, err = io.Copy(w, f)
-	if err != nil {
-		server.logger.Println("Unable to write block to ResponseWriter. Error: ", err)
-		return
-	}
 
 	activity := Activity{
 		RequestType: getBlockType,
 		BlockId:     blockID,
 		TimeStamp:   time.Now(),
-		// TODO: Need this param from renter
-		// RenterId:    params.RenterID,
+		RenterId:    renterID,
 	}
-	server.addActivity(activity)
+	server.provider.addActivity(activity)
+
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, f)
+	if err != nil {
+		server.logger.Println("Unable to write block to ResponseWriter. Error: ", err)
+		return
+	}
 }
 
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
-	blockID, exists := mux.Vars(r)["blockID"]
+	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "No block given"})
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
 		return
 	}
+	blockID := blockquery[0]
 
-	path := path.Join(server.provider.Homedir, "blocks", blockID)
+	// TODO: Replace this with authorization token
+	renterquery, exists := r.URL.Query()["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
-		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
 
 	err := os.Remove(path)
 	if err != nil {
-		msg := fmt.Sprintf("Error deleting block %s: %s", blockID, err)
-		server.logger.Println(msg)
-		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
+		msg := fmt.Sprintf("Error deleting block with ID %s", blockID)
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
-
-	server.writeResp(w, http.StatusOK, &errorResp{})
 
 	activity := Activity{
 		RequestType: deleteBlockType,
 		BlockId:     blockID,
 		TimeStamp:   time.Now(),
-		// TODO: Need this param from provider
-		// RenterId:    params.RenterID,
+		RenterId:    renterID,
 	}
-	server.addActivity(activity)
+	server.provider.addActivity(activity)
 
-}
+	server.writeResp(w, http.StatusOK, &errorResp{"Block Deleted"})
 
-type getContractsResp struct {
-	Contracts []*core.Contract `json:"contracts"`
 }
 
 func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK,
 		getContractsResp{Contracts: server.provider.contracts})
-}
-
-type getInfoResp struct {
-	ProviderId      string `json:"providerId"`
-	TotalStorage    int64  `json:"providerAllocated"`
-	ReservedStorage int64  `json:"providerReserved"`
-	UsedStorage     int64  `json:"providerUsed"`
-	FreeStorage     int64  `json:"providerFree"`
-	TotalContracts  int    `json:"providerContracts"`
 }
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
@@ -282,22 +265,17 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &info)
 }
 
-type getActivityResp struct {
-	Activity []Activity `json:"activity"`
+func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
+	// TODO: authenticate
+	renterID, exists := mux.Vars(r)["renterID"]
+	if exists {
+		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])
+	}
+	server.writeResp(w, http.StatusOK, getRenterResp{renter: server.provider.renters[renterID]})
 }
 
 func (server *providerServer) getActivity(w http.ResponseWriter, r *http.Request) {
-	server.writeResp(w, http.StatusOK, &getActivityResp{Activity: server.activity})
-}
-
-func (server *providerServer) addActivity(activity Activity) {
-	server.activity = append(server.activity, activity)
-	if len(server.activity) > maxActivity {
-
-		// Drop the oldest activity.
-		// O(N) but fine for small feed.
-		server.activity = server.activity[1:]
-	}
+	server.writeResp(w, http.StatusOK, &getActivityResp{Activity: server.provider.activity})
 }
 
 func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
@@ -316,4 +294,32 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 	} else {
 		server.logger.Println(status)
 	}
+}
+
+// Responses
+type errorResp struct {
+	Error string `json:"error,omitempty"`
+}
+type postContractParams struct {
+	Contract *core.Contract `json:"contract"`
+}
+type postContractResp struct {
+	Contract *core.Contract `json:"contract"`
+}
+type getInfoResp struct {
+	ProviderId      string `json:"providerId"`
+	TotalStorage    int64  `json:"providerAllocated"`
+	ReservedStorage int64  `json:"providerReserved"`
+	UsedStorage     int64  `json:"providerUsed"`
+	FreeStorage     int64  `json:"providerFree"`
+	TotalContracts  int    `json:"providerContracts"`
+}
+type getContractsResp struct {
+	Contracts []*core.Contract `json:"contracts"`
+}
+type getRenterResp struct {
+	renter RenterInfo `json:"renter-info"`
+}
+type getActivityResp struct {
+	Activity []Activity `json:"activity"`
 }

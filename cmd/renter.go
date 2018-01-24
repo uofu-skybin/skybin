@@ -11,7 +11,6 @@ import (
 	"skybin/core"
 	"skybin/util"
 	"io/ioutil"
-	"fmt"
 )
 
 var renterCmd = Cmd{

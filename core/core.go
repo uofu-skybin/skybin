@@ -46,7 +46,7 @@ type Block struct {
 	Sha256Hash string `json:"hash"`
 
 	// Size of the block in bytes
-	Size int64
+	Size int64 `json:"size"`
 
 	// Locations of providers where the block is stored
 	Locations []BlockLocation `json:"locations"`

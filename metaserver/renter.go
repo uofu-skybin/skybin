@@ -3,7 +3,6 @@ package metaserver
 import (
 	"encoding/json"
 	"net/http"
-	"skybin/core"
 
 	"github.com/gorilla/mux"
 )
@@ -18,13 +17,14 @@ func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
 }
 
 type postRenterResp struct {
-	Renter core.RenterInfo `json:"provider,omitempty"`
-	Error  string          `json:"error,omitempty"`
+	Renter RenterInfo `json:"provider,omitempty"`
+	Error  string     `json:"error,omitempty"`
 }
 
 func (server *metaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var renter core.RenterInfo
+		// BUG(kincaid): Make this take a purpose-built struct
+		var renter RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
 
 		if err != nil {
@@ -73,5 +73,42 @@ func (server *metaServer) getRenterHandler() http.HandlerFunc {
 			return
 		}
 		json.NewEncoder(w).Encode(renter)
+	})
+}
+
+func (server *metaServer) putRenterHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		// Make sure renter exists.
+		renter, err := server.db.FindRenterByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		// Attempt to decode the supplied renter.
+		var updatedRenter RenterInfo
+		err = json.NewDecoder(r.Body).Decode(updatedRenter)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: "could not parse body"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// Make sure the user has not changed the renter's ID.
+		// BUG(kincaid): Think about other fields users shouldn't change.
+		if updatedRenter.ID != renter.ID {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := postRenterResp{Error: "must not change renter ID"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// Put the new provider into the database.
+		err = server.db.UpdateRenter(updatedRenter)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		resp := postRenterResp{Renter: updatedRenter}
 	})
 }

@@ -24,8 +24,13 @@ type getProvidersResp struct {
 
 func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		providers, err := server.db.FindAllProviders()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		resp := getProvidersResp{
-			Providers: server.db.FindAllProviders(),
+			Providers: providers,
 		}
 		json.NewEncoder(w).Encode(resp)
 	})
@@ -87,5 +92,42 @@ func (server *metaServer) getProviderHandler() http.HandlerFunc {
 			return
 		}
 		json.NewEncoder(w).Encode(provider)
+	})
+}
+
+func (server *metaServer) putProviderHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		// Make sure provider exists.
+		provider, err := server.db.FindProviderByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		// Attempt to decode the supplied provider.
+		var updatedProvider core.ProviderInfo
+		err = json.NewDecoder(r.Body).Decode(updatedProvider)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postProviderResp{Error: "could not parse body"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// Make sure the user has not changed the provider's ID.
+		// BUG(kincaid): Think about other fields users shouldn't change.
+		if updatedProvider.ID != provider.ID {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := postProviderResp{Error: "must not change provider ID"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// Put the new provider into the database.
+		err = server.db.UpdateProvider(updatedProvider)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		resp := postProviderResp{Provider: updatedProvider}
 	})
 }

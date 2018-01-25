@@ -33,21 +33,24 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
 	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.signingKey, server.getRenterPublicKey)).Methods("POST")
 
-	// BUG(kincaid): Add PUT method for providers.
 	router.Handle("/providers", server.getProvidersHandler()).Methods("GET")
 	router.Handle("/providers", server.postProviderHandler()).Methods("POST")
 	router.Handle("/providers/{id}", server.getProviderHandler()).Methods("GET")
+	router.Handle("/providers/{id}", authMiddleware.Handler(server.putProviderHandler())).Methods("PUT")
 
-	// BUG(kincaid): Add PUT method for renters.
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
+	router.Handle("/renters/{id}", authMiddleware.Handler(server.putRenterHandler())).Methods("PUT")
 
-	// BUG(kincaid): Add PUT method for files.
-	router.Handle("/files/{id}", authMiddleware.Handler(server.postFileHandler())).Methods("POST")
-	router.Handle("/files/{id}", authMiddleware.Handler(server.getFileHandler())).Methods("GET")
-	router.Handle("/files/{id}", authMiddleware.Handler(server.deleteFileHandler())).Methods("DELETE")
-	router.Handle("/files/{id}/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
-	router.Handle("/files/{id}/{version}", authMiddleware.Handler(server.deleteFileVersionHandler())).Methods("DELETE")
+	router.Handle("/renters/{id}/files", authMiddleware.Handler(server.getFilesHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files/{id}", authMiddleware.Handler(server.postFileHandler())).Methods("POST")
+	router.Handle("/renters/{id}/files/{id}", authMiddleware.Handler(server.getFileHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files/{id}", authMiddleware.Handler(server.deleteFileHandler())).Methods("DELETE")
+	router.Handle("/renters/{id}/files/{id}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files/{id}/versions", authMiddleware.Handler(server.postFileVersionsHandler())).Methods("POST")
+	router.Handle("/renters/{id}/files/{id}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
+	router.Handle("/renters/{id}/files/{id}/versions/{version}", authMiddleware.Handler(server.putFileVersionHandler())).Methods("PUT")
+	router.Handle("/renters/{id}/files/{id}/versions/{version}", authMiddleware.Handler(server.deleteFileVersionHandler())).Methods("DELETE")
 
 	return router
 }

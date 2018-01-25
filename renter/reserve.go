@@ -11,6 +11,10 @@ import (
 )
 
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
+	if amount < kMinContractSize {
+		return nil, fmt.Errorf("Must reserve at least %d bytes.", kMinContractSize)
+	}
+
 	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
 	providers, err := metaService.GetProviders()
 	if err != nil {

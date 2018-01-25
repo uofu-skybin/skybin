@@ -56,6 +56,10 @@ const (
 	// The minimum size of a storage blob
 	kMinBlobSize = 1
 
+	// Minimum contract storage amount
+	// A user cannot reserve less storage than this
+	kMinContractSize = 1024*1024
+
 	// Maximum storage amount of any contract
 	kMaxContractSize = 1024*1024*1024
 )

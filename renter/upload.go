@@ -15,6 +15,7 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"time"
+	"crypto/rsa"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
@@ -32,10 +33,12 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		return nil, err
 	}
 
+	var pubKey *rsa.PublicKey
 	var aesKey []byte
+	var aesKeyEncrypted []byte
 	var aesIV []byte
+	var aesIVEncrypted []byte
 	var aesBlock cipher.Block
-	var encrypter cipher.Stream
 	var tempFile *os.File
 	var blocks []core.Block
 	var blockIdx int
@@ -43,7 +46,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 	var fileId string
 	var file *core.File
 
-	// Create encryption key
+	// Generate encryption keys
 	aesKey = make([]byte, 32)
 	_, err = rand.Reader.Read(aesKey)
 	if err != nil {
@@ -56,15 +59,33 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		err = fmt.Errorf("Unable to read initialization vector. Error: %v", err)
 		goto error
 	}
+	fileId, err = genId()
+	if err != nil {
+		goto error
+	}
+	pubKey, err = r.loadPublicKey()
+	if err != nil {
+		err = fmt.Errorf("Cannot load public key. Error: %v", err)
+		goto error
+	}
+	aesKeyEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, aesKey, nil)
+	if err != nil {
+		err = fmt.Errorf("Unable to encrypt aes key. Error: %v", err)
+		goto error
+	}
+	aesIVEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, aesIV, nil)
+	if err != nil {
+		err = fmt.Errorf("Unable to encrypt aes IV. Error: %v", err)
+		goto error
+	}
 	aesBlock, err = aes.NewCipher(aesKey)
 	if err != nil {
 		err = fmt.Errorf("Unable to create block cipher for encryption. Error: %v", err)
 		goto error
 	}
-	encrypter = cipher.NewCFBEncrypter(aesBlock, aesIV)
 
 	// Prepare temp file for upload
-	tempFile, err = prepareFile(srcPath, encrypter)
+	tempFile, err = prepareFile(srcPath, cipher.NewCFBEncrypter(aesBlock, aesIV))
 	if err != nil {
 		goto error
 	}
@@ -97,10 +118,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		}
 	}
 
-	fileId, err = genId()
-	if err != nil {
-		goto uploadError
-	}
+	// Save file metadata
 	file = &core.File{
 		ID:         fileId,
 		Name:       destPath,
@@ -109,11 +127,10 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		UploadSize: uploadSize,
 		ModTime:    finfo.ModTime(),
 		AccessList: []core.Permission{},
-		AesKey:     string(aesKey),
-		AesIV:      string(aesIV),
+		AesKey:     string(aesKeyEncrypted),
+		AesIV:      string(aesIVEncrypted),
 		Blocks:     blocks,
 	}
-
 	err = r.saveFile(file)
 	if err != nil {
 		goto uploadError

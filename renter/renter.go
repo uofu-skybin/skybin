@@ -11,6 +11,8 @@ import (
 	"skybin/util"
 	"strings"
 	"github.com/satori/go.uuid"
+	"crypto/rsa"
+	"io/ioutil"
 )
 
 type Config struct {
@@ -240,6 +242,22 @@ func removeBlock(block *core.Block) error {
 		}
 	}
 	return nil
+}
+
+func (r *Renter) loadPublicKey() (*rsa.PublicKey, error) {
+	data, err := ioutil.ReadFile(path.Join(r.Homedir, "renterid.pub"))
+	if err != nil {
+		return nil, err
+	}
+	return util.UnmarshalPublicKey(data)
+}
+
+func (r *Renter) loadPrivateKey() (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(path.Join(r.Homedir, "renterid"))
+	if err != nil {
+		return nil, err
+	}
+	return util.UnmarshalPrivateKey(data)
 }
 
 func genId() (string, error) {

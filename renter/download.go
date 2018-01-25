@@ -15,6 +15,8 @@ import (
 	"path"
 	"errors"
 	"crypto/sha256"
+	"crypto/rsa"
+	"crypto/rand"
 )
 
 func (r *Renter) Download(fileId string, destPath string) error {
@@ -76,12 +78,14 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 	}
 
 	// Decrypt
-	aesKey := []byte(f.AesKey)
+	aesKey, aesIV, err := r.decryptEncryptionKeys(f)
+	if err != nil {
+		return err
+	}
 	aesCipher, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return fmt.Errorf("Unable to create aes cipher. Error: %v", err)
 	}
-	aesIV := []byte(f.AesIV)
 	streamReader := cipher.StreamReader{
 		S: cipher.NewCFBDecrypter(aesCipher, aesIV),
 		R: temp1,
@@ -142,4 +146,21 @@ func downloadBlock(block *core.Block, out io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("Unable to download file block %s. Cannot connect to providers.", block.ID)
+}
+
+// Decrypts and returns f's AES key and AES IV.
+func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byte, err error) {
+	privKey, err := r.loadPrivateKey()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to load private key. Error: %v", err)
+	}
+	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, privKey, []byte(f.AesKey), nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes key. Error: %v", err)
+	}
+	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, privKey, []byte(f.AesIV), nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
+	}
+	return aesKey, aesIV, nil
 }

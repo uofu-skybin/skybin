@@ -26,13 +26,11 @@ func (r *Renter) Download(fileId string, destPath string) error {
 		return errors.New("Folder downloads not supported yet")
 	}
 
-
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
 		user, err := user.Current()
 		if err != nil {
 			return err
-
 		}
 		destPath = path.Join(user.HomeDir, f.Name)
 	}

@@ -22,10 +22,34 @@ type Client struct {
 	client *http.Client
 }
 
-func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
-	url := fmt.Sprintf("http://%s/storage", client.addr)
+func (client *Client) GetInfo() (*Info, error) {
+	url := fmt.Sprintf("http://%s/info", client.addr)
 
-	req := postStorageReq{Amount: amount}
+	resp, err := client.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var info Info
+	err = json.NewDecoder(resp.Body).Decode(&info)
+	if err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
+
+func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
+	url := fmt.Sprintf("http://%s/reserve-storage", client.addr)
+
+	req := reserveStorageReq{
+		Amount: amount,
+	}
 	data, _ := json.Marshal(&req)
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
 	if err != nil {
@@ -37,7 +61,7 @@ func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		return nil, decodeError(resp.Body)
 	}
 
-	var respMsg postStorageResp
+	var respMsg reserveStorageResp
 	err = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if err != nil {
 		return nil, err
@@ -47,9 +71,9 @@ func (client *Client) ReserveStorage(amount int64) ([]*core.Contract, error) {
 }
 
 func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
-	url := fmt.Sprintf("http://%s/files", client.addr)
+	url := fmt.Sprintf("http://%s/files/upload", client.addr)
 
-	req := postFilesReq{
+	req := uploadFileReq{
 		SourcePath: srcPath,
 		DestPath:   destPath,
 	}
@@ -73,8 +97,49 @@ func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 	return file, nil
 }
 
+func (client *Client) Download(fileId string, destpath string) error {
+	url := fmt.Sprintf("http://%s/files/download", client.addr)
+	req := downloadFileReq{
+		FileId: fileId,
+		DestPath: destpath,
+	}
+	data, _ := json.Marshal(&req)
+	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
 func (client *Client) CreateFolder(name string) (*core.File, error) {
-	return client.Upload("", name)
+	url := fmt.Sprintf("http://%s/files/create-folder", client.addr)
+	req := createFolderReq{
+		Name: name,
+	}
+	data, _ := json.Marshal(&req)
+	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, decodeError(resp.Body)
+	}
+
+	file := &core.File{}
+	err = json.NewDecoder(resp.Body).Decode(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
 }
 
 func (client *Client) ListFiles() ([]*core.File, error) {
@@ -99,10 +164,12 @@ func (client *Client) ListFiles() ([]*core.File, error) {
 	return respMsg.Files, nil
 }
 
-func (client *Client) Download(fileId string, destpath string) error {
-	url := fmt.Sprintf("http://%s/files/%s/download", client.addr, fileId)
+func (client *Client) Remove(fileId string) error {
+	url := fmt.Sprintf("http://%s/files/remove", client.addr)
 
-	req := postDownloadReq{Destination: destpath}
+	req := removeFileReq{
+		FileID: fileId,
+	}
 	data, _ := json.Marshal(&req)
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
 	if err != nil {
@@ -110,54 +177,10 @@ func (client *Client) Download(fileId string, destpath string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		return decodeError(resp.Body)
-	}
-
-	return nil
-}
-
-func (client *Client) Remove(fileId string) error {
-	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileId)
-
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := client.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
-
 	return nil
-}
-
-func (client *Client) GetInfo() (*Info, error) {
-	url := fmt.Sprintf("http://%s/info", client.addr)
-
-	resp, err := client.client.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, decodeError(resp.Body)
-	}
-
-	var info Info
-	err = json.NewDecoder(resp.Body).Decode(&info)
-	if err != nil {
-		return nil, err
-	}
-
-	return &info, nil
 }
 
 func decodeError(r io.Reader) error {

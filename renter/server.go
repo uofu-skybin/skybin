@@ -5,8 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"os/user"
-	"path"
+	"fmt"
 	"skybin/core"
 )
 
@@ -21,13 +20,17 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	}
 
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
-	router.HandleFunc("/storage", server.postStorage).Methods("POST")
-	router.HandleFunc("/files", server.postFiles).Methods("POST")
+	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
+	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
-	router.HandleFunc("/files/{fileId}", server.deleteFile).Methods("DELETE")
-	router.HandleFunc("/files/{fileId}/download", server.postDownload).Methods("POST")
-	router.HandleFunc("/files/{fileId}/permissions", server.postPermissions).Methods("POST")
-	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
+	router.HandleFunc("/files/shared", server.getFiles).Methods("GET")
+	router.HandleFunc("/files/upload", server.uploadFile).Methods("POST")
+	router.HandleFunc("/files/download", server.downloadFile).Methods("POST")
+	router.HandleFunc("/files/create-folder", server.createFolder).Methods("POST")
+	router.HandleFunc("/files/share", server.createFolder).Methods("POST")
+	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
+	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
+	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
 
 	return server
 }
@@ -58,79 +61,44 @@ func (server *renterServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, info)
 }
 
-type postStorageReq struct {
+func (server *renterServer) createStorageEstimate(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+type reserveStorageReq struct {
 	Amount int64 `json:"amount"`
 }
 
-type postStorageResp struct {
+type reserveStorageResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 
-func (server *renterServer) postStorage(w http.ResponseWriter, r *http.Request) {
-	var req postStorageReq
-	var resp postStorageResp
-
+func (server *renterServer) reserveStorage(w http.ResponseWriter, r *http.Request) {
+	var req reserveStorageReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: err.Error()})
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
 		return
 	}
 
 	contracts, err := server.renter.ReserveStorage(req.Amount)
 	if err != nil {
+		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: err.Error()})
+			&errorResp{Error: fmt.Sprintf("Unable to reserve storage. Error: %v", err)})
 		return
 	}
 
-	resp.Contracts = contracts
+	resp := reserveStorageResp{
+		Contracts: contracts,
+	}
 	server.writeResp(w, http.StatusCreated, &resp)
 }
 
-type postFilesReq struct {
-	SourcePath string `json:"sourcePath"`
-	DestPath   string `json:"destPath"`
-}
-
-type postFilesResp struct {
-	File *core.File `json:"file"`
-}
-
-func (server *renterServer) postFiles(w http.ResponseWriter, r *http.Request) {
-
-	var req postFilesReq
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "Bad json"})
-		return
-	}
-	if len(req.DestPath) == 0 {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "No destpath given"})
-		return
-	}
-
-	var fileInfo *core.File
-
-	// Is this a create folder request?
-	if len(req.SourcePath) == 0 {
-		fileInfo, err = server.renter.CreateFolder(req.DestPath)
-	} else {
-		fileInfo, err = server.renter.Upload(req.SourcePath, req.DestPath)
-	}
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: err.Error()})
-		return
-	}
-
-	server.writeResp(w, http.StatusCreated, fileInfo)
-}
-
 type getFilesResp struct {
-	Files []*core.File `json:"files"`
+	Files []*core.File
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
@@ -140,95 +108,128 @@ func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 			&errorResp{Error: err.Error()})
 		return
 	}
-
 	server.writeResp(w, http.StatusOK, &getFilesResp{Files: files})
 }
 
-func (server *renterServer) deleteFile(w http.ResponseWriter, r *http.Request) {
-	fileId := mux.Vars(r)["fileId"]
-	err := server.renter.Remove(fileId)
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: err.Error()})
-		return
-	}
-	server.writeResp(w, http.StatusOK, &errorResp{})
-}
-
-type postDownloadReq struct {
-	Destination string `json:"destination,omitempty"`
-}
-
-func (server *renterServer) postDownload(w http.ResponseWriter, r *http.Request) {
-	var req postDownloadReq
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "Bad json"})
-		return
-	}
-
-	fileId := mux.Vars(r)["fileId"]
-
-	f, err := server.renter.Lookup(fileId)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: err.Error()})
-		return
-	}
-
-	// Download to home directory if no destination given
-	if len(req.Destination) == 0 {
-		user, err := user.Current()
-		if err != nil {
-			server.writeResp(w, http.StatusInternalServerError,
-				&errorResp{Error: err.Error()})
-			return
-		}
-		req.Destination = path.Join(user.HomeDir, f.Name)
-	}
-
-	err = server.renter.Download(f, req.Destination)
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: err.Error()})
-		return
-	}
-
-	server.writeResp(w, http.StatusCreated, &errorResp{})
-}
-
-type postPermissionsReq struct {
-	UserId string `json:"userId"`
-}
-
-func (server *renterServer) postPermissions(w http.ResponseWriter, r *http.Request) {
-	var req postPermissionsReq
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "Bad json"})
-		return
-	}
-	fileId := mux.Vars(r)["fileId"]
-	f, err := server.renter.Lookup(fileId)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: err.Error()})
-		return
-	}
-	err = server.renter.ShareFile(f, req.UserId)
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: err.Error()})
-		return
-	}
-	server.writeResp(w, http.StatusCreated, &errorResp{})
-}
-
 func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement
-	server.writeResp(w, http.StatusOK, &getFilesResp{Files: []*core.File{}})
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+type uploadFileReq struct {
+	SourcePath string `json:"sourcePath"`
+	DestPath string `json:"destPath"`
+	ShouldOverwrite bool `json:"shouldOverwrite"`
+}
+
+func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
+	var req uploadFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+
+	f, err := server.renter.Upload(req.SourcePath, req.DestPath, req.ShouldOverwrite)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusCreated, f)
+}
+
+type downloadFileReq struct {
+	FileId   string `json:"fileId"`
+	DestPath string `json:"destPath"`
+}
+
+func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request) {
+	var req downloadFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+
+	err = server.renter.Download(req.FileId, req.DestPath)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusCreated, &errorResp{})
+}
+
+type createFolderReq struct {
+	Name string `json:"name"`
+}
+
+func (server *renterServer) createFolder(w http.ResponseWriter, r *http.Request) {
+	var req createFolderReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+
+	f, err := server.renter.CreateFolder(req.Name)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusCreated, f)
+}
+
+func (server *renterServer) shareFile(w http.ResponseWriter, r *http.Request) {
+	// TODO: implement
+}
+
+func (server *renterServer) renameFile(w http.ResponseWriter, r *http.Request) {
+	// TODO: implement
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {
+	// TODO: implement
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+type removeFileReq struct {
+	FileID string `json:"fileID"`
+}
+
+func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
+	var req downloadFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+
+	err = server.renter.Remove(req.FileId)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

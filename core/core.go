@@ -1,6 +1,8 @@
 package core
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	DefaultMetaAddr     = "127.0.0.1:8001"
@@ -23,8 +25,9 @@ type RenterInfo struct {
 }
 
 type Contract struct {
-	RenterId          string `json:"renterID"`
-	ProviderId        string `json:"providerID"`
+	ID                string `json:"contractId"`
+	RenterId          string `json:"renterId"`
+	ProviderId        string `json:"providerId"`
 	StorageSpace      int64  `json:"storageSpace"`
 	RenterSignature   string `json:"renterSignature"`
 	ProviderSignature string `json:"providerSignature"`
@@ -33,13 +36,14 @@ type Contract struct {
 type BlockLocation struct {
 	ProviderId string `json:"providerId"`
 	Addr       string `json:"address"`
+	ContractId string `json:"contractId"`
 }
 
 type Block struct {
 	ID string `json:"id"`
 
 	// sha256 hash of the block
-	Hash string `json:"hash"`
+	Sha256Hash string `json:"hash"`
 
 	// Size of the block in bytes
 	Size int64
@@ -63,10 +67,10 @@ type File struct {
 	Name       string       `json:"name"`
 	IsDir      bool         `json:"isDir"`
 	Size       int64        `json:"size"`
+	UploadSize int64        `json:"uploadSize"`
 	ModTime    time.Time    `json:"modTime"`
 	AccessList []Permission `json:"accessList"`
-	EncryptionKey string    `json: "encryptionKey"`
-	EncryptionIV string     `json: "encryptionIV"`
+	AesKey     string       `json:"aesKey"`
+	AesIV      string       `json:"aesIV"`
 	Blocks     []Block      `json:"blocks"`
 }
-

@@ -55,11 +55,12 @@ type Block struct {
 // Permission provides access to a file to a non-owning user
 type Permission struct {
 
-	// The user who this permission grants access to
-	UserId string `json:"userId"`
+	// The renter who this permission grants access to
+	RenterId string `json:"renterId"`
 
-	// The file's encryption key encrypted with the user's public key
-	SessionKey string `json:"sessionKey"`
+	// The file's encryption information encrypted with the user's public key
+	AesKey string `json:"aesKey"`
+	AesIV  string `json:"aesIV`
 }
 
 type File struct {

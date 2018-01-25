@@ -161,7 +161,7 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 
 func (r *Renter) ShareFile(f *core.File, userId string) error {
 	f.AccessList = append(f.AccessList, core.Permission{
-		UserId: userId,
+		RenterId: userId,
 	})
 	err := r.saveSnapshot()
 	if err != nil {

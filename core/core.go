@@ -17,12 +17,9 @@ type ProviderInfo struct {
 }
 
 type RenterInfo struct {
-	ID         string       `json:"id"`
-	Alias      string       `json:"alias"`
-	PublicKey  string       `json:"publicKey"`
-	Contracts  []Contract   `json:"contracts"`
-	Files      []FileRecord `json:"files"`
-	SharedWith []FileRecord `json:"sharedWith"`
+	ID        string `json:"id"`
+	PublicKey string `json:"publicKey"`
+	Files     []File `json:"files"`
 }
 
 type Contract struct {
@@ -53,13 +50,12 @@ type Block struct {
 
 // Permission provides access to a file to a non-owning user
 type Permission struct {
+
 	// The user who this permission grants access to
 	UserId string `json:"userId"`
+
 	// The file's encryption key encrypted with the user's public key
-	EncryptionKey        string `json:"encryptionKey"`
-	InitializationVector string `json:"initializationVector"`
-	CanWrite             bool   `json:"canWrite"`
-	CanShare             bool   `json:"canShare"`
+	SessionKey string `json:"sessionKey"`
 }
 
 type File struct {
@@ -70,11 +66,5 @@ type File struct {
 	ModTime    time.Time    `json:"modTime"`
 	AccessList []Permission `json:"accessList"`
 	Blocks     []Block      `json:"blocks"`
-	VersionNum int          `json:"versionNum"`
 	OwnerID    string       `json:"ownerID"`
-}
-
-type FileRecord struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
 }

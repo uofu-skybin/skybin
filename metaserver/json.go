@@ -11,21 +11,22 @@ import (
 
 type jsonDB struct {
 	providers []core.ProviderInfo
-	renters   []core.RenterInfo
-	files     []core.File
+	renters   []RenterInfo
+	files     []File
 	path      string
 }
 
 type storageFile struct {
 	Providers []core.ProviderInfo
-	Renters   []core.RenterInfo
+	Renters   []RenterInfo
+	Files     []File
 }
 
 func newJsonDB(dbLocation string) jsonDB {
 	db := jsonDB{
 		path:      dbLocation,
 		providers: make([]core.ProviderInfo, 0),
-		renters:   make([]core.RenterInfo, 0),
+		renters:   make([]RenterInfo, 0),
 	}
 
 	if _, err := os.Stat(dbLocation); os.IsNotExist(err) {
@@ -74,20 +75,20 @@ func (db *jsonDB) loadDbFromFile() {
 
 // Renter operations
 
-func (db *jsonDB) FindAllRenters() []core.RenterInfo {
-	return db.renters
+func (db *jsonDB) FindAllRenters() ([]RenterInfo, error) {
+	return db.renters, nil
 }
 
-func (db *jsonDB) FindRenterByID(id string) (core.RenterInfo, error) {
+func (db *jsonDB) FindRenterByID(id string) (*RenterInfo, error) {
 	for _, renter := range db.renters {
 		if renter.ID == id {
-			return renter, nil
+			return &renter, nil
 		}
 	}
-	return core.RenterInfo{}, errors.New("could not locate renter with given ID")
+	return nil, errors.New("could not locate renter with given ID")
 }
 
-func (db *jsonDB) InsertRenter(newRenter core.RenterInfo) error {
+func (db *jsonDB) InsertRenter(newRenter RenterInfo) error {
 	for _, renter := range db.renters {
 		if newRenter.ID == renter.ID {
 			return errors.New("renter with given ID already exists")
@@ -98,7 +99,7 @@ func (db *jsonDB) InsertRenter(newRenter core.RenterInfo) error {
 	return nil
 }
 
-func (db *jsonDB) UpdateRenter(updateRenter core.RenterInfo) error {
+func (db *jsonDB) UpdateRenter(updateRenter RenterInfo) error {
 	foundRenter := false
 	var replaceIndex int
 
@@ -134,17 +135,17 @@ func (db *jsonDB) DeleteRenter(renterID string) error {
 }
 
 // Provider operations
-func (db *jsonDB) FindAllProviders() []core.ProviderInfo {
-	return db.providers
+func (db *jsonDB) FindAllProviders() ([]core.ProviderInfo, error) {
+	return db.providers, nil
 }
 
-func (db *jsonDB) FindProviderByID(id string) (core.ProviderInfo, error) {
+func (db *jsonDB) FindProviderByID(id string) (*core.ProviderInfo, error) {
 	for _, provider := range db.providers {
 		if provider.ID == id {
-			return provider, nil
+			return &provider, nil
 		}
 	}
-	return core.ProviderInfo{}, errors.New("could not locate provider with given ID")
+	return nil, errors.New("could not locate provider with given ID")
 }
 
 func (db *jsonDB) InsertProvider(newProvider core.ProviderInfo) error {
@@ -195,41 +196,30 @@ func (db *jsonDB) DeleteProvider(providerID string) error {
 
 // File operations
 
-func (db *jsonDB) FindAllFiles() []core.File {
-	return db.files
+func (db *jsonDB) FindAllFiles() ([]File, error) {
+	return db.files, nil
 }
 
-func (db jsonDB) FindFileByID(fileID string) (core.File, error) {
-	var foundFiles []core.File
+func (db *jsonDB) FindFileByID(fileID string) (*File, error) {
 	for _, file := range db.files {
 		if file.ID == fileID {
-			foundFiles = append(foundFiles, file)
+			return &file, nil
 		}
 	}
-	if len(foundFiles) == 0 {
-		return core.File{}, errors.New("could not locate file with given ID")
-	}
-	highestVersionIndex := -1
-	highestVersionFound := -1
-	for i, file := range foundFiles {
-		if file.VersionNum > highestVersionFound {
-			highestVersionIndex = i
-			highestVersionFound = file.VersionNum
-		}
-	}
-	return foundFiles[highestVersionIndex], nil
+	return nil, errors.New("could not find file with specified ID")
 }
 
-func (db *jsonDB) FindFileByIDAndVersion(fileID string, version int) (core.File, error) {
-	for _, file := range db.files {
-		if file.ID == fileID && file.VersionNum == version {
-			return file, nil
+func (db *jsonDB) FindFilesByRenter(renterID string) ([]File, error) {
+	var renterFiles []File
+	for _, item := range db.files {
+		if item.OwnerID == renterID {
+			renterFiles = append(renterFiles, item)
 		}
 	}
-	return core.File{}, errors.New("no file with specified ID and version")
+	return renterFiles, nil
 }
 
-func (db *jsonDB) InsertFile(newFile core.File) error {
+func (db *jsonDB) InsertFile(newFile File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == newFile.OwnerID {
@@ -239,17 +229,12 @@ func (db *jsonDB) InsertFile(newFile core.File) error {
 	if !foundRenter {
 		return errors.New("no renter matching ownerID")
 	}
-	for _, file := range db.files {
-		if file.ID == newFile.ID && file.VersionNum == newFile.VersionNum {
-			return errors.New("there is already a file with the given ID and version")
-		}
-	}
 	db.files = append(db.files, newFile)
 	db.dumpDbToFile()
 	return nil
 }
 
-func (db *jsonDB) UpdateFile(updateFile core.File) error {
+func (db *jsonDB) UpdateFile(updateFile File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == updateFile.OwnerID {
@@ -261,7 +246,7 @@ func (db *jsonDB) UpdateFile(updateFile core.File) error {
 	}
 	updateIndex := -1
 	for i, file := range db.files {
-		if file.ID == updateFile.ID && file.VersionNum == updateFile.VersionNum {
+		if file.ID == updateFile.ID {
 			updateIndex = i
 		}
 	}
@@ -274,31 +259,16 @@ func (db *jsonDB) UpdateFile(updateFile core.File) error {
 }
 
 func (db *jsonDB) DeleteFile(fileID string) error {
-	var keepFiles []core.File
-	for _, file := range db.files {
-		if file.ID != fileID {
-			keepFiles = append(keepFiles, file)
-		}
-	}
-	if len(keepFiles) == len(db.files) {
-		return errors.New("no files with specified ID")
-	}
-	db.files = keepFiles
-	db.dumpDbToFile()
-	return nil
-}
-
-func (db *jsonDB) DeleteFileVersion(fileID string, versionNum int) error {
-	deleteIndex := -1
+	removeIndex := -1
 	for i, file := range db.files {
-		if file.ID == fileID && file.VersionNum == versionNum {
-			deleteIndex = i
+		if fileID == file.ID {
+			removeIndex = i
 		}
 	}
-	if deleteIndex == -1 {
-		return errors.New("could not locate file with specified ID and version")
+	if removeIndex == -1 {
+		return errors.New("no file with given ID")
 	}
-	db.files = append(db.files[:deleteIndex], db.files[deleteIndex+1:]...)
+	db.files = append(db.files[:removeIndex], db.files[removeIndex+1:]...)
 	db.dumpDbToFile()
 	return nil
 }

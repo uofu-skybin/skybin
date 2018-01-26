@@ -111,7 +111,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		location := block.Locations[0]
 		pvdr := provider.NewClient(location.Addr, &http.Client{})
 		lr := io.LimitReader(tempFile, block.Size)
-		err = pvdr.PutBlock(block.ID, r.Config.RenterId, lr)
+		err = pvdr.PutBlock(r.Config.RenterId, block.ID, lr)
 		if err != nil {
 			err = fmt.Errorf("Unable to upload block. Error: %v", err)
 			goto uploadError

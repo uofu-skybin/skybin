@@ -11,16 +11,16 @@ import (
 // A contract without the signature fields,
 // with other fields sorted by name.
 type contractTerms struct {
-	StorageSpace int64  `json:"storageSpace"`
 	ProviderId   string `json:"providerId"`
 	RenterId     string `json:"renterId"`
+	StorageSpace int64  `json:"storageSpace"`
 }
 
 func makeTerms(c *Contract) contractTerms {
 	return contractTerms{
-		StorageSpace: c.StorageSpace,
 		ProviderId:   c.ProviderId,
 		RenterId:     c.RenterId,
+		StorageSpace: c.StorageSpace,
 	}
 }
 

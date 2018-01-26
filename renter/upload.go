@@ -142,7 +142,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 
 uploadError:
 	for i := 0; i < blockIdx; i++ {
-		err := removeBlock(&blocks[i])
+		err := r.removeBlock(&blocks[i])
 		if err != nil {
 			// TODO: append block to list to be removed later...
 		}

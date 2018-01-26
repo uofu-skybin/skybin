@@ -50,7 +50,7 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 	defer temp1.Close()
 	defer os.Remove(temp1.Name())
 	for _, block := range f.Blocks {
-		err = downloadBlock(&block, temp1)
+		err = r.downloadBlock(&block, temp1)
 		if err != nil {
 			return err
 		}
@@ -123,11 +123,11 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 	return nil
 }
 
-func downloadBlock(block *core.Block, out io.Writer) error {
+func (r *Renter) downloadBlock(block *core.Block, out io.Writer) error {
 	for _, location := range block.Locations {
 		client := provider.NewClient(location.Addr, &http.Client{})
 
-		blockReader, err := client.GetBlock(block.ID)
+		blockReader, err := client.GetBlock(r.Config.RenterId, block.ID)
 		if err != nil {
 
 			// TODO: Check that failure is due to a network error, not because

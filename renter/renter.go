@@ -186,7 +186,7 @@ func (r *Renter) Remove(fileId string) error {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
 	for _, block := range f.Blocks {
-		err := removeBlock(&block)
+		err := r.removeBlock(&block)
 		if err != nil {
 			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
 		}
@@ -233,10 +233,10 @@ func (r *Renter) saveSnapshot() error {
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
 }
 
-func removeBlock(block *core.Block) error {
+func (r *Renter) removeBlock(block *core.Block) error {
 	for _, location := range block.Locations {
 		pvdr := provider.NewClient(location.Addr, &http.Client{})
-		err := pvdr.RemoveBlock(block.ID)
+		err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
 		if err != nil {
 			return err
 		}

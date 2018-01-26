@@ -60,7 +60,7 @@ type Permission struct {
 
 	// The file's encryption information encrypted with the user's public key
 	AesKey string `json:"aesKey"`
-	AesIV  string `json:"aesIV`
+	AesIV  string `json:"aesIV"`
 }
 
 type File struct {
@@ -75,3 +75,4 @@ type File struct {
 	AesIV      string       `json:"aesIV"`
 	Blocks     []Block      `json:"blocks"`
 }
+

@@ -6,11 +6,13 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/json"
+	"encoding/base64"
 )
 
 // A contract without the signature fields,
 // with other fields sorted by name.
 type contractTerms struct {
+	ID           string `json:"id"`
 	ProviderId   string `json:"providerId"`
 	RenterId     string `json:"renterId"`
 	StorageSpace int64  `json:"storageSpace"`
@@ -18,6 +20,7 @@ type contractTerms struct {
 
 func makeTerms(c *Contract) contractTerms {
 	return contractTerms{
+		ID:           c.ID,
 		ProviderId:   c.ProviderId,
 		RenterId:     c.RenterId,
 		StorageSpace: c.StorageSpace,
@@ -35,26 +38,37 @@ func hashContract(contract *Contract) ([]byte, error) {
 }
 
 // SignContract signs a contract with a given key.
-// It does not mutate the contract; it merely returns the signature.
-func SignContract(contract *Contract, key *rsa.PrivateKey) ([]byte, error) {
+// It does not mutate the contract; it merely returns the base64 encoded signature.
+func SignContract(contract *Contract, key *rsa.PrivateKey) (string, error) {
 	h, err := hashContract(contract)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, h[:])
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return signature, err
+	return base64.StdEncoding.EncodeToString(signature), err
 }
 
 // VerifyContractSignature checks that a signature matches a contract using the given key.
-func VerifyContractSignature(contract *Contract, signature []byte, key rsa.PublicKey) error {
+// signature should be a base64 encoded signature returned by SignContract.
+func VerifyContractSignature(contract *Contract, signature string, key rsa.PublicKey) error {
 	h, err := hashContract(contract)
 	if err != nil {
 		return err
 	}
-	return rsa.VerifyPKCS1v15(&key, crypto.SHA256, h, signature)
+	sb, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return err
+	}
+	return rsa.VerifyPKCS1v15(&key, crypto.SHA256, h, sb)
+}
+
+// CompareContracts returns whether two contracts are the same, that is,
+// that they have the same fields.
+func CompareContracts(c1, c2 Contract) bool {
+	return c1 == c2
 }
 
 // CompareContractTerms returns whether the terms of two contracts match.

@@ -12,6 +12,7 @@ func TestSignVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := Contract{
+		ID:           "cid",
 		RenterId:     "abcdefg",
 		ProviderId:   "hijklmnop",
 		StorageSpace: 1024 * 1024,
@@ -27,6 +28,13 @@ func TestSignVerify(t *testing.T) {
 
 	// Mutate contract copies to check signature failure
 	c2 := c
+	c2.ID = "1"
+	err = VerifyContractSignature(&c2, sig, key.PublicKey)
+	if err == nil {
+		t.Fatal("verify should fail - contract does not match original")
+	}
+
+	c2 = c
 	c2.RenterId = "1"
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
@@ -48,8 +56,53 @@ func TestSignVerify(t *testing.T) {
 	}
 }
 
+func TestCompare(t *testing.T) {
+	c1 := Contract{
+		ID: "cid",
+		RenterId: "rid",
+		ProviderId: "pid",
+		StorageSpace: 1 << 30,
+		RenterSignature: "rsig",
+		ProviderSignature: "psig",
+	}
+	c2 := c1
+	if !CompareContracts(c1, c2) {
+		t.Fatal("contracts should be the same")
+	}
+	c2.ID = "1"
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c2.RenterId = "1"
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c2.ProviderId = "1"
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c1.StorageSpace = 1
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c1.RenterSignature = "1"
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c1.ProviderSignature = "1"
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+}
+
 func TestCompareTerms(t *testing.T) {
 	c1 := Contract{
+		ID:                "cid",
 		RenterId:          "dxzcvew",
 		ProviderId:        "oiupbjn",
 		StorageSpace:      3734,

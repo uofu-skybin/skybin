@@ -1,14 +1,14 @@
 package util
 
 import (
+	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/x509"
 	"encoding/base32"
 	"encoding/json"
-	"io/ioutil"
-	"crypto/rsa"
 	"encoding/pem"
-	"crypto/x509"
 	"errors"
+	"io/ioutil"
 )
 
 func Hash(data []byte) string {
@@ -35,7 +35,7 @@ func LoadJson(filename string, v interface{}) error {
 
 func MarshalPrivateKey(key *rsa.PrivateKey) []byte {
 	block := pem.Block{
-		Type: "RSA PRIVATE KEY",
+		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(key),
 	}
 	return pem.EncodeToMemory(&block)
@@ -55,7 +55,7 @@ func MarshalPublicKey(key *rsa.PublicKey) ([]byte, error) {
 		return nil, err
 	}
 	block := pem.Block{
-		Type: "RSA PUBLIC KEY",
+		Type:  "RSA PUBLIC KEY",
 		Bytes: bytes,
 	}
 	return pem.EncodeToMemory(&block), nil

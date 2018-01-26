@@ -5,8 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 )
 
 // A contract without the signature fields,

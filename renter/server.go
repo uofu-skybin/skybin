@@ -2,10 +2,10 @@ package renter
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"fmt"
 	"skybin/core"
 )
 
@@ -116,9 +116,9 @@ func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Reques
 }
 
 type uploadFileReq struct {
-	SourcePath string `json:"sourcePath"`
-	DestPath string `json:"destPath"`
-	ShouldOverwrite bool `json:"shouldOverwrite"`
+	SourcePath      string `json:"sourcePath"`
+	DestPath        string `json:"destPath"`
+	ShouldOverwrite bool   `json:"shouldOverwrite"`
 }
 
 func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,11 @@
 package renter
 
 import (
+	"crypto/rsa"
 	"errors"
 	"fmt"
+	"github.com/satori/go.uuid"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -10,9 +13,6 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-	"github.com/satori/go.uuid"
-	"crypto/rsa"
-	"io/ioutil"
 )
 
 type Config struct {
@@ -36,7 +36,7 @@ type Renter struct {
 	// All free storage blobs available for uploads.
 	// Each storage contract should have at most one associated
 	// blob in this list.
-	freelist  []*storageBlob
+	freelist []*storageBlob
 }
 
 // snapshot stores a renter's serialized state
@@ -61,10 +61,10 @@ const (
 
 	// Minimum contract storage amount
 	// A user cannot reserve less storage than this
-	kMinContractSize = 1024*1024
+	kMinContractSize = 1024 * 1024
 
 	// Maximum storage amount of any contract
-	kMaxContractSize = 1024*1024*1024
+	kMaxContractSize = 1024 * 1024 * 1024
 )
 
 func LoadFromDisk(homedir string) (*Renter, error) {
@@ -99,7 +99,6 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		return nil, err
 	}
 	renter.privKey = privKey
-
 
 	return renter, err
 }

@@ -58,11 +58,11 @@ func TestSignVerify(t *testing.T) {
 
 func TestCompare(t *testing.T) {
 	c1 := Contract{
-		ID: "cid",
-		RenterId: "rid",
-		ProviderId: "pid",
-		StorageSpace: 1 << 30,
-		RenterSignature: "rsig",
+		ID:                "cid",
+		RenterId:          "rid",
+		ProviderId:        "pid",
+		StorageSpace:      1 << 30,
+		RenterSignature:   "rsig",
 		ProviderSignature: "psig",
 	}
 	c2 := c1

@@ -1,22 +1,22 @@
 package renter
 
 import (
-	"skybin/core"
-	"io"
-	"skybin/provider"
-	"net/http"
-	"fmt"
-	"os"
+	"compress/zlib"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
-	"compress/zlib"
+	"net/http"
+	"os"
 	"os/user"
 	"path"
-	"errors"
-	"crypto/sha256"
-	"crypto/rsa"
-	"crypto/rand"
+	"skybin/core"
+	"skybin/provider"
 )
 
 func (r *Renter) Download(fileId string, destPath string) error {
@@ -62,7 +62,7 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 
 	// Check block hashes
 	for _, block := range f.Blocks {
-		h:= sha256.New()
+		h := sha256.New()
 		lr := io.LimitReader(temp1, block.Size)
 		_, err = io.Copy(h, lr)
 		if err != nil {

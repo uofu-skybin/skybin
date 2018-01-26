@@ -2,11 +2,11 @@ package util
 
 import (
 	"bytes"
-	"testing"
-	"crypto/rsa"
-	"crypto/rand"
 	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"testing"
 )
 
 func TestMarshalKey(t *testing.T) {

@@ -18,15 +18,15 @@ func parseBytes(s string) (int64, error) {
 	l := strings.ToLower(s)
 	if strings.HasSuffix(l, "gb") {
 		mul = 1e9
-		l = s[:len(l) - len("gb")]
+		l = s[:len(l)-len("gb")]
 	} else if strings.HasSuffix(l, "mb") {
 		mul = 1e6
-		l = l[:len(l)- len("gb")]
+		l = l[:len(l)-len("gb")]
 	} else if strings.HasSuffix(l, "kb") {
 		mul = 1e3
-		l = l[:len(l) - len("kb")]
+		l = l[:len(l)-len("kb")]
 	} else if strings.HasSuffix(l, "b") {
-		l = l[:len(l) - len("b")]
+		l = l[:len(l)-len("b")]
 	}
 	n, err := strconv.ParseInt(l, 10, 64)
 	if err != nil {

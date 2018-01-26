@@ -100,7 +100,7 @@ func (client *Client) Upload(srcPath, destPath string) (*core.File, error) {
 func (client *Client) Download(fileId string, destpath string) error {
 	url := fmt.Sprintf("http://%s/files/download", client.addr)
 	req := downloadFileReq{
-		FileId: fileId,
+		FileId:   fileId,
 		DestPath: destpath,
 	}
 	data, _ := json.Marshal(&req)

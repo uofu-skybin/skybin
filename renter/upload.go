@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"time"
-	"crypto/rsa"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
@@ -180,7 +180,7 @@ func (r *Renter) findStorage(amount int64) ([]*storageBlob, error) {
 func (r *Renter) reclaimBlobs(blobs []*storageBlob, uploadSize int64) {
 	var n int64 = 0
 	for _, blob := range blobs {
-		if blob.Amount + n > uploadSize {
+		if blob.Amount+n > uploadSize {
 			used := uploadSize - n
 			remaining := blob.Amount - used
 			if remaining > kMinBlobSize {
@@ -268,9 +268,9 @@ func prepareBlocks(tempFile *os.File, blobs []*storageBlob) ([]core.Block, error
 			return nil, fmt.Errorf("Unable to generate block ID. Error: %s", err)
 		}
 		block := core.Block{
-			ID:   blockId,
+			ID:         blockId,
 			Sha256Hash: blockHash,
-			Size: blockSize,
+			Size:       blockSize,
 			Locations: []core.BlockLocation{
 				{
 					ProviderId: blob.ProviderId,

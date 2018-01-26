@@ -75,4 +75,3 @@ type File struct {
 	AesIV      string       `json:"aesIV"`
 	Blocks     []Block      `json:"blocks"`
 }
-

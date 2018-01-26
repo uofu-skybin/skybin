@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/asn1"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -13,7 +14,6 @@ import (
 	"skybin/provider"
 	"skybin/renter"
 	"skybin/util"
-	"io/ioutil"
 )
 
 var initCmd = Cmd{

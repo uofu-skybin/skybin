@@ -119,7 +119,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	// create directory for renter's blocks if necessary
 	renterDir := path.Join(server.provider.Homedir, "blocks", renterID)
 	if _, err := os.Stat(renterDir); os.IsNotExist(err) {
-		err := os.MkdirAll(renterDir, 0777)
+		err := os.MkdirAll(renterDir, 0700)
 		if err != nil {
 			server.logger.Println(err)
 			server.writeResp(w, http.StatusInternalServerError,
@@ -344,7 +344,7 @@ type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 type getRenterResp struct {
-	renter RenterInfo `json:"renter-info"`
+	renter *RenterInfo `json:"renter-info"`
 }
 type getActivityResp struct {
 	Activity []Activity `json:"activity"`

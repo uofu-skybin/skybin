@@ -2,12 +2,12 @@ package renter
 
 import (
 	"errors"
+	"fmt"
+	"math/rand"
+	"net/http"
 	"skybin/core"
 	"skybin/metaserver"
-	"net/http"
-	"fmt"
 	"skybin/provider"
-	"math/rand"
 )
 
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
@@ -36,8 +36,8 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		contracts = append(contracts, contract)
 		blobs = append(blobs, &storageBlob{
 			ProviderId: pinfo.ID,
-			Addr: pinfo.Addr,
-			Amount: contract.StorageSpace,
+			Addr:       pinfo.Addr,
+			Amount:     contract.StorageSpace,
 			ContractId: contract.ID,
 		})
 		reserved += n
@@ -52,7 +52,6 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 
 	return contracts, nil
 }
-
 
 func (r *Renter) reserveN(n int64, providers []core.ProviderInfo) (*core.Contract, *core.ProviderInfo, error) {
 	const randiters = 1024
@@ -91,24 +90,34 @@ func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Cont
 	//	return nil, errors.New("Provider doesn't have enough space")
 	//}
 
+	// Create proposal
 	cid, err := genId()
 	if err != nil {
 		return nil, err
 	}
 	proposal := core.Contract{
-		ID: cid,
-		RenterId: r.Config.RenterId,
-		ProviderId: pinfo.ID,
+		ID:           cid,
+		RenterId:     r.Config.RenterId,
+		ProviderId:   pinfo.ID,
 		StorageSpace: space,
-		RenterSignature: "signature",
 	}
+	signature, err := core.SignContract(&proposal, r.privKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to sign contract. Error: %s", err)
+	}
+	proposal.RenterSignature = signature
 
+	// Send to renter
 	signedContract, err := client.ReserveStorage(&proposal)
 	if err != nil {
 		return nil, err
 	}
 	if len(signedContract.ProviderSignature) == 0 {
 		return nil, errors.New("Provider did not agree to contract")
+	}
+	proposal.ProviderSignature = signedContract.ProviderSignature
+	if !core.CompareContracts(proposal, *signedContract) {
+		return nil, errors.New("Provider's terms don't match original contract")
 	}
 
 	return signedContract, nil

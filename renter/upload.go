@@ -33,7 +33,6 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		return nil, err
 	}
 
-	var pubKey *rsa.PublicKey
 	var aesKey []byte
 	var aesKeyEncrypted []byte
 	var aesIV []byte
@@ -63,17 +62,12 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 	if err != nil {
 		goto error
 	}
-	pubKey, err = r.loadPublicKey()
-	if err != nil {
-		err = fmt.Errorf("Cannot load public key. Error: %v", err)
-		goto error
-	}
-	aesKeyEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, aesKey, nil)
+	aesKeyEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesKey, nil)
 	if err != nil {
 		err = fmt.Errorf("Unable to encrypt aes key. Error: %v", err)
 		goto error
 	}
-	aesIVEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, aesIV, nil)
+	aesIVEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesIV, nil)
 	if err != nil {
 		err = fmt.Errorf("Unable to encrypt aes IV. Error: %v", err)
 		goto error

@@ -31,6 +31,7 @@ type Renter struct {
 	Homedir   string
 	files     []*core.File
 	contracts []*core.Contract
+	privKey   *rsa.PrivateKey
 
 	// All free storage blobs available for uploads.
 	// Each storage contract should have at most one associated
@@ -92,6 +93,13 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		renter.contracts = s.Contracts
 		renter.freelist = s.FreeStorage
 	}
+
+	privKey, err := loadPrivateKey(path.Join(homedir, "renterid"))
+	if err != nil {
+		return nil, err
+	}
+	renter.privKey = privKey
+
 
 	return renter, err
 }
@@ -244,16 +252,8 @@ func (r *Renter) removeBlock(block *core.Block) error {
 	return nil
 }
 
-func (r *Renter) loadPublicKey() (*rsa.PublicKey, error) {
-	data, err := ioutil.ReadFile(path.Join(r.Homedir, "renterid.pub"))
-	if err != nil {
-		return nil, err
-	}
-	return util.UnmarshalPublicKey(data)
-}
-
-func (r *Renter) loadPrivateKey() (*rsa.PrivateKey, error) {
-	data, err := ioutil.ReadFile(path.Join(r.Homedir, "renterid"))
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

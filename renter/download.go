@@ -150,15 +150,11 @@ func (r *Renter) downloadBlock(block *core.Block, out io.Writer) error {
 
 // Decrypts and returns f's AES key and AES IV.
 func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byte, err error) {
-	privKey, err := r.loadPrivateKey()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Unable to load private key. Error: %v", err)
-	}
-	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, privKey, []byte(f.AesKey), nil)
+	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, []byte(f.AesKey), nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to decrypt aes key. Error: %v", err)
 	}
-	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, privKey, []byte(f.AesIV), nil)
+	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, []byte(f.AesIV), nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
 	}

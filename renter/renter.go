@@ -128,15 +128,6 @@ func (r *Renter) Info() (*Info, error) {
 	}, nil
 }
 
-func (r *Renter) findBlobWithProvider(providerId string) (*storageBlob, bool) {
-	for _, blob := range r.freelist {
-		if blob.ProviderId == providerId {
-			return blob, true
-		}
-	}
-	return nil, false
-}
-
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	id, err := genId()
 	if err != nil {
@@ -149,7 +140,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 		AccessList: []core.Permission{},
 		Blocks:     []core.Block{},
 	}
-	err = r.addFile(file)
+	err = r.saveFile(file)
 	if err != nil {
 		return nil, err
 	}
@@ -198,16 +189,6 @@ func (r *Renter) Remove(fileId string) error {
 			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
 		}
 
-	}
-	return nil
-}
-
-func (r *Renter) addFile(f *core.File) error {
-	r.files = append(r.files, f)
-	err := r.saveSnapshot()
-	if err != nil {
-		r.files = r.files[:len(r.files)-1]
-		return fmt.Errorf("Unable to save snapshot. Error %s", err)
 	}
 	return nil
 }

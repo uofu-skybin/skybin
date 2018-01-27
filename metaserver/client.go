@@ -116,37 +116,37 @@ func (client *Client) RegisterRenter(info *core.RenterInfo) error {
 	return nil
 }
 
-func (client *Client) GetRenter(renterID string) (core.RenterInfo, error) {
+func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 	if client.token == "" {
-		return core.RenterInfo{}, errors.New("must authorize before calling this method")
+		return nil, errors.New("must authorize before calling this method")
 	}
 
 	url := fmt.Sprintf("http://%s/renters/%s", client.addr, renterID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return core.RenterInfo{}, err
+		return nil, err
 	}
 
 	token := fmt.Sprintf("Bearer %s", client.token)
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK {
 		var respMsg postRenterResp
 		err = json.NewDecoder(resp.Body).Decode(&respMsg)
 		if err != nil {
-			return core.RenterInfo{}, err
+			return nil, err
 		}
-		return core.RenterInfo{}, errors.New(respMsg.Error)
+		return nil, errors.New(respMsg.Error)
 	}
 
 	var renter core.RenterInfo
 	err = json.NewDecoder(resp.Body).Decode(&renter)
 	if err != nil {
-		return core.RenterInfo{}, err
+		return nil, err
 	}
-	return renter, nil
+	return &renter, nil
 }
 
 func (client *Client) PostFile(file core.File) error {

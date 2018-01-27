@@ -18,6 +18,7 @@ import (
 
 type Config struct {
 	RenterId       string `json:"renterId"`
+	RenterAlias    string `json"renterAlias"`
 	ApiAddr        string `json:"apiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`

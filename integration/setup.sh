@@ -8,6 +8,8 @@ trap "kill 0" EXIT
 REPO_DIR="./repo"
 TEST_FILE_DIR="./files"
 
+RENTER_ALIAS="test"
+
 echo "building skybin"
 cd .. && go build
 cd -
@@ -29,6 +31,6 @@ echo "starting provider"
 ../skybin provider &
 
 echo "starting renter"
-../skybin renter &
+../skybin renter -alias test &
 
 wait

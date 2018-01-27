@@ -30,11 +30,10 @@ func (r *Renter) Download(fileId string, destPath string) error {
 
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
-		user, err := user.Current()
+		destPath, err = defaultDownloadLocation(f)
 		if err != nil {
 			return err
 		}
-		destPath = path.Join(user.HomeDir, f.Name)
 	}
 
 	return r.performDownload(f, destPath)
@@ -159,4 +158,21 @@ func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byt
 		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
 	}
 	return aesKey, aesIV, nil
+}
+
+func defaultDownloadLocation(f *core.File) (string, error) {
+	user, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	destPath := path.Join(user.HomeDir, path.Base(f.Name))
+	if _, err := os.Stat(destPath); err == nil {
+		for i := 1; ; i++ {
+			d := fmt.Sprintf("%s (%d)", destPath, i)
+			if _, err := os.Stat(d); os.IsNotExist(err) {
+				return d, nil
+			}
+		}
+	}
+	return destPath, nil
 }

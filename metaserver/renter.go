@@ -3,6 +3,7 @@ package metaserver
 import (
 	"encoding/json"
 	"net/http"
+	"skybin/core"
 
 	"github.com/gorilla/mux"
 )
@@ -17,14 +18,13 @@ func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
 }
 
 type postRenterResp struct {
-	Renter RenterInfo `json:"provider,omitempty"`
-	Error  string     `json:"error,omitempty"`
+	Renter core.RenterInfo `json:"provider,omitempty"`
+	Error  string          `json:"error,omitempty"`
 }
 
 func (server *metaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// BUG(kincaid): Make this take a purpose-built struct
-		var renter RenterInfo
+		var renter core.RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
 
 		if err != nil {
@@ -34,10 +34,15 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 			return
 		}
 
-		// Make sure the user supplied a public key for the provider.
+		// Make sure the user supplied a public key and alias for the renter.
 		if renter.PublicKey == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := postRenterResp{Error: "must specify RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if renter.Alias == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := postRenterResp{Error: "must specify alias"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -86,7 +91,7 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 			return
 		}
 		// Attempt to decode the supplied renter.
-		var updatedRenter RenterInfo
+		var updatedRenter core.RenterInfo
 		err = json.NewDecoder(r.Body).Decode(updatedRenter)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -94,15 +99,21 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
-		// Make sure the user has not changed the renter's ID.
+		// Make sure the user has not changed the renter's ID or alias.
 		// BUG(kincaid): Think about other fields users shouldn't change.
+		// BUG(kincaid): Should the user be able to change their alias?
 		if updatedRenter.ID != renter.ID {
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := postRenterResp{Error: "must not change renter ID"}
 			json.NewEncoder(w).Encode(resp)
 			return
+		} else if updatedRenter.Alias != renter.Alias {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := postRenterResp{Error: "must not change renter alias"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		// Put the new provider into the database.
+		// Put the new renter into the database.
 		err = server.db.UpdateRenter(updatedRenter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -110,5 +121,6 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusOK)
 		resp := postRenterResp{Renter: updatedRenter}
+		json.NewEncoder(w).Encode(resp)
 	})
 }

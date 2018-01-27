@@ -2,38 +2,7 @@ package metaserver
 
 import (
 	"skybin/core"
-	"time"
 )
-
-// DB internal representation of core data structures
-//===================================================
-
-type RenterInfo struct {
-	ID        string       `json:"id"`
-	PublicKey string       `json:"publicKey"`
-	Files     []FileRecord `json:"files"`
-	Shared    []FileRecord `json:"shared"`
-}
-
-type Version struct {
-	ID     string       `json:"id"`
-	Blocks []core.Block `json:"blocks"`
-}
-
-type File struct {
-	ID         string            `json:"id"`
-	IsDir      bool              `json:"isDir"`
-	Size       int64             `json:"size"`
-	ModTime    time.Time         `json:"modTime"`
-	AccessList []core.Permission `json:"accessList"`
-	Versions   []Version         `json:"versions"`
-	OwnerID    string            `json:"ownerID"`
-}
-
-type FileRecord struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
 
 // Interface containing operations that must be implemented for every database backend.
 type metaDB interface {
@@ -41,13 +10,13 @@ type metaDB interface {
 	//==================
 
 	// Return a list of all renters in the database
-	FindAllRenters() ([]RenterInfo, error)
+	FindAllRenters() ([]core.RenterInfo, error)
 	// Return the renter with the specified ID.
-	FindRenterByID(renterID string) (*RenterInfo, error)
+	FindRenterByID(renterID string) (*core.RenterInfo, error)
 	// Insert the provided renter into the database.
-	InsertRenter(renter RenterInfo) error
+	InsertRenter(renter core.RenterInfo) error
 	// Update the provided renter in the databse.
-	UpdateRenter(renter RenterInfo) error
+	UpdateRenter(renter core.RenterInfo) error
 	// Delete the specified renter from the database.
 	DeleteRenter(renterID string) error
 
@@ -69,15 +38,19 @@ type metaDB interface {
 	//====================
 
 	// Return a list of all files in the database.
-	FindAllFiles() ([]File, error)
+	FindAllFiles() ([]core.File, error)
 	// Return the latest version of the file with the specified ID.
-	FindFileByID(fileID string) (*File, error)
-	// Return a list of files present in the renter's directory.
-	FindFilesByRenter(renterID string) ([]File, error)
+	FindFileByID(fileID string) (*core.File, error)
+	// Return a map of paths to files present in the renter's directory.
+	FindFilesInRenterDirectory(renterID string) ([]core.File, error)
+	// Return a map of names to files shared with a given renter.
+	FindFilesSharedWithRenter(renterID string) ([]core.File, error)
+	// Return a list of files that the renter owns.
+	FindFilesByOwner(renterID string) ([]core.File, error)
 	// Insert the given file into the database.
-	InsertFile(file File) error
+	InsertFile(file core.File) error
 	// Update the given fiel in the database.
-	UpdateFile(file File) error
+	UpdateFile(file core.File) error
 	// Delete all versions of the given file from the database.
 	DeleteFile(fileID string) error
 }

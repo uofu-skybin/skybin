@@ -171,7 +171,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
-		Blocks:     []core.Block{},
+		Versions:   []core.Version{},
 	}
 	err = r.addFile(file)
 	if err != nil {
@@ -246,16 +246,19 @@ func (r *Renter) Upload(srcPath, destPath string) (*core.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot generate file ID. Error: %s", err)
 	}
+
+	version := core.Version{
+		Size:    finfo.Size(),
+		ModTime: finfo.ModTime(),
+		Blocks:  []core.Block{block},
+	}
+
 	file := &core.File{
 		ID:         fileId,
 		Name:       destPath,
 		IsDir:      false,
-		Size:       finfo.Size(),
-		ModTime:    finfo.ModTime(),
 		AccessList: []core.Permission{},
-		Blocks: []core.Block{
-			block,
-		},
+		Versions:   []core.Version{version},
 	}
 
 	err = r.addFile(file)
@@ -289,7 +292,8 @@ func (r *Renter) Download(f *core.File, destpath string) error {
 	}
 	defer outFile.Close()
 
-	for _, block := range f.Blocks {
+	// BUG(kincaid): Probably want to do a specific version here.
+	for _, block := range f.Versions[len(f.Versions)-1].Blocks {
 		err = downloadBlock(&block, outFile)
 		if err != nil {
 			_ = os.Remove(destpath)
@@ -324,7 +328,8 @@ func (r *Renter) Remove(fileId string) error {
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
-	for _, block := range f.Blocks {
+	// BUG(kincaid): Probably want to do a specific version here.
+	for _, block := range f.Versions[len(f.Versions)-1].Blocks {
 		err := removeBlock(&block)
 		if err != nil {
 			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)

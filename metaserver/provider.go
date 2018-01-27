@@ -129,5 +129,6 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusOK)
 		resp := postProviderResp{Provider: updatedProvider}
+		json.NewEncoder(w).Encode(resp)
 	})
 }

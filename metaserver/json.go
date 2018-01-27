@@ -11,22 +11,22 @@ import (
 
 type jsonDB struct {
 	providers []core.ProviderInfo
-	renters   []RenterInfo
-	files     []File
+	renters   []core.RenterInfo
+	files     []core.File
 	path      string
 }
 
 type storageFile struct {
 	Providers []core.ProviderInfo
-	Renters   []RenterInfo
-	Files     []File
+	Renters   []core.RenterInfo
+	Files     []core.File
 }
 
 func newJsonDB(dbLocation string) jsonDB {
 	db := jsonDB{
 		path:      dbLocation,
 		providers: make([]core.ProviderInfo, 0),
-		renters:   make([]RenterInfo, 0),
+		renters:   make([]core.RenterInfo, 0),
 	}
 
 	if _, err := os.Stat(dbLocation); os.IsNotExist(err) {
@@ -75,11 +75,11 @@ func (db *jsonDB) loadDbFromFile() {
 
 // Renter operations
 
-func (db *jsonDB) FindAllRenters() ([]RenterInfo, error) {
+func (db *jsonDB) FindAllRenters() ([]core.RenterInfo, error) {
 	return db.renters, nil
 }
 
-func (db *jsonDB) FindRenterByID(id string) (*RenterInfo, error) {
+func (db *jsonDB) FindRenterByID(id string) (*core.RenterInfo, error) {
 	for _, renter := range db.renters {
 		if renter.ID == id {
 			return &renter, nil
@@ -88,10 +88,12 @@ func (db *jsonDB) FindRenterByID(id string) (*RenterInfo, error) {
 	return nil, errors.New("could not locate renter with given ID")
 }
 
-func (db *jsonDB) InsertRenter(newRenter RenterInfo) error {
+func (db *jsonDB) InsertRenter(newRenter core.RenterInfo) error {
 	for _, renter := range db.renters {
 		if newRenter.ID == renter.ID {
 			return errors.New("renter with given ID already exists")
+		} else if newRenter.Alias == renter.Alias {
+			return errors.New("renter with given alias already exists")
 		}
 	}
 	db.renters = append(db.renters, newRenter)
@@ -99,7 +101,7 @@ func (db *jsonDB) InsertRenter(newRenter RenterInfo) error {
 	return nil
 }
 
-func (db *jsonDB) UpdateRenter(updateRenter RenterInfo) error {
+func (db *jsonDB) UpdateRenter(updateRenter core.RenterInfo) error {
 	foundRenter := false
 	var replaceIndex int
 
@@ -196,11 +198,11 @@ func (db *jsonDB) DeleteProvider(providerID string) error {
 
 // File operations
 
-func (db *jsonDB) FindAllFiles() ([]File, error) {
+func (db *jsonDB) FindAllFiles() ([]core.File, error) {
 	return db.files, nil
 }
 
-func (db *jsonDB) FindFileByID(fileID string) (*File, error) {
+func (db *jsonDB) FindFileByID(fileID string) (*core.File, error) {
 	for _, file := range db.files {
 		if file.ID == fileID {
 			return &file, nil
@@ -209,8 +211,60 @@ func (db *jsonDB) FindFileByID(fileID string) (*File, error) {
 	return nil, errors.New("could not find file with specified ID")
 }
 
-func (db *jsonDB) FindFilesByRenter(renterID string) ([]File, error) {
-	var renterFiles []File
+func (db *jsonDB) FindFilesInRenterDirectory(renterID string) ([]core.File, error) {
+	// Find the renter
+	renter, err := db.FindRenterByID(renterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set of renter's file IDs (so we don't have to iterate multiple times)
+	fileIDs := make(map[string]bool)
+	for _, file := range renter.Files {
+		fileIDs[file] = true
+	}
+
+	// Files that are in the renter's directory
+	var filesInDirectory []core.File
+
+	// Locate renter's files
+	for _, file := range db.files {
+		if _, present := fileIDs[file.ID]; present {
+			filesInDirectory = append(filesInDirectory, file)
+		}
+	}
+
+	return filesInDirectory, nil
+}
+
+func (db *jsonDB) FindFilesSharedWithRenter(renterID string) ([]core.File, error) {
+	// Find the renter
+	renter, err := db.FindRenterByID(renterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set of shared file IDs (so we don't have to iterate multiple times)
+	sharedFileIDs := make(map[string]bool)
+	for _, file := range renter.Files {
+		sharedFileIDs[file] = true
+	}
+
+	// Files that are in the renter's shared directory
+	var sharedFiles []core.File
+
+	// Locate shared files
+	for _, file := range db.files {
+		if _, present := sharedFileIDs[file.ID]; present {
+			sharedFiles = append(sharedFiles, file)
+		}
+	}
+
+	return sharedFiles, nil
+}
+
+func (db *jsonDB) FindFilesByOwner(renterID string) ([]core.File, error) {
+	var renterFiles []core.File
 	for _, item := range db.files {
 		if item.OwnerID == renterID {
 			renterFiles = append(renterFiles, item)
@@ -219,7 +273,7 @@ func (db *jsonDB) FindFilesByRenter(renterID string) ([]File, error) {
 	return renterFiles, nil
 }
 
-func (db *jsonDB) InsertFile(newFile File) error {
+func (db *jsonDB) InsertFile(newFile core.File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == newFile.OwnerID {
@@ -234,7 +288,7 @@ func (db *jsonDB) InsertFile(newFile File) error {
 	return nil
 }
 
-func (db *jsonDB) UpdateFile(updateFile File) error {
+func (db *jsonDB) UpdateFile(updateFile core.File) error {
 	foundRenter := false
 	for _, item := range db.renters {
 		if item.ID == updateFile.OwnerID {

@@ -3,7 +3,6 @@ package metaserver
 import (
 	"log"
 	"net/http"
-	"path"
 	"skybin/authorization"
 	"skybin/core"
 
@@ -14,7 +13,7 @@ import (
 func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router := mux.NewRouter()
 
-	db := newJsonDB(path.Join(dataDirectory, "metaDB.json"))
+	db := mongoDB{}
 
 	server := &metaServer{
 		dataDir:    dataDirectory,

@@ -98,7 +98,7 @@ func (server *renterServer) reserveStorage(w http.ResponseWriter, r *http.Reques
 }
 
 type getFilesResp struct {
-	Files []*core.File
+	Files []*core.File `json:"files"`
 }
 
 func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {

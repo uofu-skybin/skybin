@@ -118,7 +118,29 @@ func TestUpdateRenter(t *testing.T) {
 	if diff := deep.Equal(renter, updatedRenter); diff != nil {
 		t.Fatal(diff)
 	}
+
 	// Make sure we can't update the ID, alias, or public key.
+	oldID := renter.ID
+	renter.ID = "foo"
+	err = client.UpdateRenter(renter)
+	if err == nil {
+		t.Fatal("was able to update renter ID")
+	}
+	renter.ID = oldID
+
+	oldAlias := renter.Alias
+	renter.Alias = "foo"
+	err = client.UpdateRenter(renter)
+	if err == nil {
+		t.Fatal("was able to update renter alias")
+	}
+	renter.Alias = oldAlias
+
+	renter.PublicKey = "foo"
+	err = client.UpdateRenter(renter)
+	if err == nil {
+		t.Fatal("was able to update renter public key")
+	}
 }
 
 // Get renter info

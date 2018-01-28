@@ -112,7 +112,13 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 			resp := postRenterResp{Error: "must not change renter alias"}
 			json.NewEncoder(w).Encode(resp)
 			return
+		} else if updatedRenter.PublicKey != renter.PublicKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := postRenterResp{Error: "must not change renter public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
+
 		// Put the new renter into the database.
 		err = server.db.UpdateRenter(updatedRenter)
 		if err != nil {

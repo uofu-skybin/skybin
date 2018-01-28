@@ -271,11 +271,62 @@ func TestDeleteProvider(t *testing.T) {
 	}
 }
 
-// Get files
+// POST file
+func TestUploadFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileUploadTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file := core.File{
+		ID:         "someID",
+		Name:       "foo",
+		AccessList: make([]core.Permission, 0),
+		Versions:   make([]core.Version, 0),
+	}
+	err = client.PostFile(renter.ID, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve the file and make sure it matches what we posted and has the proper owner.
+	result, err := client.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file.OwnerID = renter.ID
+	if diff := deep.Equal(file, result); diff != nil {
+		t.Fatal(diff)
+	}
+
+	// Make sure the file shows up in the renter's files.
+	renter, err = client.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundFile := false
+	for _, item := range renter.Files {
+		if item == file.ID {
+			foundFile = true
+			break
+		}
+	}
+	if !foundFile {
+		t.Fatal("file not added to renter's directory")
+	}
+}
+
+// Get renter's files
 // Get file
 // Get shared files
 // Get shared file
-// POST file
 // Update file
 // Get file
 // Delete file
@@ -284,4 +335,5 @@ func TestDeleteProvider(t *testing.T) {
 // Get version of file
 // Delete version of file
 // Share file
+// Unshare file
 // Remove shared file

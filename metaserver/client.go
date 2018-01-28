@@ -156,7 +156,7 @@ func (client *Client) DeleteProvider(providerID string) error {
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
 		println(resp.Status)
-		var respMsg postRenterResp
+		var respMsg postProviderResp
 		err = json.NewDecoder(resp.Body).Decode(&respMsg)
 		if err != nil {
 			return err
@@ -282,19 +282,19 @@ func (client *Client) DeleteRenter(renterID string) error {
 	return nil
 }
 
-func (client *Client) PostFile(file core.File) error {
+func (client *Client) PostFile(renterID string, file core.File) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/files", client.addr)
+	url := fmt.Sprintf("http://%s/renters/%s/files", client.addr, renterID)
 
-	var buf []byte
-	serialized := bytes.NewBuffer(buf)
-	_ = json.NewEncoder(serialized).Encode(file)
-	body := bytes.NewReader(buf)
+	b, err := json.Marshal(file)
+	if err != nil {
+		return err
+	}
 
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -308,18 +308,23 @@ func (client *Client) PostFile(file core.File) error {
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return errors.New("bad status from server")
+		var respMsg fileResp
+		err = json.NewDecoder(resp.Body).Decode(&respMsg)
+		if err != nil {
+			return errors.New(resp.Status)
+		}
+		return errors.New(respMsg.Error)
 	}
 
 	return nil
 }
 
-func (client *Client) GetFile(fileID string) (core.File, error) {
+func (client *Client) GetFile(renterID string, fileID string) (core.File, error) {
 	if client.token == "" {
 		return core.File{}, errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileID)
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s", client.addr, renterID, fileID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

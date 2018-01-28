@@ -42,10 +42,24 @@ func (server *metaServer) postFileHandler() http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&file)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse body"}
+			resp := fileResp{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
+
+		params := mux.Vars(r)
+
+		// Make sure the renter exists.
+		renter, err := server.db.FindRenterByID(params["renterID"])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := fileResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Make sure the file's owner ID is set to that of the renter.
+		file.OwnerID = params["renterID"]
 
 		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
 		err = server.db.InsertFile(file)
@@ -55,6 +69,18 @@ func (server *metaServer) postFileHandler() http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
+
+		// Insert the file's ID into the renter's directory.
+		renter.Files = append(renter.Files, file.ID)
+		// BUG(kincaid): Consider trying to roll things back if this fails.
+		err = server.db.UpdateRenter(*renter)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			resp := fileResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(file)
 	})
 }

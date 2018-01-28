@@ -391,6 +391,55 @@ func TestUpdateFile(t *testing.T) {
 }
 
 // Get renter's files
+func TestGetFiles(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "filesGetTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload some files.
+	var files []core.File
+	for i := 1; i < 10; i++ {
+		file := core.File{
+			ID:         "someID" + string(i),
+			Name:       "foo" + string(i),
+			AccessList: make([]core.Permission, 0),
+			Versions:   make([]core.Version, 0),
+		}
+		err = client.PostFile(renter.ID, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file.OwnerID = renter.ID
+	}
+
+	// Retrieve the files and make sure they are all present.
+	result, err := client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		compared := false
+		for _, item := range result {
+			if item.ID == file.ID {
+				if diff := deep.Equal(file, result); diff != nil {
+					t.Fatal(diff)
+				}
+				compared = true
+				break
+			}
+		}
+		if !compared {
+			t.Fatal("File ", file.ID, " missing from output")
+		}
+	}
+}
+
 // Get shared files
 // Get shared file
 // Delete file

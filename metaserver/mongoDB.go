@@ -248,15 +248,15 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 	// Retrieve files from collection.
 	files := session.DB(dbName).C("files")
 
-	selector := make([]struct{ ID string }, 0)
-	for _, file := range filesToFind {
-		selector = append(selector, struct{ ID string }{ID: file})
-	}
-
 	var foundFiles []core.File
-	err = files.Find(selector).All(&foundFiles)
-	if err != nil {
-		return nil, err
+	for _, item := range filesToFind {
+		selector := struct{ ID string }{ID: item}
+		var result core.File
+		err = files.Find(selector).One(&result)
+		if err != nil {
+			return nil, err
+		}
+		foundFiles = append(foundFiles, result)
 	}
 
 	return foundFiles, nil

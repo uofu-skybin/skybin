@@ -187,7 +187,7 @@ func (server *metaServer) getFileVersionHandler() http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
-		file, err := server.db.FindFileByID(params["id"])
+		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -285,7 +285,7 @@ func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
 		}
 
 		// Add 1 for index shift, 1 to get version number
-		version.Number = len(file.Versions) + 2
+		version.Number = len(file.Versions) + 1
 		file.Versions = append(file.Versions, version)
 
 		err = server.db.UpdateFile(*file)
@@ -295,7 +295,7 @@ func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusCreated)
 	})
 }
 

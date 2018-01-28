@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"skybin/core"
 	"testing"
+	"time"
 
 	"github.com/go-test/deep"
 )
@@ -469,12 +470,12 @@ func TestDeleteFile(t *testing.T) {
 }
 
 // Post new version of file
-func blahTestUploadNewFileVersion(t *testing.T) {
+func TestUploadNewFileVersion(t *testing.T) {
 	httpClient := http.Client{}
 	client := NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
-	renter, err := registerRenter(client, "fileUploadTest")
+	renter, err := registerRenter(client, "fileUploadVersionTest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,40 +486,37 @@ func blahTestUploadNewFileVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Retrieve the file and make sure it matches what we posted and has the proper owner.
-	result, err := client.GetFile(renter.ID, file.ID)
+	// Upload a new version of the file.
+	version := core.Version{
+		Blocks:  make([]core.Block, 0),
+		Size:    1000,
+		ModTime: time.Time{},
+	}
+
+	err = client.PostFileVersion(renter.ID, file.ID, version)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file.OwnerID = renter.ID
-	if diff := deep.Equal(file, *result); diff != nil {
+	// Retrieve the version and make sure it matches.
+	version.Number = 1
+
+	result, err := client.GetFileVersion(renter.ID, file.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(version, *result); diff != nil {
 		t.Fatal(diff)
-	}
-
-	// Make sure the file shows up in the renter's files.
-	renter, err = client.GetRenter(renter.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	foundFile := false
-	for _, item := range renter.Files {
-		if item == file.ID {
-			foundFile = true
-			break
-		}
-	}
-	if !foundFile {
-		t.Fatal("file not added to renter's directory")
 	}
 }
 
+// Get all versions of file
+// Delete version of file
+// Update file version
+
 // Get shared files
 // Get shared file
-// Get all versions of file
-// Get version of file
-// Delete version of file
 // Share file
 // Get shared file
 // Unshare file

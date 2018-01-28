@@ -383,35 +383,6 @@ func (client *Client) GetFile(renterID string, fileID string) (*core.File, error
 	return &file, nil
 }
 
-func (client *Client) GetFileVersion(fileID string, fileVersion int) (core.File, error) {
-	if client.token == "" {
-		return core.File{}, errors.New("must authorize before calling this method")
-	}
-
-	url := fmt.Sprintf("http://%s/files/%s/%d", client.addr, fileID, fileVersion)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return core.File{}, err
-	}
-
-	token := fmt.Sprintf("Bearer %s", client.token)
-	req.Header.Add("Authorization", token)
-
-	resp, err := client.client.Do(req)
-	if err != nil {
-		return core.File{}, err
-	}
-
-	var file core.File
-	err = json.NewDecoder(resp.Body).Decode(&file)
-	if err != nil {
-		return core.File{}, err
-	}
-
-	return file, nil
-}
-
 func (client *Client) GetFiles(renterID string) ([]core.File, error) {
 	if client.token == "" {
 		return nil, errors.New("must authorize before calling this method")
@@ -472,6 +443,67 @@ func (client *Client) DeleteFile(renterID string, fileID string) error {
 	}
 
 	return nil
+}
+
+func (client *Client) PostFileVersion(renterID string, fileID string, version core.Version) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions", client.addr, renterID, fileID)
+
+	b, err := json.Marshal(version)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
+func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion int) (*core.Version, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions/%d", client.addr, renterID, fileID, fileVersion)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var version core.Version
+	err = json.NewDecoder(resp.Body).Decode(&version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &version, nil
 }
 
 func (client *Client) DeleteFileVersion(fileID string, fileVersion int) error {

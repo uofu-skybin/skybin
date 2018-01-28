@@ -105,6 +105,68 @@ func (client *Client) GetProvider(providerID string) (core.ProviderInfo, error) 
 	return respMsg, nil
 }
 
+func (client *Client) UpdateProvider(provider *core.ProviderInfo) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/providers/%s", client.addr, provider.ID)
+
+	b, err := json.Marshal(provider)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if resp.StatusCode != http.StatusOK {
+		var respMsg postProviderResp
+		err = json.NewDecoder(resp.Body).Decode(&respMsg)
+		if err != nil {
+			return err
+		}
+		return errors.New(respMsg.Error)
+	}
+
+	return nil
+}
+
+func (client *Client) DeleteProvider(providerID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/providers/%s", client.addr, providerID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if resp.StatusCode != http.StatusOK {
+		println(resp.Status)
+		var respMsg postRenterResp
+		err = json.NewDecoder(resp.Body).Decode(&respMsg)
+		if err != nil {
+			return err
+		}
+		return errors.New(respMsg.Error)
+	}
+
+	return nil
+}
+
 func (client *Client) RegisterRenter(info *core.RenterInfo) error {
 	url := fmt.Sprintf("http://%s/renters", client.addr)
 	body, err := json.Marshal(info)

@@ -36,6 +36,7 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/providers", server.postProviderHandler()).Methods("POST")
 	router.Handle("/providers/{id}", server.getProviderHandler()).Methods("GET")
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.putProviderHandler())).Methods("PUT")
+	router.Handle("/providers/{id}", authMiddleware.Handler(server.deleteProviderHandler())).Methods("DELETE")
 
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")

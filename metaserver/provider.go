@@ -106,7 +106,7 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 		}
 		// Attempt to decode the supplied provider.
 		var updatedProvider core.ProviderInfo
-		err = json.NewDecoder(r.Body).Decode(updatedProvider)
+		err = json.NewDecoder(r.Body).Decode(&updatedProvider)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := postProviderResp{Error: "could not parse body"}
@@ -120,6 +120,11 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 			resp := postProviderResp{Error: "must not change provider ID"}
 			json.NewEncoder(w).Encode(resp)
 			return
+		} else if updatedProvider.PublicKey != provider.PublicKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := postProviderResp{Error: "must not change provider public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 		// Put the new provider into the database.
 		err = server.db.UpdateProvider(updatedProvider)
@@ -130,5 +135,19 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		resp := postProviderResp{Provider: updatedProvider}
 		json.NewEncoder(w).Encode(resp)
+	})
+}
+
+func (server *metaServer) deleteProviderHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		err := server.db.DeleteProvider(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			server.logger.Println(err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	})
 }

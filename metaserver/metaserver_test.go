@@ -82,43 +82,21 @@ func TestRegisterRenter(t *testing.T) {
 	httpClient := http.Client{}
 	client := NewClient(core.DefaultMetaAddr, &httpClient)
 
-	// Generate an RSA key for registration.
-	reader := rand.Reader
-	rsaKey, err := rsa.GenerateKey(reader, 2048)
-	publicKeyString := getPublicKeyString(&rsaKey.PublicKey)
+	// Register a renter.
+	renter, err := registerRenter(client, "renterRegisterTest")
 	if err != nil {
-		panic("could not generate rsa key")
-	}
-
-	// Renter that will be registered.
-	renter := core.RenterInfo{
-		PublicKey: publicKeyString,
-		Alias:     "testRenterReg",
-		Shared:    make([]string, 0),
-		Files:     make([]string, 0),
-	}
-
-	err = client.RegisterRenter(&renter)
-	if err != nil {
-		t.Fatal("encountered error while registering renter: ", err)
-	}
-
-	renterID := fingerprintKey(publicKeyString)
-
-	err = client.AuthorizeRenter(rsaKey, renterID)
-	if err != nil {
-		t.Fatal("encountered error while attempting to authorize with registered renter: ", err)
+		t.Fatal(err)
 	}
 
 	expected := &core.RenterInfo{
-		PublicKey: publicKeyString,
-		Alias:     "testRenterReg",
-		ID:        renterID,
+		PublicKey: renter.PublicKey,
+		Alias:     "renterRegisterTest",
+		ID:        renter.ID,
 		Shared:    make([]string, 0),
 		Files:     make([]string, 0),
 	}
 
-	returned, err := client.GetRenter(renterID)
+	returned, err := client.GetRenter(renter.ID)
 	if err != nil {
 		t.Fatal("encountered error while attempting to retrieve registered renter info: ", err)
 	}
@@ -229,9 +207,69 @@ func TestRegisterProvider(t *testing.T) {
 }
 
 // Update provider
-// List providers
-// Get provider
+func TestUpdateProvider(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	provider, err := registerProvider(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider.Addr = "thisisanew.address"
+	err = client.UpdateProvider(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedProvider, err := client.GetProvider(provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(*provider, updatedProvider); diff != nil {
+		t.Fatal(diff)
+	}
+
+	// Make sure we can't update public key or id
+	oldID := provider.ID
+	provider.ID = "foo"
+	err = client.UpdateProvider(provider)
+	if err == nil {
+		t.Fatal("was able to update provider ID")
+	}
+	provider.ID = oldID
+
+	provider.PublicKey = "foo"
+	err = client.UpdateProvider(provider)
+	if err == nil {
+		t.Fatal("was able to update provider public key")
+	}
+}
+
 // Delete provider
+func TestDeleteProvider(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a provider.
+	provider, err := registerProvider(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the provider.
+	err = client.DeleteProvider(provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to get the provider's information.
+	_, err = client.GetProvider(provider.ID)
+	if err == nil {
+		t.Fatal("was able to retrieve deleted provider")
+	}
+}
 
 // Get files
 // Get file

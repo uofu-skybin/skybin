@@ -177,7 +177,7 @@ func (db *mongoDB) UpdateProvider(provider core.ProviderInfo) error {
 
 // Delete the specified provider from the dtabase.
 func (db *mongoDB) DeleteProvider(providerID string) error {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := getMongoCollection("providers")
 	if err != nil {
 		return err
 	}

@@ -238,8 +238,9 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 	// Get file IDs in renter directory.
 	renters := session.DB(dbName).C("renters")
 
+	selector := struct{ ID string }{ID: renterID}
 	var renter core.RenterInfo
-	err = renters.Find(nil).One(&renter)
+	err = renters.Find(selector).One(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +251,7 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 
 	var foundFiles []core.File
 	for _, item := range filesToFind {
-		selector := struct{ ID string }{ID: item}
+		selector = struct{ ID string }{ID: item}
 		var result core.File
 		err = files.Find(selector).One(&result)
 		if err != nil {

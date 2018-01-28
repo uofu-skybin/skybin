@@ -308,12 +308,7 @@ func (client *Client) PostFile(renterID string, file core.File) error {
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		var respMsg fileResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return errors.New(resp.Status)
-		}
-		return errors.New(respMsg.Error)
+		return errors.New(resp.Status)
 	}
 
 	return nil
@@ -449,12 +444,12 @@ func (client *Client) GetFiles(renterID string) ([]core.File, error) {
 	return files, nil
 }
 
-func (client *Client) DeleteFile(fileID string) error {
+func (client *Client) DeleteFile(renterID string, fileID string) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/files/%s", client.addr, fileID)
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s", client.addr, renterID, fileID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
@@ -467,6 +462,9 @@ func (client *Client) DeleteFile(fileID string) error {
 	resp, err := client.client.Do(req)
 	if err != nil {
 		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
 	}
 
 	if resp.StatusCode != http.StatusOK {

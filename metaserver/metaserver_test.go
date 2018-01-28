@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"net/http"
 	"skybin/core"
 	"testing"
@@ -271,6 +272,22 @@ func TestDeleteProvider(t *testing.T) {
 	}
 }
 
+func uploadFile(client *Client, renterID string, ID string, name string) (*core.File, error) {
+	// Attempt to upload a file.
+	file := core.File{
+		ID:         ID,
+		Name:       name,
+		AccessList: make([]core.Permission, 0),
+		Versions:   make([]core.Version, 0),
+	}
+	err := client.PostFile(renterID, file)
+	if err != nil {
+		return nil, err
+	}
+	file.OwnerID = renterID
+	return &file, nil
+}
+
 // POST file
 func TestUploadFile(t *testing.T) {
 	httpClient := http.Client{}
@@ -282,14 +299,7 @@ func TestUploadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Attempt to upload a file.
-	file := core.File{
-		ID:         "someID",
-		Name:       "foo",
-		AccessList: make([]core.Permission, 0),
-		Versions:   make([]core.Version, 0),
-	}
-	err = client.PostFile(renter.ID, file)
+	file, err := uploadFile(client, renter.ID, "testUploadFile", "testUploadFile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +311,7 @@ func TestUploadFile(t *testing.T) {
 	}
 
 	file.OwnerID = renter.ID
-	if diff := deep.Equal(file, *result); diff != nil {
+	if diff := deep.Equal(file, result); diff != nil {
 		t.Fatal(diff)
 	}
 
@@ -335,21 +345,142 @@ func TestUpdateFile(t *testing.T) {
 	}
 
 	// Attempt to upload a file.
-	file := core.File{
-		ID:         "fileUpdateTest",
-		Name:       "updateTest",
-		AccessList: make([]core.Permission, 0),
-		Versions:   make([]core.Version, 0),
-	}
-	err = client.PostFile(renter.ID, file)
+	file, err := uploadFile(client, renter.ID, "fileUpdateTest", "fileUpdateTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.OwnerID = renter.ID
 
 	// Update the file.
 	file.Name = "newName"
-	err = client.UpdateFile(renter.ID, file)
+	err = client.UpdateFile(renter.ID, *file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve the file and make sure it matches what we posted and has the proper owner.
+	result, err := client.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file.OwnerID = renter.ID
+	if diff := deep.Equal(file, result); diff != nil {
+		t.Fatal(diff)
+	}
+
+	// Make sure the file shows up in the renter's files.
+	renter, err = client.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundFile := false
+	for _, item := range renter.Files {
+		if item == file.ID {
+			foundFile = true
+			break
+		}
+	}
+	if !foundFile {
+		t.Fatal("file not added to renter's directory")
+	}
+
+	// Make sure users can't update file's owner ID
+	file.OwnerID = "somebodyElseShouldPay"
+	err = client.UpdateFile(renter.ID, *file)
+	if err == nil {
+		t.Fatal("user allowed to update owner ID")
+	}
+}
+
+// Get renter's files
+func TestGetFiles(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "filesGetTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload some files.
+	var files []*core.File
+	for i := 1; i < 10; i++ {
+		fileName := fmt.Sprintf("getFilesTest%d", i)
+		file, err := uploadFile(client, renter.ID, fileName, fileName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, file)
+	}
+
+	// Retrieve the files and make sure they are all present.
+	result, err := client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range files {
+		compared := false
+		for _, item := range result {
+			if item.ID == file.ID {
+				if diff := deep.Equal(*file, item); diff != nil {
+					t.Fatal(diff)
+				}
+				compared = true
+				break
+			}
+		}
+		if !compared {
+			t.Fatal("File ", file.ID, " missing from output")
+		}
+	}
+}
+
+// Delete file
+func TestDeleteFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter.
+	renter, err := registerRenter(client, "fileDeleteTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file, err := uploadFile(client, renter.ID, "fileDeleteTest", "fileDeleteTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the file
+	err = client.DeleteFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to retrieve the file.
+	_, err = client.GetFile(renter.ID, file.ID)
+	if err == nil {
+		t.Fatal("was able to retrieve deleted file")
+	}
+}
+
+// Post new version of file
+func blahTestUploadNewFileVersion(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileUploadTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file, err := uploadFile(client, renter.ID, "testUploadFileVersion", "testUploadFileVersion")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,69 +512,10 @@ func TestUpdateFile(t *testing.T) {
 	if !foundFile {
 		t.Fatal("file not added to renter's directory")
 	}
-
-	// Make sure users can't update file's owner ID
-	file.OwnerID = "somebodyElseShouldPay"
-	err = client.UpdateFile(renter.ID, file)
-	if err == nil {
-		t.Fatal("user allowed to update owner ID")
-	}
-}
-
-// Get renter's files
-func TestGetFiles(t *testing.T) {
-	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
-
-	// Register a renter
-	renter, err := registerRenter(client, "filesGetTest")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Attempt to upload some files.
-	var files []core.File
-	for i := 1; i < 10; i++ {
-		file := core.File{
-			ID:         "someID" + string(i),
-			Name:       "foo" + string(i),
-			AccessList: make([]core.Permission, 0),
-			Versions:   make([]core.Version, 0),
-		}
-		err = client.PostFile(renter.ID, file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		file.OwnerID = renter.ID
-	}
-
-	// Retrieve the files and make sure they are all present.
-	result, err := client.GetFiles(renter.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, file := range files {
-		compared := false
-		for _, item := range result {
-			if item.ID == file.ID {
-				if diff := deep.Equal(file, result); diff != nil {
-					t.Fatal(diff)
-				}
-				compared = true
-				break
-			}
-		}
-		if !compared {
-			t.Fatal("File ", file.ID, " missing from output")
-		}
-	}
 }
 
 // Get shared files
 // Get shared file
-// Delete file
-// Post new version of file
 // Get all versions of file
 // Get version of file
 // Delete version of file

@@ -149,6 +149,39 @@ func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 	return &renter, nil
 }
 
+func (client *Client) UpdateRenter(renter *core.RenterInfo) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s", client.addr, renter.ID)
+
+	b, err := json.Marshal(renter)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if resp.StatusCode != http.StatusOK {
+		var respMsg postRenterResp
+		err = json.NewDecoder(resp.Body).Decode(&respMsg)
+		if err != nil {
+			return err
+		}
+		return errors.New(respMsg.Error)
+	}
+
+	return nil
+}
+
 func (client *Client) PostFile(file core.File) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")

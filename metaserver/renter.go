@@ -92,10 +92,10 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 		}
 		// Attempt to decode the supplied renter.
 		var updatedRenter core.RenterInfo
-		err = json.NewDecoder(r.Body).Decode(updatedRenter)
+		err = json.NewDecoder(r.Body).Decode(&updatedRenter)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := postRenterResp{Error: "could not parse body"}
+			resp := postRenterResp{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}

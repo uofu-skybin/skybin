@@ -47,8 +47,9 @@ func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
 	}
 	defer session.Close()
 
+	selector := struct{ ID string }{ID: renterID}
 	var result core.RenterInfo
-	err = c.Find(nil).One(&result)
+	err = c.Find(selector).One(&result)
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +132,9 @@ func (db *mongoDB) FindProviderByID(providerID string) (*core.ProviderInfo, erro
 	}
 	defer session.Close()
 
+	selector := struct{ ID string }{ID: providerID}
 	var result core.ProviderInfo
-	err = c.Find(nil).One(&result)
+	err = c.Find(selector).One(&result)
 	if err != nil {
 		return nil, err
 	}

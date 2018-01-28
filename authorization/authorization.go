@@ -149,7 +149,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, decodedNonce[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Error: "key verification failed"}
+			resp := AuthChallengeError{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
 		} else {
 			token := jwt.New(jwt.SigningMethodHS256)

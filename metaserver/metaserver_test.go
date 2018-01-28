@@ -62,6 +62,8 @@ func TestMetaserverRenterRegistration(t *testing.T) {
 	renter := core.RenterInfo{
 		PublicKey: publicKeyString,
 		Alias:     "testRenterReg",
+		Shared:    make([]string, 0),
+		Files:     make([]string, 0),
 	}
 
 	err = client.RegisterRenter(&renter)
@@ -80,6 +82,8 @@ func TestMetaserverRenterRegistration(t *testing.T) {
 		PublicKey: publicKeyString,
 		Alias:     "testRenterReg",
 		ID:        renterID,
+		Shared:    make([]string, 0),
+		Files:     make([]string, 0),
 	}
 
 	returned, err := client.GetRenter(renterID)
@@ -87,8 +91,8 @@ func TestMetaserverRenterRegistration(t *testing.T) {
 		t.Fatal("encountered error while attempting to retrieve registered renter info: ", err)
 	}
 
-	if returned.Alias != expected.Alias || returned.ID != expected.ID || returned.PublicKey != expected.PublicKey {
-		t.Fatal("Expected ", expected, ", received ", expected)
+	if diff := deep.Equal(expected, returned); diff != nil {
+		t.Fatal(diff)
 	}
 }
 
@@ -143,8 +147,29 @@ func TestUpdateRenter(t *testing.T) {
 	}
 }
 
-// Get renter info
 // Delete renter
+func TestDeleteRenter(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter.
+	renter, err := registerRenter(client, "renterDeleteTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the renter.
+	err = client.DeleteRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to get the renter's information.
+	_, err = client.GetRenter(renter.ID)
+	if err == nil {
+		t.Fatal("was able to retrieve deleted renter")
+	}
+}
 
 // POST contract
 // Get contracts

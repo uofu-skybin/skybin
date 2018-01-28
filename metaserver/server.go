@@ -40,6 +40,7 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.putRenterHandler())).Methods("PUT")
+	router.Handle("/renters/{id}", authMiddleware.Handler(server.deleteRenterHandler())).Methods("DELETE")
 
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.getFilesHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.postFileHandler())).Methods("POST")

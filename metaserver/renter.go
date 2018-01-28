@@ -130,3 +130,17 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 		json.NewEncoder(w).Encode(resp)
 	})
 }
+
+func (server *metaServer) deleteRenterHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+		err := server.db.DeleteRenter(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			server.logger.Println(err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+}

@@ -17,7 +17,8 @@ type Config struct {
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 
-	TotalStorage int64 `json:"totalStorage"`
+	SpaceAvail   int64              `json:"spaceAvail,omitempty"`
+	StorageRates []core.StorageRate `json:"storageRates,omitempty"`
 
 	// Is this provider registered with metaservice?
 	IsRegistered bool `json:"isRegistered"`

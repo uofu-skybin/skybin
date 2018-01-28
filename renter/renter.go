@@ -83,6 +83,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		renter.contracts = s.Contracts
 		renter.freelist = s.FreeStorage
 	}
+	renterId = renter.Config.RenterId
 
 	return renter, err
 }

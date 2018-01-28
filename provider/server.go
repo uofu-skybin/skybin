@@ -35,9 +35,12 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
+	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
+
 	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
 	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
+	// router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
 	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.signingKey, server.getProviderPublicKey)).Methods("POST")
@@ -123,17 +126,18 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Verify that received file is the correct size
-	if int64(n) > avail {
+	// fmt.Println(n)
+	if n > avail {
 		os.Remove(path)
-		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", int64(n), avail)
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", n, avail)
 		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
 		return
 	}
 
 	// Update stats
-	server.provider.stats.StorageUsed += int64(n)
-	renter.StorageUsed += int64(n)
-	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: int64(n)})
+	server.provider.stats.StorageUsed += n
+	renter.StorageUsed += n
+	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
 	server.provider.renters[renterID] = renter
 
 	err = server.provider.saveSnapshot()

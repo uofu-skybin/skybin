@@ -36,7 +36,7 @@ func registerRenter(client *Client, alias string) (*core.RenterInfo, error) {
 	renterID := fingerprintKey(publicKeyString)
 	renter.ID = renterID
 
-	err = client.Authorize(rsaKey, renterID)
+	err = client.AuthorizeRenter(rsaKey, renterID)
 	if err != nil {
 		return nil, errors.New("could not authorize")
 	}
@@ -44,8 +44,40 @@ func registerRenter(client *Client, alias string) (*core.RenterInfo, error) {
 	return &renter, nil
 }
 
+func registerProvider(client *Client) (*core.ProviderInfo, error) {
+	// Generate an RSA key for registration.
+	reader := rand.Reader
+	rsaKey, err := rsa.GenerateKey(reader, 2048)
+	publicKeyString := getPublicKeyString(&rsaKey.PublicKey)
+	if err != nil {
+		panic("could not generate rsa key")
+	}
+
+	// provider that will be registered.
+	provider := core.ProviderInfo{
+		PublicKey:   publicKeyString,
+		Addr:        "foo",
+		SpaceAvail:  500,
+		StorageRate: 5,
+	}
+
+	err = client.RegisterProvider(&provider)
+	if err != nil {
+		return nil, err
+	}
+
+	provider.ID = fingerprintKey(publicKeyString)
+
+	err = client.AuthorizeProvider(rsaKey, provider.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider, nil
+}
+
 // Check that renters can register with the metaserver.
-func TestMetaserverRenterRegistration(t *testing.T) {
+func TestRegisterRenter(t *testing.T) {
 	// Create a client for testing.
 	httpClient := http.Client{}
 	client := NewClient(core.DefaultMetaAddr, &httpClient)
@@ -73,7 +105,7 @@ func TestMetaserverRenterRegistration(t *testing.T) {
 
 	renterID := fingerprintKey(publicKeyString)
 
-	err = client.Authorize(rsaKey, renterID)
+	err = client.AuthorizeRenter(rsaKey, renterID)
 	if err != nil {
 		t.Fatal("encountered error while attempting to authorize with registered renter: ", err)
 	}
@@ -177,6 +209,25 @@ func TestDeleteRenter(t *testing.T) {
 // Delete contract
 
 // Register provider
+func TestRegisterProvider(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	provider, err := registerProvider(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	returned, err := client.GetProvider(provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(*provider, returned); diff != nil {
+		t.Fatal(diff)
+	}
+}
+
 // Update provider
 // List providers
 // Get provider

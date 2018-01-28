@@ -24,9 +24,19 @@ type Client struct {
 	token  string
 }
 
-func (client *Client) Authorize(privateKey *rsa.PrivateKey, renterID string) error {
+func (client *Client) AuthorizeRenter(privateKey *rsa.PrivateKey, renterID string) error {
 	authClient := authorization.NewClient(client.addr, client.client)
 	token, err := authClient.GetAuthToken(privateKey, "renter", renterID)
+	if err != nil {
+		return err
+	}
+	client.token = token
+	return nil
+}
+
+func (client *Client) AuthorizeProvider(privateKey *rsa.PrivateKey, providerID string) error {
+	authClient := authorization.NewClient(client.addr, client.client)
+	token, err := authClient.GetAuthToken(privateKey, "provider", providerID)
 	if err != nil {
 		return err
 	}

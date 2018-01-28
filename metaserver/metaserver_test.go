@@ -301,7 +301,7 @@ func TestUploadFile(t *testing.T) {
 	}
 
 	file.OwnerID = renter.ID
-	if diff := deep.Equal(file, result); diff != nil {
+	if diff := deep.Equal(file, *result); diff != nil {
 		t.Fatal(diff)
 	}
 
@@ -323,17 +323,82 @@ func TestUploadFile(t *testing.T) {
 	}
 }
 
+// Update file
+func TestUpdateFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileUpdateTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file := core.File{
+		ID:         "fileUpdateTest",
+		Name:       "updateTest",
+		AccessList: make([]core.Permission, 0),
+		Versions:   make([]core.Version, 0),
+	}
+	err = client.PostFile(renter.ID, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.OwnerID = renter.ID
+
+	// Update the file.
+	file.Name = "newName"
+	err = client.UpdateFile(renter.ID, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve the file and make sure it matches what we posted and has the proper owner.
+	result, err := client.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file.OwnerID = renter.ID
+	if diff := deep.Equal(file, *result); diff != nil {
+		t.Fatal(diff)
+	}
+
+	// Make sure the file shows up in the renter's files.
+	renter, err = client.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundFile := false
+	for _, item := range renter.Files {
+		if item == file.ID {
+			foundFile = true
+			break
+		}
+	}
+	if !foundFile {
+		t.Fatal("file not added to renter's directory")
+	}
+
+	// Make sure users can't update file's owner ID
+	file.OwnerID = "somebodyElseShouldPay"
+	err = client.UpdateFile(renter.ID, file)
+	if err == nil {
+		t.Fatal("user allowed to update owner ID")
+	}
+}
+
 // Get renter's files
-// Get file
 // Get shared files
 // Get shared file
-// Update file
-// Get file
 // Delete file
 // Post new version of file
 // Get all versions of file
 // Get version of file
 // Delete version of file
 // Share file
+// Get shared file
 // Unshare file
 // Remove shared file

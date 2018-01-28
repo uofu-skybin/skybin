@@ -217,8 +217,9 @@ func (db *mongoDB) FindFileByID(fileID string) (*core.File, error) {
 	}
 	defer session.Close()
 
+	selector := struct{ ID string }{ID: fileID}
 	var result core.File
-	err = c.Find(nil).One(&result)
+	err = c.Find(selector).One(&result)
 	if err != nil {
 		return nil, err
 	}

@@ -89,9 +89,10 @@ func (server *metaServer) getFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
-		file, err := server.db.FindFileByID(params["id"])
+		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
+			server.logger.Println(err)
 			return
 		}
 		json.NewEncoder(w).Encode(file)
@@ -155,6 +156,11 @@ func (server *metaServer) putFileHandler() http.HandlerFunc {
 		if file.ID != params["fileID"] {
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := fileResp{Error: "must not change file ID"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if file.OwnerID != params["renterID"] {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := fileResp{Error: "must not change file owner"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}

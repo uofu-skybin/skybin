@@ -25,10 +25,10 @@ type RenterInfo struct {
 }
 
 type Version struct {
-	Number int     `json:"number"`
-	Blocks []Block `json:"blocks"`
-	Size       int64        `json:"size"`
-	ModTime    time.Time    `json:"modTime"`
+	Number  int       `json:"number"`
+	Blocks  []Block   `json:"blocks"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"modTime"`
 }
 
 type File struct {

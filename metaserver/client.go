@@ -319,16 +319,21 @@ func (client *Client) PostFile(renterID string, file core.File) error {
 	return nil
 }
 
-func (client *Client) GetFile(renterID string, fileID string) (core.File, error) {
+func (client *Client) UpdateFile(renterID string, file core.File) error {
 	if client.token == "" {
-		return core.File{}, errors.New("must authorize before calling this method")
+		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/renters/%s/files/%s", client.addr, renterID, fileID)
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s", client.addr, renterID, file.ID)
 
-	req, err := http.NewRequest("GET", url, nil)
+	b, err := json.Marshal(file)
 	if err != nil {
-		return core.File{}, err
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(b))
+	if err != nil {
+		return err
 	}
 
 	token := fmt.Sprintf("Bearer %s", client.token)
@@ -336,16 +341,51 @@ func (client *Client) GetFile(renterID string, fileID string) (core.File, error)
 
 	resp, err := client.client.Do(req)
 	if err != nil {
-		return core.File{}, err
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var respMsg fileResp
+		err = json.NewDecoder(resp.Body).Decode(&respMsg)
+		if err != nil {
+			return errors.New(resp.Status)
+		}
+		return errors.New(respMsg.Error)
+	}
+
+	return nil
+}
+
+func (client *Client) GetFile(renterID string, fileID string) (*core.File, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s", client.addr, renterID, fileID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
 	}
 
 	var file core.File
 	err = json.NewDecoder(resp.Body).Decode(&file)
 	if err != nil {
-		return core.File{}, err
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
 	}
 
-	return file, nil
+	return &file, nil
 }
 
 func (client *Client) GetFileVersion(fileID string, fileVersion int) (core.File, error) {

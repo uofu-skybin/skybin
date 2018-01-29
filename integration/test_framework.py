@@ -19,7 +19,7 @@ DEFAULT_REPOS_DIR = './repos'
 DEFAULT_TEST_FILE_DIR = './files'
 
 # Whether test logging is enabled by default
-LOG_ENABLED = False
+LOG_ENABLED = True 
 
 # Whether test files are removed by default
 REMOVE_TEST_FILES = True

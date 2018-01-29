@@ -4,10 +4,9 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/asn1"
-	"encoding/pem"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -27,7 +26,7 @@ var initCmd = Cmd{
 func runInit(args ...string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	homeFlag := fs.String("home", "", "directory to place skybin files")
-	_ = fs.String("keyfile", "", "file containing renter's private key")
+	keyFileFlag := fs.String("keyfile", "", "file containing renter's private key")
 	fs.Parse(args)
 
 	homedir := *homeFlag
@@ -45,24 +44,32 @@ func runInit(args ...string) {
 
 	// Create repo
 	checkErr(os.MkdirAll(homedir, 0700))
-	initRenter(homedir)
+	initRenter(homedir, *keyFileFlag)
 	initProvider(homedir)
 }
 
-func initRenter(homedir string) {
+func initRenter(homedir string, keyfile string) {
 
 	// Create home folder
 	checkErr(os.MkdirAll(path.Join(homedir, "renter"), 0700))
 
 	// Create keys
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	var rsaKey *rsa.PrivateKey
+	var err error
+	if len(keyfile) != 0 {
+		keybytes, err := ioutil.ReadFile(keyfile)
+		checkErr(err)
+		rsaKey, err = util.UnmarshalPrivateKey(keybytes)
+	} else {
+		rsaKey, err = rsa.GenerateKey(rand.Reader, 2048)
+	}
 	checkErr(err)
 
 	privateKeyPath := path.Join(homedir, "renter", "renterid")
 	publicKeyPath := privateKeyPath + ".pub"
 
 	savePrivateKey(rsaKey, privateKeyPath)
-	savePublicKey(rsaKey.PublicKey, publicKeyPath)
+	savePublicKey(&rsaKey.PublicKey, publicKeyPath)
 
 	// Create config
 	renterConfig := renter.Config{
@@ -78,7 +85,7 @@ func initRenter(homedir string) {
 
 func initProvider(homedir string) {
 	checkErr(os.MkdirAll(path.Join(homedir, "provider"), 0700))
-	checkErr(os.MkdirAll(path.Join(homedir, "provider/blocks"), 0700)) // add blocks folder
+	checkErr(os.MkdirAll(path.Join(homedir, "provider/blocks"), 0700))
 
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	checkErr(err)
@@ -87,7 +94,7 @@ func initProvider(homedir string) {
 	publicKeyPath := path.Join(homedir, "provider", "providerid.pub")
 
 	savePrivateKey(rsaKey, privateKeyPath)
-	savePublicKey(rsaKey.PublicKey, publicKeyPath)
+	savePublicKey(&rsaKey.PublicKey, publicKeyPath)
 
 	// Create provider config
 	checkErr(err)
@@ -109,28 +116,13 @@ func createId(pubKey crypto.PublicKey) string {
 }
 
 func savePrivateKey(key *rsa.PrivateKey, path string) {
-	keyBlock := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	}
-	savePemBlock(keyBlock, path)
+	checkErr(ioutil.WriteFile(path, util.MarshalPrivateKey(key), 0666))
 }
 
-func savePublicKey(key rsa.PublicKey, path string) {
-	bytes, err := x509.MarshalPKIXPublicKey(&key)
+func savePublicKey(key *rsa.PublicKey, path string) {
+	keybytes, err := util.MarshalPublicKey(key)
 	checkErr(err)
-	keyBlock := &pem.Block{
-		Type:  "RSA PUBLIC KEY",
-		Bytes: bytes,
-	}
-	savePemBlock(keyBlock, path)
-}
-
-func savePemBlock(block *pem.Block, path string) {
-	f, err := os.Create(path)
-	checkErr(err)
-	defer f.Close()
-	checkErr(pem.Encode(f, block))
+	checkErr(ioutil.WriteFile(path, keybytes, 0666))
 }
 
 func checkErr(err error) {

@@ -9,12 +9,12 @@ class RenterAPI:
         self.base_url = base_url
 
     def reserve_space(self, amount):
-        resp = requests.post(self.base_url + '/storage', json={'amount': amount})
+        resp = requests.post(self.base_url + '/reserve-storage', json={'amount': amount})
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
 
     def upload_file(self, source, dest):
-        resp = requests.post(self.base_url + '/files', json={
+        resp = requests.post(self.base_url + '/files/upload', json={
             'sourcePath': source,
             'destPath': dest
         })
@@ -23,8 +23,11 @@ class RenterAPI:
         return json.loads(resp.content)
 
     def download_file(self, file_id, destination):
-        url = '{}/files/{}/download'.format(self.base_url, file_id)
-        resp = requests.post(url, json={'destination': destination})
+        url = self.base_url + '/files/download'
+        resp = requests.post(url, json={
+            'fileId': file_id,
+            'destPath': destination,
+        })
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
 

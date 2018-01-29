@@ -380,7 +380,7 @@ func (server *metaServer) getFilePermissionHandler() http.HandlerFunc {
 			return
 		}
 		for _, item := range file.AccessList {
-			if item.UserId == params["sharedID"] {
+			if item.RenterId == params["sharedID"] {
 				json.NewEncoder(w).Encode(item)
 				return
 			}
@@ -405,7 +405,7 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 		}
 
 		// Make sure a valid renter is specified in the permission.
-		renter, err := server.db.FindRenterByID(permission.UserId)
+		renter, err := server.db.FindRenterByID(permission.RenterId)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -423,7 +423,7 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 
 		// Make sure the renter is not already in the ACL
 		for _, item := range file.AccessList {
-			if item.UserId == renter.ID {
+			if item.RenterId == renter.ID {
 				w.WriteHeader(http.StatusBadRequest)
 				resp := fileResp{Error: "already shared with this renter"}
 				json.NewEncoder(w).Encode(resp)
@@ -476,7 +476,7 @@ func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
 
 		updateIndex := -1
 		for i, item := range file.AccessList {
-			if item.UserId == params["sharedID"] {
+			if item.RenterId == params["sharedID"] {
 				updateIndex = i
 			}
 		}
@@ -513,7 +513,7 @@ func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		}
 		removeIndex := -1
 		for i, item := range file.AccessList {
-			if item.UserId == params["sharedID"] {
+			if item.RenterId == params["sharedID"] {
 				removeIndex = i
 				break
 			}

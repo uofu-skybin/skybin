@@ -210,7 +210,7 @@ func (server *metaServer) getFileVersionsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
-		file, err := server.db.FindFileByID(params["id"])
+		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -232,7 +232,7 @@ func (server *metaServer) deleteFileVersionHandler() http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
-		file, err := server.db.FindFileByID(params["id"])
+		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -324,6 +324,7 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
 		updateIndex := -1
@@ -333,8 +334,11 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 			}
 		}
 		if updateIndex == -1 {
-
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
+
+		file.Versions[updateIndex] = newVersion
 
 		err = server.db.UpdateFile(*file)
 		if err != nil {

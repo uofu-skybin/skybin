@@ -477,6 +477,38 @@ func (client *Client) PostFileVersion(renterID string, fileID string, version co
 	return nil
 }
 
+func (client *Client) PutFileVersion(renterID string, fileID string, version core.Version) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions/%d", client.addr, renterID, fileID, version.Number)
+
+	b, err := json.Marshal(version)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
 func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion int) (*core.Version, error) {
 	if client.token == "" {
 		return nil, errors.New("must authorize before calling this method")
@@ -496,6 +528,9 @@ func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
 
 	var version core.Version
 	err = json.NewDecoder(resp.Body).Decode(&version)
@@ -506,12 +541,41 @@ func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion
 	return &version, nil
 }
 
-func (client *Client) DeleteFileVersion(fileID string, fileVersion int) error {
+func (client *Client) GetFileVersions(renterID string, fileID string) ([]core.Version, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions", client.addr, renterID, fileID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var versions []core.Version
+	err = json.NewDecoder(resp.Body).Decode(&versions)
+	if err != nil {
+		return nil, err
+	}
+
+	return versions, nil
+}
+
+func (client *Client) DeleteFileVersion(renterID string, fileID string, fileVersion int) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/files/%s/%d", client.addr, fileID, fileVersion)
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions/%d", client.addr, renterID, fileID, fileVersion)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
@@ -527,7 +591,7 @@ func (client *Client) DeleteFileVersion(fileID string, fileVersion int) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Bad response from server")
+		return errors.New(resp.Status)
 	}
 
 	return nil

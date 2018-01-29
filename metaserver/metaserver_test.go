@@ -512,8 +512,152 @@ func TestUploadNewFileVersion(t *testing.T) {
 }
 
 // Get all versions of file
+func TestGetFileVersions(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileVersionsGetTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Upload a file.
+	file, err := uploadFile(client, renter.ID, "getFileVersionsTest", "getFileVersionsTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// upload some versions.
+	var versions []core.Version
+	for i := 0; i < 10; i++ {
+		version := core.Version{
+			Blocks:  make([]core.Block, 0),
+			Size:    1000,
+			ModTime: time.Time{},
+		}
+		err = client.PostFileVersion(renter.ID, file.ID, version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		version.Number = i + 1
+		versions = append(versions, version)
+	}
+
+	// Retrieve the versions and make sure they are all present.
+	result, err := client.GetFileVersions(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, version := range versions {
+		compared := false
+		for _, item := range result {
+			if item.Number == version.Number {
+				if diff := deep.Equal(version, item); diff != nil {
+					t.Fatal(diff)
+				}
+				compared = true
+				break
+			}
+		}
+		if !compared {
+			t.Fatal("Version ", version.Number, " missing from output")
+		}
+	}
+}
+
 // Delete version of file
+func TestDeleteFileVersion(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileDeleteVersionTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file, err := uploadFile(client, renter.ID, "testDeleteFileVersion", "testDeleteFileVersion")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Upload a new version of the file.
+	version := core.Version{
+		Blocks:  make([]core.Block, 0),
+		Size:    1000,
+		ModTime: time.Time{},
+	}
+
+	err = client.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the version of the file.
+	err = client.DeleteFileVersion(renter.ID, file.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we can't retrieve that version.
+	result, err := client.GetFileVersion(renter.ID, file.ID, 1)
+	if err == nil {
+		t.Log(result)
+		t.Fatal("was able to retrieve deleted file version")
+	}
+}
+
 // Update file version
+func TestUpdateFileVersion(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "fileUpdateVersionTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to upload a file.
+	file, err := uploadFile(client, renter.ID, "testUpdateFileVersion", "testUpdateFileVersion")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Upload a new version of the file.
+	version := core.Version{
+		Blocks:  make([]core.Block, 0),
+		Size:    1000,
+		ModTime: time.Time{},
+	}
+
+	err = client.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the version we just uploaded.
+	version.Number = 1
+	version.Size = 2000
+
+	err = client.PutFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the file was updated.
+	result, err := client.GetFileVersion(renter.ID, file.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(version, *result); diff != nil {
+		t.Fatal(diff)
+	}
+}
 
 // Get shared files
 // Get shared file

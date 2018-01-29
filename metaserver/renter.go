@@ -21,7 +21,7 @@ func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
 
 type postRenterResp struct {
 	Renter core.RenterInfo `json:"provider,omitempty"`
-	Error  string      `json:"error,omitempty"`
+	Error  string          `json:"error,omitempty"`
 }
 
 func (server *metaServer) postRenterHandler() http.HandlerFunc {

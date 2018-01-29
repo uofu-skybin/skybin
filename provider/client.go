@@ -22,6 +22,11 @@ func NewClient(addr string, client *http.Client) *Client {
 	}
 }
 
+func (client *Client) GetInfo() (*core.ProviderInfo, error) {
+	// TODO: Implement
+	return nil, nil
+}
+
 func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, error) {
 	url := fmt.Sprintf("http://%s/contracts", client.addr)
 	body, err := json.Marshal(&postContractParams{Contract: contract})

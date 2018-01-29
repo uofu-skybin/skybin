@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"skybin/core"
 	"skybin/util"
 	"time"
@@ -29,7 +28,7 @@ type Provider struct {
 	contracts []*core.Contract
 	stats     Stats
 	activity  []Activity
-	renters   map[string]RenterInfo
+	renters   map[string]*RenterInfo
 }
 
 // Provider node statistics
@@ -71,9 +70,9 @@ const (
 )
 
 type snapshot struct {
-	Contracts []*core.Contract      `json:"contracts"`
-	Stats     Stats                 `json:"stats"`
-	Renters   map[string]RenterInfo `json:"renters"`
+	Contracts []*core.Contract       `json:"contracts"`
+	Stats     Stats                  `json:"stats"`
+	Renters   map[string]*RenterInfo `json:"renters"`
 }
 
 func (provider *Provider) saveSnapshot() error {
@@ -90,7 +89,7 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir:   homedir,
 		contracts: make([]*core.Contract, 0),
-		renters:   make(map[string]RenterInfo, 0),
+		renters:   make(map[string]*RenterInfo, 0),
 	}
 
 	config := &Config{}
@@ -138,19 +137,20 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	// Sign contract
 	contract.ProviderSignature = "signature"
 
-	// Record contract and update stats
-	renterID := contract.RenterId
 	// Add storage space to the renter
-	renter := provider.renters[renterID]
+	renter, exists := provider.renters[contract.RenterId]
+	if !exists {
+		renter = &RenterInfo{
+			Contracts: []*core.Contract{},
+			Blocks:    []*BlockInfo{},
+		}
+		provider.renters[contract.RenterId] = renter
+	}
 	renter.StorageReserved += contract.StorageSpace
 	renter.Contracts = append(renter.Contracts, contract)
 
-	provider.renters[renterID] = renter
 	provider.stats.StorageReserved += contract.StorageSpace
 	provider.contracts = append(provider.contracts, contract)
-
-	// Create a new directory for the renters blocks
-	os.MkdirAll(path.Join(provider.Homedir, "blocks", renterID), 0700)
 
 	activity := Activity{
 		RequestType: negotiateType,
@@ -162,16 +162,4 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 
 	provider.saveSnapshot()
 	return contract, nil
-}
-
-// helper that could be useful for future auditing
-func DirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
 }

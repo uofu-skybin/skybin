@@ -172,6 +172,38 @@ func (r *Renter) ShareFile(f *core.File, userId string) error {
 	return nil
 }
 
+func (r *Renter) RemoveVersion(fileId string, version int) error {
+	idx, f := r.findFile(fileId)
+	if f == nil {
+		return fmt.Errorf("Cannot find file with ID %s", fileId)
+	}
+	if f.IsDir && len(r.findChildren(f)) > 0 {
+		return errors.New("Cannot remove non-empty folder")
+	}
+	var v *core.Version
+	for _, item := range f.Versions {
+		if item.Number == version {
+			v = &item
+		}
+	}
+	if v == nil {
+		return errors.New("specified version not present in file")
+	}
+	r.files = append(r.files[:idx], r.files[idx+1:]...)
+	err := r.saveSnapshot()
+	if err != nil {
+		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
+	}
+	for _, block := range v.Blocks {
+		err := r.removeBlock(&block)
+		if err != nil {
+			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
+		}
+
+	}
+	return nil
+}
+
 func (r *Renter) Remove(fileId string) error {
 	idx, f := r.findFile(fileId)
 	if f == nil {
@@ -185,13 +217,14 @@ func (r *Renter) Remove(fileId string) error {
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
-	// BUG(kincaid): Probably want to do a specific version here.
-	for _, block := range f.Versions[len(f.Versions)-1].Blocks {
-		err := removeBlock(&block)
-		if err != nil {
-			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
-		}
+	for _, v := range f.Versions {
+		for _, block := range v.Blocks {
+			err := r.removeBlock(&block)
+			if err != nil {
+				return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
+			}
 
+		}
 	}
 	return nil
 }

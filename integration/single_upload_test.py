@@ -32,6 +32,7 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
+        alias='singleFileUploadTest'
     )
     try:
         test_single_upload(ctxt, file_size=args.file_size)

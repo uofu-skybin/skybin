@@ -370,6 +370,9 @@ func (client *Client) GetFile(renterID string, fileID string) (*core.File, error
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
 
 	var file core.File
 	err = json.NewDecoder(resp.Body).Decode(&file)
@@ -592,6 +595,162 @@ func (client *Client) DeleteFileVersion(renterID string, fileID string, fileVers
 
 	if resp.StatusCode != http.StatusOK {
 		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
+func (client *Client) GetSharedFile(renterID string, fileID string) (*core.File, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/shared/%s", client.addr, renterID, fileID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	var file core.File
+	err = json.NewDecoder(resp.Body).Decode(&file)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	return &file, nil
+}
+
+func (client *Client) ShareFile(renterID string, fileID string, permission core.Permission) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/permissions", client.addr, renterID, fileID)
+
+	b, err := json.Marshal(permission)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
+func (client *Client) UnshareFile(renterID string, fileID string, userID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/permissions/%s", client.addr, renterID, fileID, userID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
+func (client *Client) GetSharedFiles(renterID string) ([]core.File, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/shared", client.addr, renterID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	var files []core.File
+	err = json.NewDecoder(resp.Body).Decode(&files)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
+func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/shared/%s", client.addr, renterID, fileID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("Bad response from server")
 	}
 
 	return nil

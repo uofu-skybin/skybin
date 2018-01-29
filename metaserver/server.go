@@ -53,6 +53,17 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/renters/{renterID}/files/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/files/{fileID}/versions/{version}", authMiddleware.Handler(server.putFileVersionHandler())).Methods("PUT")
 	router.Handle("/renters/{renterID}/files/{fileID}/versions/{version}", authMiddleware.Handler(server.deleteFileVersionHandler())).Methods("DELETE")
+	router.Handle("/renters/{renterID}/files/{fileID}/permissions", authMiddleware.Handler(server.getFilePermissionsHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/files/{fileID}/permissions", authMiddleware.Handler(server.postFilePermissionHandler())).Methods("POST")
+	router.Handle("/renters/{renterID}/files/{fileID}/permissions/{sharedID}", authMiddleware.Handler(server.getFilePermissionHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/files/{fileID}/permissions/{sharedID}", authMiddleware.Handler(server.putFilePermissionHandler())).Methods("PUT")
+	router.Handle("/renters/{renterID}/files/{fileID}/permissions/{sharedID}", authMiddleware.Handler(server.deleteFilePermissionHandler())).Methods("DELETE")
+
+	router.Handle("/renters/{renterID}/shared", authMiddleware.Handler(server.getSharedFilesHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/shared/{fileID}", authMiddleware.Handler(server.getFileHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/shared/{fileID}", authMiddleware.Handler(server.deleteSharedFileHandler())).Methods("DELETE")
+	router.Handle("/renters/{renterID}/shared/{fileID}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
 	return router
 }

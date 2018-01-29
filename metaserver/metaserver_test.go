@@ -659,9 +659,216 @@ func TestUpdateFileVersion(t *testing.T) {
 	}
 }
 
-// Get shared files
-// Get shared file
 // Share file
-// Get shared file
+func TestShareFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	sharer, err := registerRenter(client, "fileShareSharerTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter
+	sharedWith, err := registerRenter(client, "fileShareSharedWithTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(client, sharer.ID, "testShareFile", "testShareFile")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Share the file
+	permission := core.Permission{
+		UserId: sharedWith.ID,
+	}
+	err = client.ShareFile(sharer.ID, file.ID, permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the file shows up in the sharee's files.
+	_, err = client.GetSharedFile(sharedWith.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the file shows up in the file's ACL.
+	result, err := client.GetFile(sharer.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundPermission := false
+	for _, item := range result.AccessList {
+		if item.UserId == sharedWith.ID {
+			foundPermission = true
+		}
+	}
+
+	if !foundPermission {
+		t.Fatal("file not added to renter's directory")
+	}
+}
+
+// Get shared files
+func TestGetSharedFiles(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	sharer, err := registerRenter(client, "fileGetSharedFilesSharerTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter
+	sharedWith, err := registerRenter(client, "fileGetSharedFilesSharedWithTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(client, sharer.ID, "testGetSharedFiles", "testGetSharedFiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Share the file
+	permission := core.Permission{
+		UserId: sharedWith.ID,
+	}
+	err = client.ShareFile(sharer.ID, file.ID, permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the file shows up in the sharee's files
+	files, err := client.GetSharedFiles(sharedWith.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundFile := false
+	for _, item := range files {
+		if item.ID == file.ID {
+			foundFile = true
+			break
+		}
+	}
+
+	if !foundFile {
+		t.Fatal("could not locate shared file")
+	}
+}
+
 // Unshare file
+func TestUnshareFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	sharer, err := registerRenter(client, "fileUnshareSharerTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter
+	sharedWith, err := registerRenter(client, "fileUnshareSharedWithTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(client, sharer.ID, "testUnshareFile", "testUnshareFile")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Share the file
+	permission := core.Permission{
+		UserId: sharedWith.ID,
+	}
+	err = client.ShareFile(sharer.ID, file.ID, permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unshare the file.
+	err = client.UnshareFile(sharer.ID, file.ID, sharedWith.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the fil doesn't show up in the sharee' directory.
+	files, err := client.GetSharedFiles(sharedWith.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, item := range files {
+		if item.ID == file.ID {
+			t.Fatal("shared file remained in user's directory")
+		}
+	}
+
+	// Make sure the file's ACL is empty
+	result, err := client.GetFile(sharer.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AccessList) > 0 {
+		t.Fatal("permission remained in file after unsharing")
+	}
+}
+
 // Remove shared file
+func TestRemoveSharedFile(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	sharer, err := registerRenter(client, "fileRemoveSharedSharerTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter
+	sharedWith, err := registerRenter(client, "fileRemoveSharedSharedWithTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(client, sharer.ID, "testRemoveSharedFile", "testRemoveSharedFile")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Share the file
+	permission := core.Permission{
+		UserId: sharedWith.ID,
+	}
+	err = client.ShareFile(sharer.ID, file.ID, permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Unshare the file.
+	err = client.RemoveSharedFile(sharedWith.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the file doesn't show up in the user's directory.
+	files, err := client.GetSharedFiles(sharedWith.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, item := range files {
+		if item.ID == file.ID {
+			t.Fatal("shared file remained in user's directory")
+		}
+	}
+}

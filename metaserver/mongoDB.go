@@ -274,8 +274,9 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 	// Get file IDs in renter directory.
 	renters := session.DB(dbName).C("renters")
 
+	selector := struct{ ID string }{ID: renterID}
 	var renter core.RenterInfo
-	err = renters.Find(nil).One(&renter)
+	err = renters.Find(selector).One(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -284,15 +285,15 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 	// Retrieve files from collection.
 	files := session.DB(dbName).C("files")
 
-	selector := make([]struct{ ID string }, 0)
-	for _, file := range filesToFind {
-		selector = append(selector, struct{ ID string }{ID: file})
-	}
-
 	var foundFiles []core.File
-	err = files.Find(selector).All(&foundFiles)
-	if err != nil {
-		return nil, err
+	for _, item := range filesToFind {
+		selector = struct{ ID string }{ID: item}
+		var result core.File
+		err = files.Find(selector).One(&result)
+		if err != nil {
+			return nil, err
+		}
+		foundFiles = append(foundFiles, result)
 	}
 
 	return foundFiles, nil

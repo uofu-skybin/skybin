@@ -683,7 +683,7 @@ func TestShareFile(t *testing.T) {
 
 	// Share the file
 	permission := core.Permission{
-		UserId: sharedWith.ID,
+		RenterId: sharedWith.ID,
 	}
 	err = client.ShareFile(sharer.ID, file.ID, permission)
 	if err != nil {
@@ -704,7 +704,7 @@ func TestShareFile(t *testing.T) {
 
 	foundPermission := false
 	for _, item := range result.AccessList {
-		if item.UserId == sharedWith.ID {
+		if item.RenterId == sharedWith.ID {
 			foundPermission = true
 		}
 	}
@@ -738,7 +738,7 @@ func TestGetSharedFiles(t *testing.T) {
 
 	// Share the file
 	permission := core.Permission{
-		UserId: sharedWith.ID,
+		RenterId: sharedWith.ID,
 	}
 	err = client.ShareFile(sharer.ID, file.ID, permission)
 	if err != nil {
@@ -788,7 +788,7 @@ func TestUnshareFile(t *testing.T) {
 
 	// Share the file
 	permission := core.Permission{
-		UserId: sharedWith.ID,
+		RenterId: sharedWith.ID,
 	}
 	err = client.ShareFile(sharer.ID, file.ID, permission)
 	if err != nil {
@@ -847,7 +847,7 @@ func TestRemoveSharedFile(t *testing.T) {
 
 	// Share the file
 	permission := core.Permission{
-		UserId: sharedWith.ID,
+		RenterId: sharedWith.ID,
 	}
 	err = client.ShareFile(sharer.ID, file.ID, permission)
 	if err != nil {

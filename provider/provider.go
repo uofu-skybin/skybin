@@ -3,6 +3,7 @@ package provider
 import (
 	"crypto/rsa"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"skybin/core"
@@ -116,6 +117,12 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.renters = s.Renters
 	}
 
+	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
+	if err != nil {
+		return nil, err
+	}
+	provider.PrivateKey = privKey
+
 	return provider, err
 }
 
@@ -144,10 +151,11 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// Sign contract
-	// contract.ProviderSignature, err = core.SignContract(contract, provider.PrivateKey)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Error signing contract")
-	// }
+	provSig, err := core.SignContract(contract, provider.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("Error signing contract")
+	}
+	contract.ProviderSignature = provSig
 
 	// Add storage space to the renter
 	renter, exists := provider.renters[contract.RenterId]
@@ -174,4 +182,12 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 
 	provider.saveSnapshot()
 	return contract, nil
+}
+
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return util.UnmarshalPrivateKey(data)
 }

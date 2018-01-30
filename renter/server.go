@@ -229,7 +229,7 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

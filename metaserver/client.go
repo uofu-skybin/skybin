@@ -755,3 +755,135 @@ func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
 
 	return nil
 }
+
+func (client *Client) PostContract(renterID string, contract core.Contract) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/contracts", client.addr, renterID)
+
+	b, err := json.Marshal(contract)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return errors.New(resp.Status)
+	}
+
+	return nil
+}
+
+func (client *Client) GetContract(renterID string, contractID string) (*core.Contract, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/contracts/%s", client.addr, renterID, contractID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	var contract core.Contract
+	err = json.NewDecoder(resp.Body).Decode(&contract)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	return &contract, nil
+}
+
+func (client *Client) GetRenterContracts(renterID string) ([]core.Contract, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/contracts", client.addr, renterID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	var contracts []core.Contract
+	err = json.NewDecoder(resp.Body).Decode(&contracts)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	return contracts, nil
+}
+
+func (client *Client) DeleteContract(renterID string, contractID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/contracts/%s", client.addr, renterID, contractID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(resp.Status)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("Bad response from server")
+	}
+
+	return nil
+}

@@ -8,3 +8,5 @@ db.providers.createIndex({"id": 1}, {unique: true})
 
 db.files.createIndex({"id": 1}, {unique: true})
 db.files.createIndex({"name": 1, "ownerid": 1}, {unique: true})
+
+db.contracts.createIndex({"id": 1}, {unique: true})

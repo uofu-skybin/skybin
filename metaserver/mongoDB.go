@@ -393,7 +393,7 @@ func (db *mongoDB) FindContractByID(contractID string) (*core.Contract, error) {
 	defer session.Close()
 
 	selector := struct{ ID string }{ID: contractID}
-	var result core.File
+	var result core.Contract
 	err = c.Find(selector).One(&result)
 	if err != nil {
 		return nil, err
@@ -454,7 +454,7 @@ func (db *mongoDB) UpdateContract(contract core.Contract) error {
 }
 
 // Delete the contract.
-func DeleteContract(contractID string) error {
+func (db *mongoDB) DeleteContract(contractID string) error {
 	c, session, err := getMongoCollection("contracts")
 	if err != nil {
 		return err

@@ -184,9 +184,115 @@ func TestDeleteRenter(t *testing.T) {
 }
 
 // POST contract
+func TestPostContract(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "contractUploadTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contract := core.Contract{
+		ID:       "contractUploadTest",
+		RenterId: renter.ID,
+	}
+	err = client.PostContract(renter.ID, contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := client.GetContract(renter.ID, contract.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(contract, *result); diff != nil {
+		t.Fatal(diff)
+	}
+}
+
 // Get contracts
-// Get contract
+func TestGetContracts(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "contractGetTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// POST a few contracts
+	var contracts []core.Contract
+	for i := 0; i < 10; i++ {
+		contractName := fmt.Sprintf("contractGetTest%d", i)
+		contract := core.Contract{
+			ID:       contractName,
+			RenterId: renter.ID,
+		}
+		err = client.PostContract(renter.ID, contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contracts = append(contracts, contract)
+	}
+
+	result, err := client.GetRenterContracts(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, contract := range contracts {
+		compared := false
+		for _, item := range result {
+			if item.ID == contract.ID {
+				if diff := deep.Equal(contract, item); diff != nil {
+					t.Fatal(diff)
+				}
+				compared = true
+				break
+			}
+		}
+		if !compared {
+			t.Fatal("Contract ", contract.ID, " missing from output")
+		}
+	}
+}
+
 // Delete contract
+func TestDeleteContract(t *testing.T) {
+	httpClient := http.Client{}
+	client := NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter.
+	renter, err := registerRenter(client, "contractDeleteTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contract := core.Contract{
+		ID:       "contractDeleteTest",
+		RenterId: renter.ID,
+	}
+	err = client.PostContract(renter.ID, contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the file
+	err = client.DeleteContract(renter.ID, contract.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to retrieve the file.
+	_, err = client.GetContract(renter.ID, contract.ID)
+	if err == nil {
+		t.Fatal("was able to retrieve deleted contract")
+	}
+}
 
 // Register provider
 func TestRegisterProvider(t *testing.T) {

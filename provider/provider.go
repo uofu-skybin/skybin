@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"os"
 	"path"
@@ -17,20 +18,22 @@ type Config struct {
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 
-	SpaceAvail   int64              `json:"spaceAvail,omitempty"`
-	StorageRates []core.StorageRate `json:"storageRates,omitempty"`
+	SpaceAvail int64 `json:"spaceAvail,omitempty"`
+	// StorageRates []core.StorageRate `json:"storageRates,omitempty"`
 
 	// Is this provider registered with metaservice?
 	IsRegistered bool `json:"isRegistered"`
 }
 
 type Provider struct {
-	Config    *Config
-	Homedir   string
-	contracts []*core.Contract
-	stats     Stats
-	activity  []Activity
-	renters   map[string]RenterInfo
+	Config     *Config
+	Homedir    string
+	PublicKey  *rsa.PublicKey
+	PrivateKey *rsa.PrivateKey
+	contracts  []*core.Contract
+	stats      Stats
+	activity   []Activity
+	renters    map[string]RenterInfo
 }
 
 // Provider node statistics
@@ -120,24 +123,32 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 func (provider *Provider) addActivity(activity Activity) {
 	provider.activity = append(provider.activity, activity)
 	if len(provider.activity) > maxActivity {
-
 		// Drop the oldest activity.
-		// O(N) but fine for small feed.
 		provider.activity = provider.activity[1:]
 	}
 }
 
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
 
-	// TODO determine if contract is amiable for provider here
-	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
-	// if contract.StorageSpace > avail {
-	// 	msg := fmt.Sprintf("Contract was not accepted.")
-	// 	return nil, fmt.Errorf(msg)
+	// Verify renters signature
+	// TODO: need to look this up from metaserver
+	// err = core.VerifyContractSignature(contract, contract.RenterSignature, renter_key)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Invalid Renter signature: %s", err)
 	// }
 
+	// TODO determine if contract is amiable for provider here
+	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
+	avail := int64(9999999999)
+	if contract.StorageSpace > avail {
+		return nil, fmt.Errorf("Provider does not have sufficient storage available")
+	}
+
 	// Sign contract
-	contract.ProviderSignature = "signature"
+	// contract.ProviderSignature, err = core.SignContract(contract, provider.PrivateKey)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Error signing contract")
+	// }
 
 	// Record contract and update stats
 	renterID := contract.RenterId

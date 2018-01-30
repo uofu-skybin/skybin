@@ -49,7 +49,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	// Local API
 	// TODO: Move these to the local provider server later
-	// router.HandleFunc("/info", server.postInfo).Methods("POST")
+	router.HandleFunc("/info", server.postInfo).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
@@ -126,7 +126,6 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Verify that received file is the correct size
-	// fmt.Println(n)
 	if n > avail {
 		os.Remove(path)
 		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", n, avail)
@@ -257,6 +256,23 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	used := server.provider.stats.StorageUsed
 	free := reserved - used
 
+	// TODO: change these fields to match new
+	info := getInfoResp{
+		ProviderId:      server.provider.Config.ProviderID,
+		TotalStorage:    1 << 30,
+		ReservedStorage: reserved,
+		UsedStorage:     used,
+		FreeStorage:     free,
+		TotalContracts:  len(server.provider.contracts),
+	}
+
+	server.writeResp(w, http.StatusOK, &info)
+}
+
+func (server *providerServer) postInfo(w http.ResponseWriter, r *http.Request) {
+	var params core.ProviderInfo
+	err := json.NewDecoder(r.Body).Decode(&params)
+	server.provider.Config = params
 	info := getInfoResp{
 		ProviderId:      server.provider.Config.ProviderID,
 		TotalStorage:    1 << 30,
@@ -270,7 +286,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
-	// TODO: authenticate
+	// TODO: authenticate first
 	renterID, exists := mux.Vars(r)["renterID"]
 	if exists {
 		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])

@@ -71,15 +71,21 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	contract := params.Contract
-	if contract == nil {
+	proposal := params.Contract
+	if proposal == nil {
 		server.writeResp(w, http.StatusBadRequest,
 			&errorResp{"No contract given"})
 		return
 	}
 
-	resp, err := server.provider.negotiateContract(contract)
-	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: resp})
+	signedContract, err := server.provider.negotiateContract(proposal)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: signedContract})
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
@@ -98,22 +104,40 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 	renterID := renterquery[0]
 
-	renter := server.provider.renters[renterID]
-	avail := renter.StorageReserved - renter.StorageUsed
+	renter, exists := server.provider.renters[renterID]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{Error: "Insufficient space: You have no storage reserved."})
+		return
+	}
+	spaceAvail := renter.StorageReserved - renter.StorageUsed
 
 	// first check block size using the http header
-	if r.ContentLength > avail {
-		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", r.ContentLength, avail)
-		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
+	if r.ContentLength > spaceAvail {
+		msg := fmt.Sprintf("Block of size %d exceeds available storage %d", r.ContentLength, spaceAvail)
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
 
+	// create directory for renter's blocks if necessary
+	renterDir := path.Join(server.provider.Homedir, "blocks", renterID)
+	if _, err := os.Stat(renterDir); os.IsNotExist(err) {
+		err := os.MkdirAll(renterDir, 0700)
+		if err != nil {
+			server.logger.Println(err)
+			server.writeResp(w, http.StatusInternalServerError,
+				errorResp{Error: "Unable to save block"})
+			return
+		}
+	}
+
 	// create file
-	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
+	path := path.Join(renterDir, blockID)
 	f, err := os.Create(path)
 	if err != nil {
 		server.logger.Println("Unable to create block file. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: "Unable to save block"})
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Unable to save block"})
 		return
 	}
 	defer f.Close()
@@ -121,14 +145,16 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	n, err := io.Copy(f, r.Body)
 	if err != nil {
 		server.logger.Println("Unable to write block. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: "Unable to save block"})
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Unable to save block"})
 		return
 	}
 
 	// Verify that received file is the correct size
-	if n > avail {
+	if n > spaceAvail {
 		os.Remove(path)
-		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", n, avail)
+		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", n, spaceAvail)
+		server.logger.Println(msg)
 		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
 		return
 	}
@@ -270,19 +296,22 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *providerServer) postInfo(w http.ResponseWriter, r *http.Request) {
-	var params core.ProviderInfo
+	var params Config
 	err := json.NewDecoder(r.Body).Decode(&params)
-	server.provider.Config = params
-	info := getInfoResp{
-		ProviderId:      server.provider.Config.ProviderID,
-		TotalStorage:    1 << 30,
-		ReservedStorage: reserved,
-		UsedStorage:     used,
-		FreeStorage:     free,
-		TotalContracts:  len(server.provider.contracts),
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{"Bad json"})
 	}
+	server.provider.Config = &params
+	// info := getInfoResp{
+	// 	ProviderId:      server.provider.Config.ProviderID,
+	// 	TotalStorage:    1 << 30,
+	// 	ReservedStorage: reserved,
+	// 	UsedStorage:     used,
+	// 	FreeStorage:     free,
+	// 	TotalContracts:  len(server.provider.contracts),
+	// }
 
-	server.writeResp(w, http.StatusOK, &info)
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +367,7 @@ type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 type getRenterResp struct {
-	renter RenterInfo `json:"renter-info"`
+	renter *RenterInfo `json:"renter-info"`
 }
 type getActivityResp struct {
 	Activity []Activity `json:"activity"`

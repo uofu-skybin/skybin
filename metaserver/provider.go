@@ -21,7 +21,7 @@ func (server *metaServer) getProviderPublicKey(providerID string) (string, error
 
 type getProvidersResp struct {
 	Providers []core.ProviderInfo `json:"providers"`
-	Error     string          `json:"error,omitempty"`
+	Error     string              `json:"error,omitempty"`
 }
 
 func (server *metaServer) getProvidersHandler() http.HandlerFunc {
@@ -35,7 +35,7 @@ func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 
 type postProviderResp struct {
 	Provider core.ProviderInfo `json:"provider,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Error    string            `json:"error,omitempty"`
 }
 
 func (server *metaServer) postProviderHandler() http.HandlerFunc {

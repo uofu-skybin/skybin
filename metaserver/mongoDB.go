@@ -366,3 +366,106 @@ func (db *mongoDB) DeleteFile(fileID string) error {
 
 	return nil
 }
+
+// Contract operations
+//====================
+
+// Return a list of all contracts in the database.
+func (db *mongoDB) FindAllContracts() ([]core.Contract, error) {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	var result []core.Contract
+	err = c.Find(nil).All(&result)
+
+	return result, nil
+}
+
+// Return the contract with the specified ID
+func (db *mongoDB) FindContractByID(contractID string) (*core.Contract, error) {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	selector := struct{ ID string }{ID: contractID}
+	var result core.File
+	err = c.Find(selector).One(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// Return a list of contracts belonging to the specified renter.
+func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, error) {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	var result []core.Contract
+	selector := struct{ renterId string }{renterId: renterID}
+	err = c.Find(selector).All(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Insert the given contract into the database.
+func (db *mongoDB) InsertContract(contract core.Contract) error {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	err = c.Insert(contract)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Update the given contract.
+func (db *mongoDB) UpdateContract(contract core.Contract) error {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	selector := struct{ ID string }{ID: contract.ID}
+	err = c.Update(selector, contract)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Delete the contract.
+func DeleteContract(contractID string) error {
+	c, session, err := getMongoCollection("contracts")
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	selector := struct{ ID string }{ID: contractID}
+	err = c.Remove(selector)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

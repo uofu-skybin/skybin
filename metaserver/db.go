@@ -41,7 +41,7 @@ type metaDB interface {
 	FindAllFiles() ([]core.File, error)
 	// Return the latest version of the file with the specified ID.
 	FindFileByID(fileID string) (*core.File, error)
-	// Return a map of paths to files present in the renter's directory.
+	// Return a list of files present in the renter's directory.
 	FindFilesInRenterDirectory(renterID string) ([]core.File, error)
 	// Return a map of names to files shared with a given renter.
 	FindFilesSharedWithRenter(renterID string) ([]core.File, error)
@@ -49,8 +49,24 @@ type metaDB interface {
 	FindFilesByOwner(renterID string) ([]core.File, error)
 	// Insert the given file into the database.
 	InsertFile(file core.File) error
-	// Update the given fiel in the database.
+	// Update the given file in the database.
 	UpdateFile(file core.File) error
 	// Delete all versions of the given file from the database.
 	DeleteFile(fileID string) error
+
+	// Contract operations
+	//=====================
+
+	// Return a list of all contracts in the database.
+	FindAllContracts() ([]core.Contract, error)
+	// Return the contract with the specified ID
+	FindContractByID(contractID string) (*core.Contract, error)
+	// Return a list of contracts belonging to the specified renter.
+	FindContractsByRenter(renterID string) ([]core.Contract, error)
+	// Insert the given contract into the database.
+	InsertContract(contract core.Contract) error
+	// Update the given contract.
+	UpdateContract(contract core.Contract) error
+	// Delete the contract.
+	DeleteContract(contractID string) error
 }

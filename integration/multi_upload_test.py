@@ -12,7 +12,7 @@ DEFAULT_NUM_FILES = 10
 DEFAULT_MIN_SIZE = 1024
 DEFAULT_MAX_SIZE = 10 * 1024 * 1024
 
-def test_multi_upload(ctxt, num_files=DEFAULT_NUM_FILES,
+def multi_upload_test(ctxt, num_files=DEFAULT_NUM_FILES,
                       min_size=DEFAULT_MIN_SIZE,
                       max_size=DEFAULT_MAX_SIZE):
     ctxt.log('multi upload test')
@@ -61,16 +61,14 @@ def main():
         alias='multiFileUploadTest',
     )
     try:
-        test_multi_upload(
+        multi_upload_test(
             ctxt,
             num_files=args.num_files,
             min_size=args.min_size,
             max_size=args.max_size,
         )
-    except Exception as err:
-        ctxt.teardown()
-        raise err
-    ctxt.teardown()
+    finally:
+        ctxt.teardown()        
 
 if __name__ == "__main__":
     main()

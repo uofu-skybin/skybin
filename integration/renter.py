@@ -40,8 +40,8 @@ class RenterAPI:
         return json.loads(resp.content)
 
     def remove_file(self, file_id):
-        url = '{}/files/{}'.format(self.base_url, file_id)
-        resp = requests.delete(url)
+        url = '{}/files/remove'.format(self.base_url)
+        resp = requests.post(url, json={'fileID': file_id})
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
 

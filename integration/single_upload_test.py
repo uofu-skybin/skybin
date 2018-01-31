@@ -36,10 +36,8 @@ def main():
     )
     try:
         test_single_upload(ctxt, file_size=args.file_size)
-    except Exception as err:
+    finally:
         ctxt.teardown()
-        raise err
-    ctxt.teardown()
 
 if __name__ == "__main__":
     main()

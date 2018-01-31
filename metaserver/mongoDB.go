@@ -9,14 +9,26 @@ import (
 const dbName = "skybin"
 const dbAddress = "127.0.0.1"
 
-type mongoDB struct{}
+type mongoDB struct {
+	session *mgo.Session
+}
 
-func getMongoCollection(name string) (*mgo.Collection, *mgo.Session, error) {
+func newMongoDB() (*mongoDB, error) {
 	session, err := mgo.Dial(dbAddress)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
+	db := mongoDB{session: session}
+	return &db, nil
+}
+
+func (db *mongoDB) CloseDB() {
+	db.session.Close()
+}
+
+func (db *mongoDB) getMongoCollection(name string) (*mgo.Collection, *mgo.Session, error) {
+	session := db.session.Copy()
 	c := session.DB(dbName).C(name)
 
 	return c, session, nil
@@ -27,7 +39,7 @@ func getMongoCollection(name string) (*mgo.Collection, *mgo.Session, error) {
 
 // Return a list of all renters in the database
 func (db *mongoDB) FindAllRenters() ([]core.RenterInfo, error) {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := db.getMongoCollection("renters")
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +53,7 @@ func (db *mongoDB) FindAllRenters() ([]core.RenterInfo, error) {
 
 // Return the renter with the specified ID.
 func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := db.getMongoCollection("renters")
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +71,7 @@ func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
 
 // Insert the provided renter into the database.
 func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := db.getMongoCollection("renters")
 	if err != nil {
 		return err
 	}
@@ -75,7 +87,7 @@ func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
 
 // Update the provided renter in the databse.
 func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := db.getMongoCollection("renters")
 	if err != nil {
 		return err
 	}
@@ -92,7 +104,7 @@ func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
 
 // Delete the specified renter from the database.
 func (db *mongoDB) DeleteRenter(renterID string) error {
-	c, session, err := getMongoCollection("renters")
+	c, session, err := db.getMongoCollection("renters")
 	if err != nil {
 		return err
 	}
@@ -112,7 +124,7 @@ func (db *mongoDB) DeleteRenter(renterID string) error {
 
 // Return a list of all the providers in the database.
 func (db *mongoDB) FindAllProviders() ([]core.ProviderInfo, error) {
-	c, session, err := getMongoCollection("providers")
+	c, session, err := db.getMongoCollection("providers")
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +138,7 @@ func (db *mongoDB) FindAllProviders() ([]core.ProviderInfo, error) {
 
 // Return the provider with the specified ID.
 func (db *mongoDB) FindProviderByID(providerID string) (*core.ProviderInfo, error) {
-	c, session, err := getMongoCollection("providers")
+	c, session, err := db.getMongoCollection("providers")
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +156,7 @@ func (db *mongoDB) FindProviderByID(providerID string) (*core.ProviderInfo, erro
 
 // Insert the given provider into the database.
 func (db *mongoDB) InsertProvider(provider *core.ProviderInfo) error {
-	c, session, err := getMongoCollection("providers")
+	c, session, err := db.getMongoCollection("providers")
 	if err != nil {
 		return err
 	}
@@ -160,7 +172,7 @@ func (db *mongoDB) InsertProvider(provider *core.ProviderInfo) error {
 
 // Update the given provider in the databse.
 func (db *mongoDB) UpdateProvider(provider *core.ProviderInfo) error {
-	c, session, err := getMongoCollection("providers")
+	c, session, err := db.getMongoCollection("providers")
 	if err != nil {
 		return err
 	}
@@ -177,7 +189,7 @@ func (db *mongoDB) UpdateProvider(provider *core.ProviderInfo) error {
 
 // Delete the specified provider from the dtabase.
 func (db *mongoDB) DeleteProvider(providerID string) error {
-	c, session, err := getMongoCollection("providers")
+	c, session, err := db.getMongoCollection("providers")
 	if err != nil {
 		return err
 	}
@@ -197,7 +209,7 @@ func (db *mongoDB) DeleteProvider(providerID string) error {
 
 // Return a list of all files in the database.
 func (db *mongoDB) FindAllFiles() ([]core.File, error) {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +223,7 @@ func (db *mongoDB) FindAllFiles() ([]core.File, error) {
 
 // Return the latest version of the file with the specified ID.
 func (db *mongoDB) FindFileByID(fileID string) (*core.File, error) {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return nil, err
 	}
@@ -229,10 +241,7 @@ func (db *mongoDB) FindFileByID(fileID string) (*core.File, error) {
 
 // Return a map of paths to files present in the renter's directory.
 func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, error) {
-	session, err := mgo.Dial(dbAddress)
-	if err != nil {
-		return nil, err
-	}
+	session := db.session.Copy()
 	defer session.Close()
 
 	// Get file IDs in renter directory.
@@ -240,7 +249,7 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 
 	selector := struct{ ID string }{ID: renterID}
 	var renter core.RenterInfo
-	err = renters.Find(selector).One(&renter)
+	err := renters.Find(selector).One(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -265,10 +274,7 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 
 // Return a map of names to files shared with a given renter.
 func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, error) {
-	session, err := mgo.Dial(dbAddress)
-	if err != nil {
-		return nil, err
-	}
+	session := db.session.Copy()
 	defer session.Close()
 
 	// Get file IDs in renter directory.
@@ -276,7 +282,7 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 
 	selector := struct{ ID string }{ID: renterID}
 	var renter core.RenterInfo
-	err = renters.Find(selector).One(&renter)
+	err := renters.Find(selector).One(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +307,7 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 
 // Return a list of files that the renter owns.
 func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +325,7 @@ func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 
 // Insert the given file into the database.
 func (db *mongoDB) InsertFile(file *core.File) error {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return err
 	}
@@ -335,7 +341,7 @@ func (db *mongoDB) InsertFile(file *core.File) error {
 
 // Update the given file in the database.
 func (db *mongoDB) UpdateFile(file *core.File) error {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return err
 	}
@@ -352,7 +358,7 @@ func (db *mongoDB) UpdateFile(file *core.File) error {
 
 // Delete all versions of the given file from the database.
 func (db *mongoDB) DeleteFile(fileID string) error {
-	c, session, err := getMongoCollection("files")
+	c, session, err := db.getMongoCollection("files")
 	if err != nil {
 		return err
 	}
@@ -372,7 +378,7 @@ func (db *mongoDB) DeleteFile(fileID string) error {
 
 // Return a list of all contracts in the database.
 func (db *mongoDB) FindAllContracts() ([]core.Contract, error) {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +392,7 @@ func (db *mongoDB) FindAllContracts() ([]core.Contract, error) {
 
 // Return the contract with the specified ID
 func (db *mongoDB) FindContractByID(contractID string) (*core.Contract, error) {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +410,7 @@ func (db *mongoDB) FindContractByID(contractID string) (*core.Contract, error) {
 
 // Return a list of contracts belonging to the specified renter.
 func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, error) {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +428,7 @@ func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, erro
 
 // Insert the given contract into the database.
 func (db *mongoDB) InsertContract(contract *core.Contract) error {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return err
 	}
@@ -438,7 +444,7 @@ func (db *mongoDB) InsertContract(contract *core.Contract) error {
 
 // Update the given contract.
 func (db *mongoDB) UpdateContract(contract *core.Contract) error {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return err
 	}
@@ -455,7 +461,7 @@ func (db *mongoDB) UpdateContract(contract *core.Contract) error {
 
 // Delete the contract.
 func (db *mongoDB) DeleteContract(contractID string) error {
-	c, session, err := getMongoCollection("contracts")
+	c, session, err := db.getMongoCollection("contracts")
 	if err != nil {
 		return err
 	}

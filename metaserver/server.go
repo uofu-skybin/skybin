@@ -10,14 +10,17 @@ import (
 )
 
 // InitServer prepares a handler for the server.
-func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
+func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 	router := mux.NewRouter()
 
-	db := mongoDB{}
+	db, err := newMongoDB()
+	if err != nil {
+		panic(err)
+	}
 
-	server := &metaServer{
+	server := &MetaServer{
 		dataDir:    dataDirectory,
-		db:         &db,
+		db:         db,
 		router:     router,
 		logger:     logger,
 		authorizer: authorization.NewAuthorizer(logger),
@@ -71,10 +74,10 @@ func InitServer(dataDirectory string, logger *log.Logger) http.Handler {
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
-	return router
+	return server
 }
 
-type metaServer struct {
+type MetaServer struct {
 	dataDir    string
 	db         metaDB
 	providers  []core.ProviderInfo
@@ -90,7 +93,11 @@ type errorResp struct {
 }
 
 // ServeHTTP begins serving requests from the server's router.
-func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (server *MetaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.Method, r.URL)
-	server.ServeHTTP(w, r)
+	server.router.ServeHTTP(w, r)
+}
+
+func (server *MetaServer) Close() {
+	server.db.CloseDB()
 }

@@ -13,7 +13,7 @@ type contractResp struct {
 	Error    string        `json:"error,omitempty"`
 }
 
-func (server *metaServer) getContractsHandler() http.HandlerFunc {
+func (server *MetaServer) getContractsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Make sure the specified renter actually exists.
@@ -37,7 +37,7 @@ func (server *metaServer) getContractsHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) postContractHandler() http.HandlerFunc {
+func (server *MetaServer) postContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var contract core.Contract
 		err := json.NewDecoder(r.Body).Decode(&contract)
@@ -75,7 +75,7 @@ func (server *metaServer) postContractHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getContractHandler() http.HandlerFunc {
+func (server *MetaServer) getContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		contract, err := server.db.FindContractByID(params["contractID"])
@@ -89,7 +89,7 @@ func (server *metaServer) getContractHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putContractHandler() http.HandlerFunc {
+func (server *MetaServer) putContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -120,7 +120,7 @@ func (server *metaServer) putContractHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteContractHandler() http.HandlerFunc {
+func (server *MetaServer) deleteContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		err := server.db.DeleteContract(params["contractID"])

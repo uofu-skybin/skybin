@@ -9,7 +9,7 @@ import (
 )
 
 // Retrieves the given renter's public RSA key.
-func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
+func (server *MetaServer) getRenterPublicKey(renterID string) (string, error) {
 	renter, err := server.db.FindRenterByID(renterID)
 	if err != nil {
 		return "", err
@@ -21,7 +21,7 @@ type postRenterResp struct {
 	Renter core.RenterInfo `json:"provider,omitempty"`
 }
 
-func (server *metaServer) postRenterHandler() http.HandlerFunc {
+func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var renter core.RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
@@ -67,7 +67,7 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getRenterHandler() http.HandlerFunc {
+func (server *MetaServer) getRenterHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
@@ -82,7 +82,7 @@ func (server *metaServer) getRenterHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putRenterHandler() http.HandlerFunc {
+func (server *MetaServer) putRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Make sure renter exists.
@@ -137,7 +137,7 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteRenterHandler() http.HandlerFunc {
+func (server *MetaServer) deleteRenterHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)

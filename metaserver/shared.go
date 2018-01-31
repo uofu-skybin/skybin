@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func (server *metaServer) getSharedFilesHandler() http.HandlerFunc {
+func (server *MetaServer) getSharedFilesHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Make sure the specified renter actually exists.
@@ -31,7 +31,7 @@ func (server *metaServer) getSharedFilesHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteSharedFileHandler() http.HandlerFunc {
+func (server *MetaServer) deleteSharedFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Remove the file from the renter's directory.

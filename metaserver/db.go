@@ -6,6 +6,8 @@ import (
 
 // Interface containing operations that must be implemented for every database backend.
 type metaDB interface {
+	CloseDB()
+
 	// Renter Operations
 	//==================
 

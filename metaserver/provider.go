@@ -9,7 +9,7 @@ import (
 )
 
 // Retrieves the given provider's public RSA key.
-func (server *metaServer) getProviderPublicKey(providerID string) (string, error) {
+func (server *MetaServer) getProviderPublicKey(providerID string) (string, error) {
 	provider, err := server.db.FindProviderByID(providerID)
 	if err != nil {
 		return "", err
@@ -21,7 +21,7 @@ type getProvidersResp struct {
 	Providers []core.ProviderInfo `json:"providers"`
 }
 
-func (server *metaServer) getProvidersHandler() http.HandlerFunc {
+func (server *MetaServer) getProvidersHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providers, err := server.db.FindAllProviders()
 		if err != nil {
@@ -42,7 +42,7 @@ type postProviderResp struct {
 	Error    string            `json:"error,omitempty"`
 }
 
-func (server *metaServer) postProviderHandler() http.HandlerFunc {
+func (server *MetaServer) postProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var provider core.ProviderInfo
 		err := json.NewDecoder(r.Body).Decode(&provider)
@@ -84,7 +84,7 @@ func (server *metaServer) postProviderHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getProviderHandler() http.HandlerFunc {
+func (server *MetaServer) getProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		provider, err := server.db.FindProviderByID(params["id"])
@@ -98,7 +98,7 @@ func (server *metaServer) getProviderHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putProviderHandler() http.HandlerFunc {
+func (server *MetaServer) putProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Make sure provider exists.
@@ -146,7 +146,7 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteProviderHandler() http.HandlerFunc {
+func (server *MetaServer) deleteProviderHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)

@@ -14,7 +14,7 @@ type fileResp struct {
 	Error  string    `json:"error,omitempty"`
 }
 
-func (server *metaServer) getFilesHandler() http.HandlerFunc {
+func (server *MetaServer) getFilesHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// Make sure the specified renter actually exists.
@@ -38,7 +38,7 @@ func (server *metaServer) getFilesHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) postFileHandler() http.HandlerFunc {
+func (server *MetaServer) postFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var file core.File
 		err := json.NewDecoder(r.Body).Decode(&file)
@@ -87,7 +87,7 @@ func (server *metaServer) postFileHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getFileHandler() http.HandlerFunc {
+func (server *MetaServer) getFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -103,7 +103,7 @@ func (server *metaServer) getFileHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteFileHandler() http.HandlerFunc {
+func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		// BUG(kincaid): Make sure the renter owns the file they are deleting.
@@ -149,7 +149,7 @@ func (server *metaServer) deleteFileHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putFileHandler() http.HandlerFunc {
+func (server *MetaServer) putFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -185,7 +185,7 @@ func (server *metaServer) putFileHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getFileVersionHandler() http.HandlerFunc {
+func (server *MetaServer) getFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -215,7 +215,7 @@ func (server *metaServer) getFileVersionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getFileVersionsHandler() http.HandlerFunc {
+func (server *MetaServer) getFileVersionsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -230,7 +230,7 @@ func (server *metaServer) getFileVersionsHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteFileVersionHandler() http.HandlerFunc {
+func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -273,7 +273,7 @@ func (server *metaServer) deleteFileVersionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
+func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -311,7 +311,7 @@ func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
+func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		version, err := strconv.Atoi(params["version"])
@@ -367,7 +367,7 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getFilePermissionsHandler() http.HandlerFunc {
+func (server *MetaServer) getFilePermissionsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -382,7 +382,7 @@ func (server *metaServer) getFilePermissionsHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) getFilePermissionHandler() http.HandlerFunc {
+func (server *MetaServer) getFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
@@ -406,7 +406,7 @@ func (server *metaServer) getFilePermissionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
+func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -472,7 +472,7 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
+func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -521,7 +521,7 @@ func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
 	})
 }
 
-func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
+func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)

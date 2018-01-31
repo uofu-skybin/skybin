@@ -56,7 +56,7 @@ func (server *metaServer) deleteSharedFileHandler() http.HandlerFunc {
 			return
 		}
 		renter.Shared = append(renter.Shared[:removeIndex], renter.Shared[removeIndex+1:]...)
-		err = server.db.UpdateRenter(*renter)
+		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)

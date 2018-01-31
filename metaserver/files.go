@@ -64,7 +64,7 @@ func (server *metaServer) postFileHandler() http.HandlerFunc {
 		file.OwnerID = params["renterID"]
 
 		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
-		err = server.db.InsertFile(file)
+		err = server.db.InsertFile(&file)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := fileResp{Error: err.Error()}
@@ -75,7 +75,7 @@ func (server *metaServer) postFileHandler() http.HandlerFunc {
 		// Insert the file's ID into the renter's directory.
 		renter.Files = append(renter.Files, file.ID)
 		// BUG(kincaid): Consider trying to roll things back if this fails.
-		err = server.db.UpdateRenter(*renter)
+		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			resp := fileResp{Error: err.Error()}
@@ -137,7 +137,7 @@ func (server *metaServer) deleteFileHandler() http.HandlerFunc {
 			return
 		}
 		renter.Files = append(renter.Files[:removeIndex], renter.Files[removeIndex+1:]...)
-		err = server.db.UpdateRenter(*renter)
+		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -174,7 +174,7 @@ func (server *metaServer) putFileHandler() http.HandlerFunc {
 			return
 		}
 
-		err = server.db.UpdateFile(file)
+		err = server.db.UpdateFile(&file)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := fileResp{Error: err.Error()}
@@ -262,7 +262,7 @@ func (server *metaServer) deleteFileVersionHandler() http.HandlerFunc {
 			return
 		}
 		file.Versions = append(file.Versions[:removeIndex], file.Versions[removeIndex+1:]...)
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -298,7 +298,7 @@ func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
 		version.Number = len(file.Versions) + 1
 		file.Versions = append(file.Versions, version)
 
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -354,7 +354,7 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 
 		file.Versions[updateIndex] = newVersion
 
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -448,7 +448,7 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 
 		// Add the permission to the file's ACL
 		file.AccessList = append(file.AccessList, permission)
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -459,7 +459,7 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 
 		// Add the file's ID to the renter's directory
 		renter.Shared = append(renter.Shared, file.ID)
-		err = server.db.UpdateRenter(*renter)
+		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -508,7 +508,7 @@ func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
 
 		file.AccessList[updateIndex] = newPermission
 
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
@@ -548,7 +548,7 @@ func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
 			return
 		}
 		file.AccessList = append(file.AccessList[:removeIndex], file.AccessList[removeIndex+1:]...)
-		err = server.db.UpdateFile(*file)
+		err = server.db.UpdateFile(file)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			resp := fileResp{Error: err.Error()}
@@ -580,7 +580,7 @@ func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		}
 		renter.Shared = append(renter.Shared[:removeIndex], renter.Shared[removeIndex+1:]...)
 
-		err = server.db.UpdateRenter(*renter)
+		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)

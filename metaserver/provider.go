@@ -71,7 +71,7 @@ func (server *metaServer) postProviderHandler() http.HandlerFunc {
 		}
 
 		provider.ID = fingerprintKey(provider.PublicKey)
-		err = server.db.InsertProvider(provider)
+		err = server.db.InsertProvider(&provider)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := postProviderResp{Error: err.Error()}
@@ -132,7 +132,7 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 			return
 		}
 		// Put the new provider into the database.
-		err = server.db.UpdateProvider(updatedProvider)
+		err = server.db.UpdateProvider(&updatedProvider)
 		if err != nil {
 			server.logger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)

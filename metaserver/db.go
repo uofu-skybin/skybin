@@ -14,9 +14,9 @@ type metaDB interface {
 	// Return the renter with the specified ID.
 	FindRenterByID(renterID string) (*core.RenterInfo, error)
 	// Insert the provided renter into the database.
-	InsertRenter(renter core.RenterInfo) error
+	InsertRenter(renter *core.RenterInfo) error
 	// Update the provided renter in the databse.
-	UpdateRenter(renter core.RenterInfo) error
+	UpdateRenter(renter *core.RenterInfo) error
 	// Delete the specified renter from the database.
 	DeleteRenter(renterID string) error
 
@@ -28,9 +28,9 @@ type metaDB interface {
 	// Return the provider with the specified ID.
 	FindProviderByID(providerID string) (*core.ProviderInfo, error)
 	// Insert the given provider into the database.
-	InsertProvider(provider core.ProviderInfo) error
+	InsertProvider(provider *core.ProviderInfo) error
 	// Update the given provider in the databse.
-	UpdateProvider(provider core.ProviderInfo) error
+	UpdateProvider(provider *core.ProviderInfo) error
 	// Delete the specified provider from the dtabase.
 	DeleteProvider(providerID string) error
 
@@ -48,9 +48,9 @@ type metaDB interface {
 	// Return a list of files that the renter owns.
 	FindFilesByOwner(renterID string) ([]core.File, error)
 	// Insert the given file into the database.
-	InsertFile(file core.File) error
+	InsertFile(file *core.File) error
 	// Update the given file in the database.
-	UpdateFile(file core.File) error
+	UpdateFile(file *core.File) error
 	// Delete all versions of the given file from the database.
 	DeleteFile(fileID string) error
 
@@ -64,9 +64,9 @@ type metaDB interface {
 	// Return a list of contracts belonging to the specified renter.
 	FindContractsByRenter(renterID string) ([]core.Contract, error)
 	// Insert the given contract into the database.
-	InsertContract(contract core.Contract) error
+	InsertContract(contract *core.Contract) error
 	// Update the given contract.
-	UpdateContract(contract core.Contract) error
+	UpdateContract(contract *core.Contract) error
 	// Delete the contract.
 	DeleteContract(contractID string) error
 }

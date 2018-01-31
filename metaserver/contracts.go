@@ -62,7 +62,7 @@ func (server *metaServer) postContractHandler() http.HandlerFunc {
 		// BUG(kincaid): Make sure the contract's renter ID is set to that of the renter.
 
 		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
-		err = server.db.InsertContract(contract)
+		err = server.db.InsertContract(&contract)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := contractResp{Error: err.Error()}
@@ -109,7 +109,7 @@ func (server *metaServer) putContractHandler() http.HandlerFunc {
 			return
 		}
 
-		err = server.db.UpdateContract(contract)
+		err = server.db.UpdateContract(&contract)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := contractResp{Error: err.Error()}

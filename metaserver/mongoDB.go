@@ -58,7 +58,7 @@ func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
 }
 
 // Insert the provided renter into the database.
-func (db *mongoDB) InsertRenter(renter core.RenterInfo) error {
+func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
 	c, session, err := getMongoCollection("renters")
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (db *mongoDB) InsertRenter(renter core.RenterInfo) error {
 }
 
 // Update the provided renter in the databse.
-func (db *mongoDB) UpdateRenter(renter core.RenterInfo) error {
+func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
 	c, session, err := getMongoCollection("renters")
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func (db *mongoDB) FindProviderByID(providerID string) (*core.ProviderInfo, erro
 }
 
 // Insert the given provider into the database.
-func (db *mongoDB) InsertProvider(provider core.ProviderInfo) error {
+func (db *mongoDB) InsertProvider(provider *core.ProviderInfo) error {
 	c, session, err := getMongoCollection("providers")
 	if err != nil {
 		return err
@@ -159,7 +159,7 @@ func (db *mongoDB) InsertProvider(provider core.ProviderInfo) error {
 }
 
 // Update the given provider in the databse.
-func (db *mongoDB) UpdateProvider(provider core.ProviderInfo) error {
+func (db *mongoDB) UpdateProvider(provider *core.ProviderInfo) error {
 	c, session, err := getMongoCollection("providers")
 	if err != nil {
 		return err
@@ -318,7 +318,7 @@ func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 }
 
 // Insert the given file into the database.
-func (db *mongoDB) InsertFile(file core.File) error {
+func (db *mongoDB) InsertFile(file *core.File) error {
 	c, session, err := getMongoCollection("files")
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func (db *mongoDB) InsertFile(file core.File) error {
 }
 
 // Update the given file in the database.
-func (db *mongoDB) UpdateFile(file core.File) error {
+func (db *mongoDB) UpdateFile(file *core.File) error {
 	c, session, err := getMongoCollection("files")
 	if err != nil {
 		return err
@@ -421,7 +421,7 @@ func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, erro
 }
 
 // Insert the given contract into the database.
-func (db *mongoDB) InsertContract(contract core.Contract) error {
+func (db *mongoDB) InsertContract(contract *core.Contract) error {
 	c, session, err := getMongoCollection("contracts")
 	if err != nil {
 		return err
@@ -437,7 +437,7 @@ func (db *mongoDB) InsertContract(contract core.Contract) error {
 }
 
 // Update the given contract.
-func (db *mongoDB) UpdateContract(contract core.Contract) error {
+func (db *mongoDB) UpdateContract(contract *core.Contract) error {
 	c, session, err := getMongoCollection("contracts")
 	if err != nil {
 		return err

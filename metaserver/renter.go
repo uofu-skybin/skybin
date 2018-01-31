@@ -56,7 +56,7 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 
 		renter.ID = fingerprintKey(renter.PublicKey)
 
-		err = server.db.InsertRenter(renter)
+		err = server.db.InsertRenter(&renter)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := errorResp{Error: err.Error()}
@@ -123,7 +123,7 @@ func (server *metaServer) putRenterHandler() http.HandlerFunc {
 		}
 
 		// Put the new renter into the database.
-		err = server.db.UpdateRenter(updatedRenter)
+		err = server.db.UpdateRenter(&updatedRenter)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)

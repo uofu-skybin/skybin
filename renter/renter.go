@@ -4,7 +4,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,10 +12,13 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
+
+	"github.com/satori/go.uuid"
 )
 
 type Config struct {
 	RenterId       string `json:"renterId"`
+	RenterAlias    string `json"renterAlias"`
 	ApiAddr        string `json:"apiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
@@ -138,7 +140,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
-		Blocks:     []core.Block{},
+		Versions:   []core.Version{},
 	}
 	err = r.saveFile(file)
 	if err != nil {
@@ -170,6 +172,38 @@ func (r *Renter) ShareFile(f *core.File, userId string) error {
 	return nil
 }
 
+func (r *Renter) RemoveVersion(fileId string, version int) error {
+	idx, f := r.findFile(fileId)
+	if f == nil {
+		return fmt.Errorf("Cannot find file with ID %s", fileId)
+	}
+	if f.IsDir && len(r.findChildren(f)) > 0 {
+		return errors.New("Cannot remove non-empty folder")
+	}
+	var v *core.Version
+	for _, item := range f.Versions {
+		if item.Number == version {
+			v = &item
+		}
+	}
+	if v == nil {
+		return errors.New("specified version not present in file")
+	}
+	r.files = append(r.files[:idx], r.files[idx+1:]...)
+	err := r.saveSnapshot()
+	if err != nil {
+		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
+	}
+	for _, block := range v.Blocks {
+		err := r.removeBlock(&block)
+		if err != nil {
+			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
+		}
+
+	}
+	return nil
+}
+
 func (r *Renter) Remove(fileId string) error {
 	idx, f := r.findFile(fileId)
 	if f == nil {
@@ -183,12 +217,14 @@ func (r *Renter) Remove(fileId string) error {
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
-	for _, block := range f.Blocks {
-		err := r.removeBlock(&block)
-		if err != nil {
-			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
-		}
+	for _, v := range f.Versions {
+		for _, block := range v.Blocks {
+			err := r.removeBlock(&block)
+			if err != nil {
+				return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
+			}
 
+		}
 	}
 	return nil
 }

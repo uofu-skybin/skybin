@@ -23,6 +23,7 @@ var renterCmd = Cmd{
 func runRenter(args ...string) {
 	fs := flag.NewFlagSet("renter", flag.ExitOnError)
 	addrFlag := fs.String("addr", "", "address to listen at (host:port)")
+	aliasFlag := fs.String("alias", "", "alias to use when registering with metaserver")
 	fs.Parse(args)
 
 	homedir, err := findHomeDir()
@@ -40,8 +41,12 @@ func runRenter(args ...string) {
 		if err != nil {
 			log.Fatal("Unable to read public key file. Error: ", err)
 		}
+		if len(*aliasFlag) < 1 {
+			log.Fatal("must supply alias if not registered")
+		}
 		info := core.RenterInfo{
 			ID:        r.Config.RenterId,
+			Alias:     *aliasFlag,
 			PublicKey: string(pubKeyBytes),
 		}
 		metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
@@ -50,6 +55,7 @@ func runRenter(args ...string) {
 			log.Fatal("Unable to register with metaserver. Error: ", err)
 		}
 		r.Config.IsRegistered = true
+		r.Config.RenterAlias = *aliasFlag
 		err = util.SaveJson(path.Join(homedir, "renter", "config.json"), r.Config)
 		if err != nil {
 			log.Fatal("Unable to update config file. Error: ", err)

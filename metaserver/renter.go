@@ -2,7 +2,6 @@ package metaserver
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"skybin/core"
 
@@ -10,36 +9,39 @@ import (
 )
 
 // Retrieves the given renter's public RSA key.
-func (server *metaServer) getRenterPublicKey(renterID string) (string, error) {
-	for _, item := range server.renters {
-		if item.ID == renterID {
-			return item.PublicKey, nil
-		}
+func (server *MetaServer) getRenterPublicKey(renterID string) (string, error) {
+	renter, err := server.db.FindRenterByID(renterID)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.New("could not locate renter with given ID")
+	return renter.PublicKey, nil
 }
 
 type postRenterResp struct {
 	Renter core.RenterInfo `json:"provider,omitempty"`
-	Error  string          `json:"error,omitempty"`
 }
 
-func (server *metaServer) postRenterHandler() http.HandlerFunc {
+func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var renter core.RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
 
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "unable to parse payload"}
+			resp := errorResp{Error: "unable to parse payload"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		// Make sure the user supplied a public key for the provider.
+		// Make sure the user supplied a public key and alias for the renter.
 		if renter.PublicKey == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := postRenterResp{Error: "must specify RSA public key"}
+			resp := errorResp{Error: "must specify RSA public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if renter.Alias == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := errorResp{Error: "must specify alias"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -47,94 +49,105 @@ func (server *metaServer) postRenterHandler() http.HandlerFunc {
 		_, err = parsePublicKey(renter.PublicKey)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			resp := postRenterResp{Error: "invalid RSA public key"}
+			resp := errorResp{Error: "invalid RSA public key"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
 		renter.ID = fingerprintKey(renter.PublicKey)
 
-		server.renters = append(server.renters, renter)
+		err = server.db.InsertRenter(&renter)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := errorResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+		}
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(renter)
-		server.dumpDbToFile(server.providers, server.renters)
 	})
 }
 
-func (server *metaServer) getRenterHandler() http.HandlerFunc {
+func (server *MetaServer) getRenterHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				json.NewEncoder(w).Encode(item)
-				return
-			}
+		renter, err := server.db.FindRenterByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find renter"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(renter)
 	})
 }
 
-func (server *metaServer) getRenterFilesHandler() http.HandlerFunc {
+func (server *MetaServer) putRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				json.NewEncoder(w).Encode(item.Files)
-				return
-			}
+		// Make sure renter exists.
+		renter, err := server.db.FindRenterByID(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find renter"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+		// Attempt to decode the supplied renter.
+		var updatedRenter core.RenterInfo
+		err = json.NewDecoder(r.Body).Decode(&updatedRenter)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			resp := errorResp{Error: err.Error()}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// Make sure the user has not changed the renter's ID or alias.
+		// BUG(kincaid): Think about other fields users shouldn't change.
+		// BUG(kincaid): Should the user be able to change their alias?
+		if updatedRenter.ID != renter.ID {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := errorResp{Error: "must not change renter ID"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if updatedRenter.Alias != renter.Alias {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := errorResp{Error: "must not change renter alias"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		} else if updatedRenter.PublicKey != renter.PublicKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := errorResp{Error: "must not change renter public key"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Put the new renter into the database.
+		err = server.db.UpdateRenter(&updatedRenter)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		resp := postRenterResp{Renter: updatedRenter}
+		json.NewEncoder(w).Encode(resp)
 	})
 }
 
-func (server *metaServer) postRenterFileHandler() http.HandlerFunc {
+func (server *MetaServer) deleteRenterHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		for i, item := range server.renters {
-			if item.ID == params["id"] {
-				var file core.File
-				_ = json.NewDecoder(r.Body).Decode(&file)
-				server.renters[i].Files = append(item.Files, file)
-				json.NewEncoder(w).Encode(item.Files)
-				server.dumpDbToFile(server.providers, server.renters)
-				return
-			}
+		err := server.db.DeleteRenter(params["id"])
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find renter"}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) getRenterFileHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				for _, file := range item.Files {
-					if file.ID == params["fileId"] {
-						json.NewEncoder(w).Encode(file)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-}
-
-func (server *metaServer) deleteRenterFileHandler() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		params := mux.Vars(r)
-		for _, item := range server.renters {
-			if item.ID == params["id"] {
-				for i, file := range item.Files {
-					if file.ID == params["fileId"] {
-						item.Files = append(item.Files[:i], item.Files[i+1:]...)
-						json.NewEncoder(w).Encode(file)
-						server.dumpDbToFile(server.providers, server.renters)
-						return
-					}
-				}
-			}
-		}
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusOK)
 	})
 }

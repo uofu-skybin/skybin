@@ -207,7 +207,7 @@ def create_metaserver():
     check_service_startup(process)
     return Service(process=process, address=address)
 
-def create_renter(metaserver_addr, repo_dir):
+def create_renter(metaserver_addr, repo_dir, alias):
     """Create and start a new renter instance."""
 
     # Create repo
@@ -225,7 +225,7 @@ def create_renter(metaserver_addr, repo_dir):
     # Start renter server
     env = os.environ.copy()
     env['SKYBIN_HOME'] = homedir
-    args = [SKYBIN_CMD, 'renter']
+    args = [SKYBIN_CMD, 'renter', '-alias', alias]
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
 
     check_service_startup(process)
@@ -259,7 +259,8 @@ def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,
                test_file_dir=DEFAULT_TEST_FILE_DIR,
                log_enabled=LOG_ENABLED,
-               remove_test_files=REMOVE_TEST_FILES):
+               remove_test_files=REMOVE_TEST_FILES,
+               alias='test'):
     """Create a test context.
 
     Args:
@@ -281,7 +282,7 @@ def setup_test(num_providers=1,
         for _ in range(num_providers):
             pvdr = create_provider(ctxt.metaserver.address, repo_dir=repo_dir)
             ctxt.providers.append(pvdr)
-        ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir)
+        ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir, alias=alias)
     except Exception as err:
         ctxt.teardown()
         raise err

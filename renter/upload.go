@@ -117,13 +117,17 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		ID:         fileId,
 		Name:       destPath,
 		IsDir:      false,
-		Size:       finfo.Size(),
-		UploadSize: uploadSize,
-		ModTime:    finfo.ModTime(),
 		AccessList: []core.Permission{},
 		AesKey:     string(aesKeyEncrypted),
 		AesIV:      string(aesIVEncrypted),
-		Blocks:     blocks,
+		Versions: []core.Version{
+			core.Version{
+				Size:       finfo.Size(),
+				UploadSize: uploadSize,
+				Blocks:     blocks,
+				ModTime:    finfo.ModTime(),
+			},
+		},
 	}
 	err = r.saveFile(file)
 	if err != nil {

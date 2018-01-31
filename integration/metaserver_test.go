@@ -1,19 +1,48 @@
 package metaserver
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"skybin/core"
+	"skybin/metaserver"
 	"testing"
 	"time"
 
 	"github.com/go-test/deep"
 )
 
-func registerRenter(client *Client, alias string) (*core.RenterInfo, error) {
+func fingerprintKey(key string) string {
+	shaSum := sha256.Sum256([]byte(key))
+	fingerprint := hex.EncodeToString(shaSum[:])
+	return fingerprint
+}
+
+func getPublicKeyString(key *rsa.PublicKey) string {
+	keyBytes, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		panic(err)
+	}
+	keyBlock := &pem.Block{
+		Type:  "RSA PUBLIC KEY",
+		Bytes: keyBytes,
+	}
+	buf := bytes.NewBuffer(make([]byte, 0))
+	err = pem.Encode(buf, keyBlock)
+	if err != nil {
+		panic("could not encode PEM block")
+	}
+	return buf.String()
+}
+
+func registerRenter(client *metaserver.Client, alias string) (*core.RenterInfo, error) {
 	// Generate an RSA key for registration.
 	reader := rand.Reader
 	rsaKey, err := rsa.GenerateKey(reader, 2048)
@@ -46,7 +75,7 @@ func registerRenter(client *Client, alias string) (*core.RenterInfo, error) {
 	return &renter, nil
 }
 
-func registerProvider(client *Client) (*core.ProviderInfo, error) {
+func registerProvider(client *metaserver.Client) (*core.ProviderInfo, error) {
 	// Generate an RSA key for registration.
 	reader := rand.Reader
 	rsaKey, err := rsa.GenerateKey(reader, 2048)
@@ -82,7 +111,7 @@ func registerProvider(client *Client) (*core.ProviderInfo, error) {
 func TestRegisterRenter(t *testing.T) {
 	// Create a client for testing.
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter.
 	renter, err := registerRenter(client, "renterRegisterTest")
@@ -111,7 +140,7 @@ func TestRegisterRenter(t *testing.T) {
 // Update renter
 func TestUpdateRenter(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter.
 	renter, err := registerRenter(client, "renterUpdateTest")
@@ -162,7 +191,7 @@ func TestUpdateRenter(t *testing.T) {
 // Delete renter
 func TestDeleteRenter(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter.
 	renter, err := registerRenter(client, "renterDeleteTest")
@@ -186,7 +215,7 @@ func TestDeleteRenter(t *testing.T) {
 // POST contract
 func TestPostContract(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "contractUploadTest")
@@ -216,7 +245,7 @@ func TestPostContract(t *testing.T) {
 // Get contracts
 func TestGetContracts(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "contractGetTest")
@@ -264,7 +293,7 @@ func TestGetContracts(t *testing.T) {
 // Delete contract
 func TestDeleteContract(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter.
 	renter, err := registerRenter(client, "contractDeleteTest")
@@ -297,7 +326,7 @@ func TestDeleteContract(t *testing.T) {
 // Register provider
 func TestRegisterProvider(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	provider, err := registerProvider(client)
 	if err != nil {
@@ -317,7 +346,7 @@ func TestRegisterProvider(t *testing.T) {
 // Update provider
 func TestUpdateProvider(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	provider, err := registerProvider(client)
 	if err != nil {
@@ -358,7 +387,7 @@ func TestUpdateProvider(t *testing.T) {
 // Delete provider
 func TestDeleteProvider(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a provider.
 	provider, err := registerProvider(client)
@@ -379,7 +408,7 @@ func TestDeleteProvider(t *testing.T) {
 	}
 }
 
-func uploadFile(client *Client, renterID string, ID string, name string) (*core.File, error) {
+func uploadFile(client *metaserver.Client, renterID string, ID string, name string) (*core.File, error) {
 	// Attempt to upload a file.
 	file := core.File{
 		ID:         ID,
@@ -398,7 +427,7 @@ func uploadFile(client *Client, renterID string, ID string, name string) (*core.
 // POST file
 func TestUploadFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileUploadTest")
@@ -443,7 +472,7 @@ func TestUploadFile(t *testing.T) {
 // Update file
 func TestUpdateFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileUpdateTest")
@@ -503,7 +532,7 @@ func TestUpdateFile(t *testing.T) {
 // Get renter's files
 func TestGetFiles(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "filesGetTest")
@@ -548,7 +577,7 @@ func TestGetFiles(t *testing.T) {
 // Delete file
 func TestDeleteFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter.
 	renter, err := registerRenter(client, "fileDeleteTest")
@@ -578,7 +607,7 @@ func TestDeleteFile(t *testing.T) {
 // Post new version of file
 func TestUploadNewFileVersion(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileUploadVersionTest")
@@ -620,7 +649,7 @@ func TestUploadNewFileVersion(t *testing.T) {
 // Get all versions of file
 func TestGetFileVersions(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileVersionsGetTest")
@@ -676,7 +705,7 @@ func TestGetFileVersions(t *testing.T) {
 // Delete version of file
 func TestDeleteFileVersion(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileDeleteVersionTest")
@@ -719,7 +748,7 @@ func TestDeleteFileVersion(t *testing.T) {
 // Update file version
 func TestUpdateFileVersion(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	renter, err := registerRenter(client, "fileUpdateVersionTest")
@@ -768,7 +797,7 @@ func TestUpdateFileVersion(t *testing.T) {
 // Share file
 func TestShareFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	sharer, err := registerRenter(client, "fileShareSharerTest")
@@ -823,7 +852,7 @@ func TestShareFile(t *testing.T) {
 // Get shared files
 func TestGetSharedFiles(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	sharer, err := registerRenter(client, "fileGetSharedFilesSharerTest")
@@ -873,7 +902,7 @@ func TestGetSharedFiles(t *testing.T) {
 // Unshare file
 func TestUnshareFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	sharer, err := registerRenter(client, "fileUnshareSharerTest")
@@ -932,7 +961,7 @@ func TestUnshareFile(t *testing.T) {
 // Remove shared file
 func TestRemoveSharedFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := NewClient(core.DefaultMetaAddr, &httpClient)
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
 	sharer, err := registerRenter(client, "fileRemoveSharedSharerTest")

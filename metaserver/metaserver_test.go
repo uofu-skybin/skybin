@@ -198,7 +198,7 @@ func TestPostContract(t *testing.T) {
 		ID:       "contractUploadTest",
 		RenterId: renter.ID,
 	}
-	err = client.PostContract(renter.ID, contract)
+	err = client.PostContract(renter.ID, &contract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestGetContracts(t *testing.T) {
 			ID:       contractName,
 			RenterId: renter.ID,
 		}
-		err = client.PostContract(renter.ID, contract)
+		err = client.PostContract(renter.ID, &contract)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -276,7 +276,7 @@ func TestDeleteContract(t *testing.T) {
 		ID:       "contractDeleteTest",
 		RenterId: renter.ID,
 	}
-	err = client.PostContract(renter.ID, contract)
+	err = client.PostContract(renter.ID, &contract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func uploadFile(client *Client, renterID string, ID string, name string) (*core.
 		AccessList: make([]core.Permission, 0),
 		Versions:   make([]core.Version, 0),
 	}
-	err := client.PostFile(renterID, file)
+	err := client.PostFile(renterID, &file)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +459,7 @@ func TestUpdateFile(t *testing.T) {
 
 	// Update the file.
 	file.Name = "newName"
-	err = client.UpdateFile(renter.ID, *file)
+	err = client.UpdateFile(renter.ID, file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +494,7 @@ func TestUpdateFile(t *testing.T) {
 
 	// Make sure users can't update file's owner ID
 	file.OwnerID = "somebodyElseShouldPay"
-	err = client.UpdateFile(renter.ID, *file)
+	err = client.UpdateFile(renter.ID, file)
 	if err == nil {
 		t.Fatal("user allowed to update owner ID")
 	}
@@ -599,7 +599,7 @@ func TestUploadNewFileVersion(t *testing.T) {
 		ModTime: time.Time{},
 	}
 
-	err = client.PostFileVersion(renter.ID, file.ID, version)
+	err = client.PostFileVersion(renter.ID, file.ID, &version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +642,7 @@ func TestGetFileVersions(t *testing.T) {
 			Size:    1000,
 			ModTime: time.Time{},
 		}
-		err = client.PostFileVersion(renter.ID, file.ID, version)
+		err = client.PostFileVersion(renter.ID, file.ID, &version)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -697,7 +697,7 @@ func TestDeleteFileVersion(t *testing.T) {
 		ModTime: time.Time{},
 	}
 
-	err = client.PostFileVersion(renter.ID, file.ID, version)
+	err = client.PostFileVersion(renter.ID, file.ID, &version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -740,7 +740,7 @@ func TestUpdateFileVersion(t *testing.T) {
 		ModTime: time.Time{},
 	}
 
-	err = client.PostFileVersion(renter.ID, file.ID, version)
+	err = client.PostFileVersion(renter.ID, file.ID, &version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -749,7 +749,7 @@ func TestUpdateFileVersion(t *testing.T) {
 	version.Number = 1
 	version.Size = 2000
 
-	err = client.PutFileVersion(renter.ID, file.ID, version)
+	err = client.PutFileVersion(renter.ID, file.ID, &version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,7 +791,7 @@ func TestShareFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, permission)
+	err = client.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -846,7 +846,7 @@ func TestGetSharedFiles(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, permission)
+	err = client.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -896,7 +896,7 @@ func TestUnshareFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, permission)
+	err = client.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -955,7 +955,7 @@ func TestRemoveSharedFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, permission)
+	err = client.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}

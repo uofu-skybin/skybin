@@ -258,7 +258,7 @@ func (client *Client) DeleteRenter(renterID string) error {
 	return nil
 }
 
-func (client *Client) PostFile(renterID string, file core.File) error {
+func (client *Client) PostFile(renterID string, file *core.File) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
@@ -290,7 +290,7 @@ func (client *Client) PostFile(renterID string, file core.File) error {
 	return nil
 }
 
-func (client *Client) UpdateFile(renterID string, file core.File) error {
+func (client *Client) UpdateFile(renterID string, file *core.File) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
@@ -412,7 +412,7 @@ func (client *Client) DeleteFile(renterID string, fileID string) error {
 	return nil
 }
 
-func (client *Client) PostFileVersion(renterID string, fileID string, version core.Version) error {
+func (client *Client) PostFileVersion(renterID string, fileID string, version *core.Version) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
@@ -444,7 +444,7 @@ func (client *Client) PostFileVersion(renterID string, fileID string, version co
 	return nil
 }
 
-func (client *Client) PutFileVersion(renterID string, fileID string, version core.Version) error {
+func (client *Client) PutFileVersion(renterID string, fileID string, version *core.Version) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
@@ -600,7 +600,7 @@ func (client *Client) GetSharedFile(renterID string, fileID string) (*core.File,
 	return &file, nil
 }
 
-func (client *Client) ShareFile(renterID string, fileID string, permission core.Permission) error {
+func (client *Client) ShareFile(renterID string, fileID string, permission *core.Permission) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
@@ -717,7 +717,7 @@ func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
 	return nil
 }
 
-func (client *Client) PostContract(renterID string, contract core.Contract) error {
+func (client *Client) PostContract(renterID string, contract *core.Contract) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}

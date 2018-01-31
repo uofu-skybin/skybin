@@ -33,6 +33,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		authorizer: authorization.NewAuthorizer(logger),
 	}
 
+	// authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
@@ -43,7 +44,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	// router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.signingKey, server.getProviderPublicKey)).Methods("POST")
+	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.PrivateKey, server.getProviderPublicKey)).Methods("POST")
 
 	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
 
@@ -302,15 +303,6 @@ func (server *providerServer) postInfo(w http.ResponseWriter, r *http.Request) {
 		server.writeResp(w, http.StatusBadRequest, &errorResp{"Bad json"})
 	}
 	server.provider.Config = &params
-	// info := getInfoResp{
-	// 	ProviderId:      server.provider.Config.ProviderID,
-	// 	TotalStorage:    1 << 30,
-	// 	ReservedStorage: reserved,
-	// 	UsedStorage:     used,
-	// 	FreeStorage:     free,
-	// 	TotalContracts:  len(server.provider.contracts),
-	// }
-
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 

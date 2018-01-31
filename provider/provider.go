@@ -4,9 +4,11 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"skybin/core"
+	"skybin/metaserver"
 	"skybin/util"
 	"time"
 )
@@ -18,7 +20,8 @@ type Config struct {
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 
-	SpaceAvail int64 `json:"spaceAvail,omitempty"`
+	SpaceAvail  int64 `json:"spaceAvail"`
+	StorageRate int64 `json:"storageRate"`
 	// StorageRates []core.StorageRate `json:"storageRates,omitempty"`
 
 	// Is this provider registered with metaservice?
@@ -28,7 +31,6 @@ type Config struct {
 type Provider struct {
 	Config     *Config
 	Homedir    string
-	PublicKey  *rsa.PublicKey
 	PrivateKey *rsa.PrivateKey
 	contracts  []*core.Contract
 	stats      Stats
@@ -136,9 +138,14 @@ func (provider *Provider) addActivity(activity Activity) {
 
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
 
-	// Verify renters signature
-	// TODO: need to look this up from metaserver
-	// err = core.VerifyContractSignature(contract, contract.RenterSignature, renter_key)
+	// TODO: need to fill out stub method
+	// renterKey, err := provider.getRenterPublicKey(contract.RenterId)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
+	// }
+
+	// // Verify renters signature
+	// err = core.VerifyContractSignature(contract, contract.RenterSignature, *renterKey)
 	// if err != nil {
 	// 	return nil, fmt.Errorf("Invalid Renter signature: %s", err)
 	// }
@@ -190,4 +197,10 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, err
 	}
 	return util.UnmarshalPrivateKey(data)
+}
+
+// TODO: need this endpoint in metadata server
+func (provider *Provider) getRenterPublicKey(id string) (*rsa.PublicKey, error) {
+	metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	return nil, nil
 }

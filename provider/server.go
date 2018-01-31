@@ -166,7 +166,6 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
 	server.provider.renters[renterID] = renter
 
-	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
 	}
@@ -178,7 +177,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		TimeStamp:   time.Now(),
 	}
 	server.provider.addActivity(activity)
-
+	err = server.provider.saveSnapshot()
 	server.writeResp(w, http.StatusCreated, &errorResp{})
 }
 
@@ -245,20 +244,32 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		return
 	}
 	renterID := renterquery[0]
+	renter := server.provider.renters[renterID]
 
 	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
-	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
+	fi, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
 
-	err := os.Remove(path)
+	err = os.Remove(path)
 	if err != nil {
 		msg := fmt.Sprintf("Error deleting block with ID %s", blockID)
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
 		return
 	}
+
+	for i, block := range renter.Blocks {
+		if block.BlockId == blockID {
+			renter.Blocks = append(renter.Blocks[:i], renter.Blocks[i+1:]...)
+			server.provider.stats.StorageUsed -= fi.Size()
+			renter.StorageUsed -= fi.Size()
+		}
+	}
+
+	server.provider.renters[renterID] = renter
 
 	activity := Activity{
 		RequestType: deleteBlockType,
@@ -267,9 +278,8 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		RenterId:    renterID,
 	}
 	server.provider.addActivity(activity)
-
+	err = server.provider.saveSnapshot()
 	server.writeResp(w, http.StatusOK, &errorResp{"Block Deleted"})
-
 }
 
 func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Request) {

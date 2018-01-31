@@ -29,6 +29,8 @@ func (server *metaServer) getContractsHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(contracts)
@@ -79,7 +81,8 @@ func (server *metaServer) getContractHandler() http.HandlerFunc {
 		contract, err := server.db.FindContractByID(params["contractID"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			server.logger.Println(err)
+			resp := errorResp{Error: "could not find contract"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(contract)

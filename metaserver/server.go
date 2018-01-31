@@ -85,6 +85,10 @@ type metaServer struct {
 	signingKey []byte
 }
 
+type errorResp struct {
+	Error string `json:"error"`
+}
+
 // ServeHTTP begins serving requests from the server's router.
 func (server *metaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.Method, r.URL)

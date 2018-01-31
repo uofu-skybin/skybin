@@ -19,7 +19,6 @@ func (server *metaServer) getProviderPublicKey(providerID string) (string, error
 
 type getProvidersResp struct {
 	Providers []core.ProviderInfo `json:"providers"`
-	Error     string              `json:"error,omitempty"`
 }
 
 func (server *metaServer) getProvidersHandler() http.HandlerFunc {
@@ -27,6 +26,8 @@ func (server *metaServer) getProvidersHandler() http.HandlerFunc {
 		providers, err := server.db.FindAllProviders()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		resp := getProvidersResp{
@@ -89,6 +90,8 @@ func (server *metaServer) getProviderHandler() http.HandlerFunc {
 		provider, err := server.db.FindProviderByID(params["id"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find provider"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(provider)
@@ -102,6 +105,8 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 		provider, err := server.db.FindProviderByID(params["id"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find provider"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		// Attempt to decode the supplied provider.
@@ -129,7 +134,10 @@ func (server *metaServer) putProviderHandler() http.HandlerFunc {
 		// Put the new provider into the database.
 		err = server.db.UpdateProvider(updatedProvider)
 		if err != nil {
+			server.logger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -145,7 +153,8 @@ func (server *metaServer) deleteProviderHandler() http.HandlerFunc {
 		err := server.db.DeleteProvider(params["id"])
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			server.logger.Println(err)
+			resp := errorResp{Error: "provider not found"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

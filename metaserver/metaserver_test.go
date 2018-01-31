@@ -309,7 +309,7 @@ func TestRegisterProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := deep.Equal(*provider, returned); diff != nil {
+	if diff := deep.Equal(provider, returned); diff != nil {
 		t.Fatal(diff)
 	}
 }
@@ -335,7 +335,7 @@ func TestUpdateProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := deep.Equal(*provider, updatedProvider); diff != nil {
+	if diff := deep.Equal(provider, updatedProvider); diff != nil {
 		t.Fatal(diff)
 	}
 

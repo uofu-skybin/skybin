@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"skybin/authorization"
 	"skybin/core"
@@ -22,6 +23,15 @@ type Client struct {
 	addr   string
 	client *http.Client
 	token  string
+}
+
+func decodeError(r io.Reader) error {
+	var respMsg errorResp
+	err := json.NewDecoder(r).Decode(&respMsg)
+	if err != nil {
+		return err
+	}
+	return errors.New(respMsg.Error)
 }
 
 func (client *Client) AuthorizeRenter(privateKey *rsa.PrivateKey, renterID string) error {
@@ -55,12 +65,7 @@ func (client *Client) RegisterProvider(info *core.ProviderInfo) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusCreated {
-		var respMsg postProviderResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 	return nil
 }
@@ -73,36 +78,38 @@ func (client *Client) GetProviders() ([]core.ProviderInfo, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
 	var respMsg getProvidersResp
 	err = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(respMsg.Error)
-	}
 
 	return respMsg.Providers, nil
 }
 
-func (client *Client) GetProvider(providerID string) (core.ProviderInfo, error) {
+func (client *Client) GetProvider(providerID string) (*core.ProviderInfo, error) {
 	url := fmt.Sprintf("http://%s/providers/%s", client.addr, providerID)
 
 	resp, err := client.client.Get(url)
 	if err != nil {
-		return core.ProviderInfo{}, err
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
 	}
 
 	var respMsg core.ProviderInfo
 	err = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if err != nil {
-		return core.ProviderInfo{}, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return core.ProviderInfo{}, errors.New("bad status from server")
+		return nil, err
 	}
 
-	return respMsg, nil
+	return &respMsg, nil
 }
 
 func (client *Client) UpdateProvider(provider *core.ProviderInfo) error {
@@ -127,12 +134,7 @@ func (client *Client) UpdateProvider(provider *core.ProviderInfo) error {
 
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
-		var respMsg postProviderResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -155,13 +157,7 @@ func (client *Client) DeleteProvider(providerID string) error {
 
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
-		println(resp.Status)
-		var respMsg postProviderResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -178,12 +174,7 @@ func (client *Client) RegisterRenter(info *core.RenterInfo) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusCreated {
-		var respMsg postRenterResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 	return nil
 }
@@ -205,12 +196,7 @@ func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
-		var respMsg postRenterResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return nil, err
-		}
-		return nil, errors.New(respMsg.Error)
+		return nil, decodeError(resp.Body)
 	}
 
 	var renter core.RenterInfo
@@ -243,12 +229,7 @@ func (client *Client) UpdateRenter(renter *core.RenterInfo) error {
 
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
-		var respMsg postRenterResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -271,12 +252,7 @@ func (client *Client) DeleteRenter(renterID string) error {
 
 	resp, err := client.client.Do(req)
 	if resp.StatusCode != http.StatusOK {
-		var respMsg postRenterResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return err
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -308,7 +284,7 @@ func (client *Client) PostFile(renterID string, file core.File) error {
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -340,12 +316,7 @@ func (client *Client) UpdateFile(renterID string, file core.File) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var respMsg fileResp
-		err = json.NewDecoder(resp.Body).Decode(&respMsg)
-		if err != nil {
-			return errors.New(resp.Status)
-		}
-		return errors.New(respMsg.Error)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -371,16 +342,13 @@ func (client *Client) GetFile(renterID string, fileID string) (*core.File, error
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var file core.File
 	err = json.NewDecoder(resp.Body).Decode(&file)
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
 	}
 
 	return &file, nil
@@ -406,7 +374,7 @@ func (client *Client) GetFiles(renterID string) ([]core.File, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var files []core.File
@@ -438,11 +406,7 @@ func (client *Client) DeleteFile(renterID string, fileID string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Bad response from server")
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -474,7 +438,7 @@ func (client *Client) PostFileVersion(renterID string, fileID string, version co
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -506,7 +470,7 @@ func (client *Client) PutFileVersion(renterID string, fileID string, version cor
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -532,7 +496,7 @@ func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var version core.Version
@@ -562,6 +526,10 @@ func (client *Client) GetFileVersions(renterID string, fileID string) ([]core.Ve
 	resp, err := client.client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
 	}
 
 	var versions []core.Version
@@ -594,7 +562,7 @@ func (client *Client) DeleteFileVersion(renterID string, fileID string, fileVers
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -620,16 +588,13 @@ func (client *Client) GetSharedFile(renterID string, fileID string) (*core.File,
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var file core.File
 	err = json.NewDecoder(resp.Body).Decode(&file)
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
 	}
 
 	return &file, nil
@@ -661,7 +626,7 @@ func (client *Client) ShareFile(renterID string, fileID string, permission core.
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -688,7 +653,7 @@ func (client *Client) UnshareFile(renterID string, fileID string, userID string)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -714,7 +679,7 @@ func (client *Client) GetSharedFiles(renterID string) ([]core.File, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var files []core.File
@@ -746,11 +711,7 @@ func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Bad response from server")
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -782,7 +743,7 @@ func (client *Client) PostContract(renterID string, contract core.Contract) erro
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return errors.New(resp.Status)
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -808,16 +769,13 @@ func (client *Client) GetContract(renterID string, contractID string) (*core.Con
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var contract core.Contract
 	err = json.NewDecoder(resp.Body).Decode(&contract)
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
 	}
 
 	return &contract, nil
@@ -843,16 +801,13 @@ func (client *Client) GetRenterContracts(renterID string) ([]core.Contract, erro
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
+		return nil, decodeError(resp.Body)
 	}
 
 	var contracts []core.Contract
 	err = json.NewDecoder(resp.Body).Decode(&contracts)
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status)
 	}
 
 	return contracts, nil
@@ -878,11 +833,7 @@ func (client *Client) DeleteContract(renterID string, contractID string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Bad response from server")
+		return decodeError(resp.Body)
 	}
 
 	return nil

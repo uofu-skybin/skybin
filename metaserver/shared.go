@@ -23,6 +23,8 @@ func (server *metaServer) getSharedFilesHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(files)
@@ -35,8 +37,9 @@ func (server *metaServer) deleteSharedFileHandler() http.HandlerFunc {
 		// Remove the file from the renter's directory.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
-			server.logger.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "could not find renter"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		removeIndex := -1
@@ -48,6 +51,8 @@ func (server *metaServer) deleteSharedFileHandler() http.HandlerFunc {
 		if removeIndex == -1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println("could not find file in renter's shared directory")
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		renter.Shared = append(renter.Shared[:removeIndex], renter.Shared[removeIndex+1:]...)
@@ -55,6 +60,8 @@ func (server *metaServer) deleteSharedFileHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

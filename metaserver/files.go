@@ -30,6 +30,8 @@ func (server *metaServer) getFilesHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server errorr"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(files)
@@ -93,6 +95,8 @@ func (server *metaServer) getFileHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			server.logger.Println(err)
+			resp := errorResp{Error: "could not find file"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		json.NewEncoder(w).Encode(file)
@@ -114,8 +118,9 @@ func (server *metaServer) deleteFileHandler() http.HandlerFunc {
 		// Remove the file from the renter's directory.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
-			server.logger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
+			resp := errorResp{Error: "could not find renter"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		removeIndex := -1
@@ -127,6 +132,8 @@ func (server *metaServer) deleteFileHandler() http.HandlerFunc {
 		if removeIndex == -1 {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println("could not find file in renter's directory")
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		renter.Files = append(renter.Files[:removeIndex], renter.Files[removeIndex+1:]...)
@@ -134,6 +141,8 @@ func (server *metaServer) deleteFileHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -293,6 +302,8 @@ func (server *metaServer) postFileVersionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -336,6 +347,8 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 		}
 		if updateIndex == -1 {
 			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "version not found"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -345,6 +358,8 @@ func (server *metaServer) putFileVersionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -437,6 +452,8 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -446,6 +463,8 @@ func (server *metaServer) postFilePermissionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -482,6 +501,8 @@ func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
 		}
 		if updateIndex == -1 {
 			w.WriteHeader(http.StatusNotFound)
+			resp := errorResp{Error: "permission not found"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -491,6 +512,8 @@ func (server *metaServer) putFilePermissionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -538,6 +561,8 @@ func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -559,6 +584,8 @@ func (server *metaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			server.logger.Println(err)
+			resp := errorResp{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 

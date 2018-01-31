@@ -111,6 +111,8 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if err != nil {
 			authorizer.logger.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
+			resp := AuthChallengeError{Error: "could not find user's public key"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -118,6 +120,8 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if block == nil {
 			authorizer.logger.Println("Could not decode PEM.")
 			w.WriteHeader(http.StatusUnauthorized)
+			resp := AuthChallengeError{Error: "could not decode user's public key"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -125,6 +129,8 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if err != nil {
 			authorizer.logger.Println("Could not parse public key for user.")
 			w.WriteHeader(http.StatusUnauthorized)
+			resp := AuthChallengeError{Error: "could not parse user's public key"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -143,13 +149,15 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		if err != nil {
 			authorizer.logger.Println("Could not decode stored nonce.")
 			w.WriteHeader(http.StatusInternalServerError)
+			resp := AuthChallengeError{Error: "internal server error"}
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
 		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, decodedNonce[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Error: "key verification failed"}
+			resp := AuthChallengeError{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
 		} else {
 			token := jwt.New(jwt.SigningMethodHS256)

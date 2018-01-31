@@ -19,7 +19,7 @@ import (
 	"skybin/provider"
 )
 
-func (r *Renter) Download(fileId string, destPath string) error {
+func (r *Renter) DownloadVersion(fileId string, version int, destPath string) error {
 	f, err := r.Lookup(fileId)
 	if err != nil {
 		return err
@@ -36,10 +36,39 @@ func (r *Renter) Download(fileId string, destPath string) error {
 		}
 	}
 
-	return r.performDownload(f, destPath)
+	return r.performDownload(f, version, destPath)
 }
 
-func (r *Renter) performDownload(f *core.File, destPath string) error {
+func (r *Renter) Download(fileId string, destPath string) error {
+	f, err := r.Lookup(fileId)
+	if err != nil {
+		return err
+	}
+
+	latestVersion := -1
+	for _, v := range f.Versions {
+		if v.Number > latestVersion {
+			latestVersion = v.Number
+		}
+	}
+	if latestVersion == -1 {
+		return errors.New("nothing to download")
+	}
+
+	return r.DownloadVersion(fileId, latestVersion, destPath)
+}
+
+func (r *Renter) performDownload(f *core.File, version int, destPath string) error {
+	// Retrieve version to download
+	var v *core.Version
+	for _, item := range f.Versions {
+		if item.Number == version {
+			v = &item
+		}
+	}
+	if v == nil {
+		return errors.New("file does not contain specified version")
+	}
 
 	// Download blocks
 	temp1, err := ioutil.TempFile("", "skybin_download")
@@ -48,7 +77,7 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 	}
 	defer temp1.Close()
 	defer os.Remove(temp1.Name())
-	for _, block := range f.Blocks {
+	for _, block := range v.Blocks {
 		err = r.downloadBlock(&block, temp1)
 		if err != nil {
 			return err
@@ -60,7 +89,7 @@ func (r *Renter) performDownload(f *core.File, destPath string) error {
 	}
 
 	// Check block hashes
-	for _, block := range f.Blocks {
+	for _, block := range v.Blocks {
 		h := sha256.New()
 		lr := io.LimitReader(temp1, block.Size)
 		_, err = io.Copy(h, lr)

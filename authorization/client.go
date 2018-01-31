@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -56,7 +57,6 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, 
 	if err != nil {
 		return "", err
 	} else {
-		println(resp.StatusCode)
 		var b []byte
 		defer resp.Body.Close()
 		b, err := ioutil.ReadAll(resp.Body)
@@ -64,8 +64,7 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, 
 			return "", err
 		}
 		if resp.StatusCode != 200 {
-			println(string(b))
-			panic("Bad status: " + resp.Status)
+			return "", errors.New(string(b))
 		}
 		return string(b), nil
 	}

@@ -31,9 +31,11 @@ type ProviderInfo struct {
 // }
 
 type RenterInfo struct {
-	ID        string `json:"id"`
-	PublicKey string `json:"publicKey"`
-	Files     []File `json:"files"`
+	ID        string   `json:"id"`
+	Alias     string   `json:"alias"`
+	PublicKey string   `json:"publicKey"`
+	Files     []string `json:"files"`
+	Shared    []string `json:"shared"`
 }
 
 type Contract struct {
@@ -76,14 +78,20 @@ type Permission struct {
 }
 
 type File struct {
-	ID         string       `json:"id"`
 	Name       string       `json:"name"`
+	ID         string       `json:"id"`
 	IsDir      bool         `json:"isDir"`
-	Size       int64        `json:"size"`
-	UploadSize int64        `json:"uploadSize"`
-	ModTime    time.Time    `json:"modTime"`
 	AccessList []Permission `json:"accessList"`
+	Versions   []Version    `json:"versions"`
+	OwnerID    string       `json:"ownerID"`
 	AesKey     string       `json:"aesKey"`
 	AesIV      string       `json:"aesIV"`
-	Blocks     []Block      `json:"blocks"`
+}
+
+type Version struct {
+	Number     int       `json:"number"`
+	Blocks     []Block   `json:"blocks"`
+	Size       int64     `json:"size"`
+	UploadSize int64     `json:"uploadSize"`
+	ModTime    time.Time `json:"modTime"`
 }

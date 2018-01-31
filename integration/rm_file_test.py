@@ -35,7 +35,6 @@ def rm_file_test(ctxt):
 
     # Check it doesn't appear in file list
     file_list = ctxt.renter.list_files()['files']
-    print(file_list)
     exists = any([f for f in file_list if f['id'] == file_to_remove['id']])
     ctxt.assert_true(not exists, 'file appeared in listed files after removal')
 

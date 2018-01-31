@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"github.com/satori/go.uuid"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -12,13 +13,11 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-
-	"github.com/satori/go.uuid"
 )
 
 type Config struct {
 	RenterId       string `json:"renterId"`
-	RenterAlias    string `json"renterAlias"`
+	Alias          string `json:"alias"`
 	ApiAddr        string `json:"apiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
@@ -67,6 +66,13 @@ const (
 
 	// Maximum storage amount of any contract
 	kMaxContractSize = 1024 * 1024 * 1024
+
+	// Maximum size of an uploaded block
+	kMaxBlockSize = kMaxContractSize
+
+	// Erasure encoding defaults
+	kDefaultDataBlocks   = 8
+	kDefaultParityBlocks = 4
 )
 
 func LoadFromDisk(homedir string) (*Renter, error) {
@@ -140,7 +146,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
-		Versions:   []core.Version{},
+		Versions: []core.Version{},
 	}
 	err = r.saveFile(file)
 	if err != nil {
@@ -172,38 +178,6 @@ func (r *Renter) ShareFile(f *core.File, userId string) error {
 	return nil
 }
 
-func (r *Renter) RemoveVersion(fileId string, version int) error {
-	idx, f := r.findFile(fileId)
-	if f == nil {
-		return fmt.Errorf("Cannot find file with ID %s", fileId)
-	}
-	if f.IsDir && len(r.findChildren(f)) > 0 {
-		return errors.New("Cannot remove non-empty folder")
-	}
-	var v *core.Version
-	for _, item := range f.Versions {
-		if item.Number == version {
-			v = &item
-		}
-	}
-	if v == nil {
-		return errors.New("specified version not present in file")
-	}
-	r.files = append(r.files[:idx], r.files[idx+1:]...)
-	err := r.saveSnapshot()
-	if err != nil {
-		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
-	}
-	for _, block := range v.Blocks {
-		err := r.removeBlock(&block)
-		if err != nil {
-			return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
-		}
-
-	}
-	return nil
-}
-
 func (r *Renter) Remove(fileId string) error {
 	idx, f := r.findFile(fileId)
 	if f == nil {
@@ -212,21 +186,63 @@ func (r *Renter) Remove(fileId string) error {
 	if f.IsDir && len(r.findChildren(f)) > 0 {
 		return errors.New("Cannot remove non-empty folder")
 	}
+	for _, version := range f.Versions {
+		r.removeVersion(&version)
+	}
 	r.files = append(r.files[:idx], r.files[idx+1:]...)
 	err := r.saveSnapshot()
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
 	}
-	for _, v := range f.Versions {
-		for _, block := range v.Blocks {
-			err := r.removeBlock(&block)
-			if err != nil {
-				return fmt.Errorf("Could not delete block %s. Error: %s", block.ID, err)
-			}
+	return nil
+}
 
+func (r *Renter) removeVersion(version *core.Version) {
+	for _, block := range version.Blocks {
+		err := r.removeBlock(&block)
+		if err != nil {
+			// TODO: add to list to remove later
+			continue
+		}
+		for _, location := range block.Locations {
+			blob := &storageBlob{
+				ProviderId: location.ProviderId,
+				Addr:       location.Addr,
+				Amount:     block.Size,
+				ContractId: location.ContractId,
+			}
+			r.addBlob(blob)
+		}
+	}
+}
+
+func (r *Renter) removeBlock(block *core.Block) error {
+	for _, location := range block.Locations {
+		pvdr := provider.NewClient(location.Addr, &http.Client{})
+		err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// Add a storage blob back to the free list.
+func (r *Renter) addBlob(blob *storageBlob) {
+	for _, blob2 := range r.freelist {
+		if blob.ContractId == blob2.ContractId {
+
+			// Merge
+			blob2.Amount += blob.Amount
+			return
+		}
+	}
+	r.freelist = append(r.freelist, blob)
+}
+
+func (r *Renter) saveFile(f *core.File) error {
+	r.files = append(r.files, f)
+	return r.saveSnapshot()
 }
 
 func (r *Renter) findFile(fileId string) (idx int, f *core.File) {
@@ -255,17 +271,6 @@ func (r *Renter) saveSnapshot() error {
 		FreeStorage: r.freelist,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
-}
-
-func (r *Renter) removeBlock(block *core.Block) error {
-	for _, location := range block.Locations {
-		pvdr := provider.NewClient(location.Addr, &http.Client{})
-		err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {

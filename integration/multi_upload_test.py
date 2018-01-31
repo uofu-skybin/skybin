@@ -28,7 +28,8 @@ def multi_upload_test(ctxt, num_files=DEFAULT_NUM_FILES,
     ctxt.log('reserving space')
     # Reserve space in fragments
     frag_size = 5000000
-    for _ in range((total_size+frag_size)//frag_size):
+    bytes_to_reserve = total_size * 4
+    for _ in range(bytes_to_reserve//frag_size):
         ctxt.renter.reserve_space(frag_size)
 
     ctxt.log('uploading files')

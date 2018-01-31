@@ -116,6 +116,9 @@ class RenterService(Service):
         base_api_url = 'http://{}'.format(address)
         self._api = RenterAPI(base_api_url)
 
+    def get_info(self):
+        return self._api.get_info()
+
     def reserve_space(self, amount):
         return self._api.reserve_space(amount)
 

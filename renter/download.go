@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -19,13 +20,16 @@ import (
 	"skybin/provider"
 )
 
-func (r *Renter) DownloadVersion(fileId string, version int, destPath string) error {
+func (r *Renter) Download(fileId string, destPath string) error {
 	f, err := r.Lookup(fileId)
 	if err != nil {
 		return err
 	}
 	if f.IsDir {
 		return errors.New("Folder downloads not supported yet")
+	}
+	if len(f.Versions) == 0 {
+		return errors.New("File has no versions")
 	}
 
 	// Download to home directory if no destination given
@@ -36,77 +40,109 @@ func (r *Renter) DownloadVersion(fileId string, version int, destPath string) er
 		}
 	}
 
+	// Download the latest version by default
+	version := &f.Versions[len(f.Versions)-1]
 	return r.performDownload(f, version, destPath)
 }
 
-func (r *Renter) Download(fileId string, destPath string) error {
-	f, err := r.Lookup(fileId)
-	if err != nil {
-		return err
-	}
-
-	latestVersion := -1
-	for _, v := range f.Versions {
-		if v.Number > latestVersion {
-			latestVersion = v.Number
-		}
-	}
-	if latestVersion == -1 {
-		return errors.New("nothing to download")
-	}
-
-	return r.DownloadVersion(fileId, latestVersion, destPath)
-}
-
-func (r *Renter) performDownload(f *core.File, version int, destPath string) error {
-	// Retrieve version to download
-	var v *core.Version
-	for _, item := range f.Versions {
-		if item.Number == version {
-			v = &item
-		}
-	}
-	if v == nil {
-		return errors.New("file does not contain specified version")
-	}
-
-	// Download blocks
-	temp1, err := ioutil.TempFile("", "skybin_download")
-	if err != nil {
-		return fmt.Errorf("Unable to create temp file for download. Error: %v", err)
-	}
-	defer temp1.Close()
-	defer os.Remove(temp1.Name())
-	for _, block := range v.Blocks {
-		err = r.downloadBlock(&block, temp1)
+// Download a version of a file.
+func (r *Renter) performDownload(file *core.File, version *core.Version, destPath string) error {
+	var blockFiles []*os.File
+	successes := 0
+	failures := 0
+	for i := 0; successes < version.NumDataBlocks && failures <= version.NumParityBlocks; i++ {
+		temp, err := ioutil.TempFile("", "skybin_download")
 		if err != nil {
-			return err
+			return fmt.Errorf("Cannot create temp file. Error: %s", err)
+		}
+		defer temp.Close()
+		defer os.Remove(temp.Name())
+		err = r.downloadBlock(&version.Blocks[i], temp)
+		if err == nil {
+			successes++
+			blockFiles = append(blockFiles, temp)
+		} else {
+			failures++
+			blockFiles = append(blockFiles, nil)
 		}
 	}
-	_, err = temp1.Seek(0, os.SEEK_SET)
-	if err != nil {
-		return fmt.Errorf("Unable to seek to beginning of temp file. Error: %v", err)
+	if successes < version.NumDataBlocks {
+		return errors.New("Failed to download enough file data blocks.")
+	}
+	if failures > 0 {
+
+		// Reconstruct file from parity blocks
+		for _, blockFile := range blockFiles {
+			if blockFile != nil {
+				_, err := blockFile.Seek(0, os.SEEK_SET)
+				if err != nil {
+					return fmt.Errorf("Unable to seek block file. Error: %s", err)
+				}
+			}
+		}
+
+		blockReaders := convertToReaderSlice(blockFiles)
+		for len(blockReaders) < version.NumDataBlocks+ version.NumParityBlocks {
+			blockReaders = append(blockReaders, nil)
+		}
+
+		var fillFiles []*os.File
+		for idx, blockReader := range blockReaders {
+			var fillFile *os.File = nil
+			if blockReader == nil && idx < version.NumDataBlocks {
+				temp, err := ioutil.TempFile("", "skybin_download")
+				if err != nil {
+					return fmt.Errorf("Cannot create temp file. Error: %s", err)
+				}
+				defer temp.Close()
+				defer os.Remove(temp.Name())
+				fillFile = temp
+			}
+			fillFiles = append(fillFiles, fillFile)
+		}
+		decoder, err := reedsolomon.NewStream(version.NumDataBlocks, version.NumParityBlocks)
+		if err != nil {
+			return fmt.Errorf("Unable to construct decoder. Error: %s", err)
+		}
+		err = decoder.Reconstruct(blockReaders, convertToWriterSlice(fillFiles))
+		if err != nil {
+			return fmt.Errorf("Failed to reconstruct file. Error: %s", err)
+		}
+
+		for i := 0; i < version.NumDataBlocks; i++ {
+			if blockFiles[i] == nil {
+				blockFiles[i] = fillFiles[i]
+			}
+		}
+		blockFiles = blockFiles[:version.NumDataBlocks]
 	}
 
-	// Check block hashes
-	for _, block := range v.Blocks {
-		h := sha256.New()
-		lr := io.LimitReader(temp1, block.Size)
-		_, err = io.Copy(h, lr)
+	// Download successful. Rewind the block files.
+	if len(blockFiles) != version.NumDataBlocks {
+		panic("block files should contain file.NumDataBlocks files")
+	}
+	for _, f := range blockFiles {
+		_, err := f.Seek(0, os.SEEK_SET)
 		if err != nil {
-			return fmt.Errorf("Unable to hash block. Error: %v", err)
-		}
-		if string(h.Sum(nil)) != block.Sha256Hash {
-			return errors.New("Block hash does not match expected.")
+			return fmt.Errorf("Unable to seek block file. Error: %s", err)
 		}
 	}
-	_, err = temp1.Seek(0, os.SEEK_SET)
-	if err != nil {
-		return fmt.Errorf("Unable to seek to beginning of temp file. Error: %v", err)
+
+	// Remove padding of the last block
+	if version.PaddingBytes > 0 {
+		f := blockFiles[len(blockFiles)-1]
+		st, err := f.Stat()
+		if err != nil {
+			return fmt.Errorf("Unable to stat block file. Error: %s", err)
+		}
+		err = f.Truncate(st.Size() - version.PaddingBytes)
+		if err != nil {
+			return fmt.Errorf("Unable to truncate padding bytes. Error: %s", err)
+		}
 	}
 
 	// Decrypt
-	aesKey, aesIV, err := r.decryptEncryptionKeys(f)
+	aesKey, aesIV, err := r.decryptEncryptionKeys(file)
 	if err != nil {
 		return err
 	}
@@ -116,7 +152,7 @@ func (r *Renter) performDownload(f *core.File, version int, destPath string) err
 	}
 	streamReader := cipher.StreamReader{
 		S: cipher.NewCFBDecrypter(aesCipher, aesIV),
-		R: temp1,
+		R: io.MultiReader(convertToReaderSlice(blockFiles)...),
 	}
 	temp2, err := ioutil.TempFile("", "skybin_download")
 	if err != nil {
@@ -151,7 +187,7 @@ func (r *Renter) performDownload(f *core.File, version int, destPath string) err
 	return nil
 }
 
-func (r *Renter) downloadBlock(block *core.Block, out io.Writer) error {
+func (r *Renter) downloadBlock(block *core.Block, out *os.File) error {
 	for _, location := range block.Locations {
 		client := provider.NewClient(location.Addr, &http.Client{})
 
@@ -163,13 +199,25 @@ func (r *Renter) downloadBlock(block *core.Block, out io.Writer) error {
 			continue
 		}
 		defer blockReader.Close()
-
 		n, err := io.Copy(out, blockReader)
 		if err != nil {
 			return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
 		}
 		if n != block.Size {
 			return errors.New("Downloaded block has incorrect size.")
+		}
+		_, err = out.Seek(0, os.SEEK_SET)
+		if err != nil {
+			return fmt.Errorf("Error checking block hash. Error: %s", err)
+		}
+		h := sha256.New()
+		_, err = io.Copy(h, out)
+		if err != nil {
+			return fmt.Errorf("Error checking block hash. Error: %s", err)
+		}
+		blockHash := string(h.Sum(nil))
+		if blockHash != block.Sha256Hash {
+			return errors.New("Block hash does not match expected.")
 		}
 		return nil
 	}
@@ -204,4 +252,31 @@ func defaultDownloadLocation(f *core.File) (string, error) {
 		}
 	}
 	return destPath, nil
+}
+
+func convertToWriterSlice(files []*os.File) []io.Writer {
+	var res []io.Writer
+	for _, f := range files {
+		if f == nil {
+			// Must explicitly append nil since Go will otherwise
+			// not treat f as nil in subsequent equality checks
+			res = append(res, nil)
+		} else {
+			res = append(res, f)
+		}
+
+	}
+	return res
+}
+
+func convertToReaderSlice(files []*os.File) []io.Reader {
+	var res []io.Reader
+	for _, f := range files {
+		if f == nil {
+			res = append(res, nil)
+		} else {
+			res = append(res, f)
+		}
+	}
+	return res
 }

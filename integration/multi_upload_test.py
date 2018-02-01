@@ -59,7 +59,6 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
-        alias='multiFileUploadTest',
     )
     try:
         multi_upload_test(

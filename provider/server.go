@@ -10,6 +10,7 @@ import (
 	"path"
 	"skybin/authorization"
 	"skybin/core"
+	"skybin/util"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -33,7 +34,11 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		authorizer: authorization.NewAuthorizer(logger),
 	}
 
-	// authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
+	authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
+
+	var myHandler = http.HandlerFunc(server.postContract)
+	router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
+
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
@@ -41,10 +46,10 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
 	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
-	// router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
+	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	// router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.provider.PrivateKey, server.getProviderPublicKey)).Methods("POST")
+	router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler("renterID", util.MarshalPrivateKey(server.provider.PrivateKey), server.provider.getRenterPublicKey)).Methods("POST")
 
 	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
 
@@ -87,6 +92,7 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: signedContract})
+
 }
 
 func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
@@ -229,6 +235,11 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO: Fill out stub
+func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) {
+	return
+}
+
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
 	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
@@ -289,19 +300,23 @@ func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Reques
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 
-	reserved := server.provider.stats.StorageReserved
-	used := server.provider.stats.StorageUsed
-	free := reserved - used
+	info := core.ProviderInfo{
+		ID:          server.provider.Config.ProviderID,
+		PublicKey:   "string",
+		Addr:        server.provider.Config.ApiAddr,
+		SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
+		StorageRate: 1,
+	}
 
 	// TODO: change these fields to match new
-	info := getInfoResp{
-		ProviderId:      server.provider.Config.ProviderID,
-		TotalStorage:    1 << 30,
-		ReservedStorage: reserved,
-		UsedStorage:     used,
-		FreeStorage:     free,
-		TotalContracts:  len(server.provider.contracts),
-	}
+	// info := getInfoResp{
+	// 	ProviderId:      server.provider.Config.ProviderID,
+	// 	TotalStorage:    1 << 30,
+	// 	ReservedStorage: reserved,
+	// 	UsedStorage:     used,
+	// 	FreeStorage:     free,
+	// 	TotalContracts:  len(server.provider.contracts),
+	// }
 
 	server.writeResp(w, http.StatusOK, &info)
 }

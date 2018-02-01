@@ -2,16 +2,19 @@ package provider
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"skybin/authorization"
 	"skybin/core"
 )
 
 type Client struct {
 	client *http.Client
 	addr   string
+	token  string
 }
 
 func NewClient(addr string, client *http.Client) *Client {
@@ -19,6 +22,16 @@ func NewClient(addr string, client *http.Client) *Client {
 		client: client,
 		addr:   addr,
 	}
+}
+
+func (client *Client) AuthorizeRenter(privateKey *rsa.PrivateKey, renterID string) error {
+	authClient := authorization.NewClient(client.addr, client.client)
+	token, err := authClient.GetAuthToken(privateKey, "renter", renterID)
+	if err != nil {
+		return err
+	}
+	client.token = token
+	return nil
 }
 
 func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, error) {
@@ -61,6 +74,13 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 
 func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) error {
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
 	resp, err := client.client.Post(url, "application/octet-stream", data)
 	if err != nil {
 		return err
@@ -87,12 +107,28 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 	return resp.Body, nil
 }
 
+func (client *Client) AuditBlock(renterID string, blockID string) (io.ReadCloser, error) {
+	url := fmt.Sprintf("http://%s/blocks/audit?renterID=%s&blockID=%s", client.addr, renterID, blockID)
+	resp, err := client.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, err
+	}
+	return resp.Body, nil
+}
+
 func (client *Client) RemoveBlock(renterID string, blockID string) error {
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
 	resp, err := client.client.Do(req)
 	if err != nil {
 		return err
@@ -107,7 +143,13 @@ func (client *Client) RemoveBlock(renterID string, blockID string) error {
 
 func (client *Client) GetInfo() (*core.ProviderInfo, error) {
 	url := fmt.Sprintf("http://%s/info", client.addr)
-	resp, err := client.client.Get(url)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +170,14 @@ func (client *Client) GetInfo() (*core.ProviderInfo, error) {
 
 func (client *Client) GetRenterInfo() (*RenterInfo, error) {
 	url := fmt.Sprintf("http://%s/renter-info", client.addr)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
 	resp, err := client.client.Get(url)
 	if err != nil {
 		return nil, err

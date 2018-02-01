@@ -34,7 +34,10 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, 
 		return "", err
 	}
 	var respMsg GetAuthChallengeResp
-	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
+	err = json.NewDecoder(resp.Body).Decode(&respMsg)
+	if err != nil {
+		return "", err
+	}
 	token := respMsg.Nonce
 
 	// Sign the token
@@ -56,16 +59,14 @@ func (client *Client) GetAuthToken(privateKey *rsa.PrivateKey, authType string, 
 	resp, err = client.client.PostForm(respondURL, url.Values{responseField: {userID}, "signedNonce": {encoded}})
 	if err != nil {
 		return "", err
-	} else {
-		var b []byte
-		defer resp.Body.Close()
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return "", err
-		}
-		if resp.StatusCode != 200 {
-			return "", errors.New(string(b))
-		}
-		return string(b), nil
 	}
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != 200 {
+		return "", errors.New(string(buf))
+	}
+	return string(buf), nil
 }

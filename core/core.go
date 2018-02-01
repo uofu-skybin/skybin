@@ -81,28 +81,12 @@ type File struct {
 }
 
 type Version struct {
-	Number     int       `json:"number"`
-	Size       int64     `json:"size"`
-	ModTime         time.Time    `json:"modTime"`
-	UploadSize int64     `json:"uploadSize"`
-	PaddingBytes    int64        `json:"paddingBytes"`
-	NumDataBlocks   int          `json:"numDataBlocks"`
-	NumParityBlocks int          `json:"numParityBlocks"`
-	Blocks     []Block   `json:"blocks"`
-//
-//=======
-//	ID              string       `json:"id"`
-//	Name            string       `json:"name"`
-//	IsDir           bool         `json:"isDir"`
-//	Size            int64        `json:"size"`
-//	UploadSize      int64        `json:"uploadSize"`
-//
-//
-//	AccessList      []Permission `json:"accessList"`
-//	AesKey          string       `json:"aesKey"`
-//	AesIV           string       `json:"aesIV"`
-//
-//
-//	Blocks          []Block      `json:"blocks"`
-//>>>>>>> Erasure coding. Fix remove file to reclaim freed space.
+	Number          int       `json:"number"`
+	Size            int64     `json:"size"`
+	ModTime         time.Time `json:"modTime"`
+	UploadSize      int64     `json:"uploadSize"`
+	PaddingBytes    int64     `json:"paddingBytes"`
+	NumDataBlocks   int       `json:"numDataBlocks"`
+	NumParityBlocks int       `json:"numParityBlocks"`
+	Blocks          []Block   `json:"blocks"`
 }

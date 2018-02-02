@@ -6,4 +6,3 @@ To get started, run `setup.sh &`. This will setup SkyBin in a `repo` subfolder w
 this directory and start metadata, provider, and renter services. 
 
 Run `teardown.sh` to stop the services and delete the SkyBin setup.
-

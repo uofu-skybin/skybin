@@ -95,6 +95,9 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) 
 	return nil
 }
 
+// GetBlock retrieves the block with the given owner and ID.
+// The caller has the responsibility of closing the returned
+// ReadCloser if no error is returned.
 func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, error) {
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	resp, err := client.client.Get(url)
@@ -102,6 +105,7 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
 		return nil, decodeError(resp.Body)
 	}
 	return resp.Body, nil

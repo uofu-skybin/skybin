@@ -55,7 +55,7 @@ func runRenter(args ...string) {
 		}
 		r.Config.RenterId = config.ID
 		r.Config.IsRegistered = true
-		r.Config.RenterAlias = *aliasFlag
+		r.Config.Alias = *aliasFlag
 		err = util.SaveJson(path.Join(homedir, "renter", "config.json"), r.Config)
 		if err != nil {
 			log.Fatal("Unable to update config file. Error: ", err)

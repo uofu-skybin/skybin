@@ -56,11 +56,15 @@ type BlockLocation struct {
 type Block struct {
 	ID string `json:"id"`
 
-	// sha256 hash of the block
-	Sha256Hash string `json:"hash"`
+	// Offset of the block in the file, relative to the file's other blocks.
+	// For the first block, this is zero.
+	Num int `json:"blockNum"`
 
 	// Size of the block in bytes
 	Size int64 `json:"size"`
+
+	// sha256 hash of the block
+	Sha256Hash string `json:"hash"`
 
 	// Locations of providers where the block is stored
 	Locations []BlockLocation `json:"locations"`
@@ -78,20 +82,23 @@ type Permission struct {
 }
 
 type File struct {
-	Name       string       `json:"name"`
 	ID         string       `json:"id"`
+	OwnerID    string       `json:"ownerID"`
+	Name       string       `json:"name"`
 	IsDir      bool         `json:"isDir"`
 	AccessList []Permission `json:"accessList"`
-	Versions   []Version    `json:"versions"`
-	OwnerID    string       `json:"ownerID"`
 	AesKey     string       `json:"aesKey"`
 	AesIV      string       `json:"aesIV"`
+	Versions   []Version    `json:"versions"`
 }
 
 type Version struct {
-	Number     int       `json:"number"`
-	Blocks     []Block   `json:"blocks"`
-	Size       int64     `json:"size"`
-	UploadSize int64     `json:"uploadSize"`
-	ModTime    time.Time `json:"modTime"`
+	Number          int       `json:"number"`
+	Size            int64     `json:"size"`
+	ModTime         time.Time `json:"modTime"`
+	UploadSize      int64     `json:"uploadSize"`
+	PaddingBytes    int64     `json:"paddingBytes"`
+	NumDataBlocks   int       `json:"numDataBlocks"`
+	NumParityBlocks int       `json:"numParityBlocks"`
+	Blocks          []Block   `json:"blocks"`
 }

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"crypto/rand"
 	jwtmiddleware "github.com/auth0/go-jwt-middleware"
 	jwt "github.com/dgrijalva/jwt-go"
 )
@@ -44,6 +45,17 @@ type AuthChallengeError struct {
 	Error string `json:"error"`
 }
 
+// Generates a challenge string to be signed by the user's private key.
+func makeNonce() (string, error) {
+	buf := make([]byte, 32)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.Sum256(buf)
+	return base64.URLEncoding.EncodeToString(h[:]), nil
+}
+
 func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userIDs, present := r.URL.Query()[userIDString]
@@ -65,9 +77,14 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.
 
 		userID := userIDs[0]
 
-		// Generate a nonce signed by the user's public key
-		shaSum := sha256.Sum256([]byte(randString(32)))
-		nonce := base64.URLEncoding.EncodeToString(shaSum[:])
+		// Generate a nonce to be signed by the user's private key
+		nonce, err := makeNonce()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			resp := AuthChallengeError{Error: "Unable to generate authorization challenge."}
+			json.NewEncoder(w).Encode(&resp)
+			return
+		}
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()
@@ -96,14 +113,12 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		}
 
 		// Make sure there is an outstanding handshake with the given user ID
-		var handshake Handshake
-		if foundHandshake, ok := authorizer.handshakes[userID]; !ok {
+		handshake, exists := authorizer.handshakes[userID]
+		if !exists {
 			w.WriteHeader(http.StatusBadRequest)
 			resp := AuthChallengeError{Error: "no outstanding handshake for user"}
 			json.NewEncoder(w).Encode(resp)
 			return
-		} else {
-			handshake = foundHandshake
 		}
 
 		// Retrieve the user's public key.
@@ -159,23 +174,23 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := AuthChallengeError{Error: err.Error()}
 			json.NewEncoder(w).Encode(resp)
-		} else {
-			token := jwt.New(jwt.SigningMethodHS256)
-
-			claims := token.Claims.(jwt.MapClaims)
-			claims[userIDString] = userID
-			claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
-
-			tokenString, err := token.SignedString(signingKey)
-			if err != nil {
-				panic(err)
-			}
-			w.Write([]byte(tokenString))
-
-			authorizer.mutex.Lock()
-			delete(authorizer.handshakes, userID)
-			authorizer.mutex.Unlock()
+			return
 		}
+		token := jwt.New(jwt.SigningMethodHS256)
+
+		claims := token.Claims.(jwt.MapClaims)
+		claims[userIDString] = userID
+		claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+
+		tokenString, err := token.SignedString(signingKey)
+		if err != nil {
+			panic(err)
+		}
+		w.Write([]byte(tokenString))
+
+		authorizer.mutex.Lock()
+		delete(authorizer.handshakes, userID)
+		authorizer.mutex.Unlock()
 	}
 }
 

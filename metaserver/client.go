@@ -54,20 +54,26 @@ func (client *Client) AuthorizeProvider(privateKey *rsa.PrivateKey, providerID s
 	return nil
 }
 
-func (client *Client) RegisterProvider(info *core.ProviderInfo) error {
+func (client *Client) RegisterProvider(info *core.ProviderInfo) (*core.ProviderInfo, error) {
 	url := fmt.Sprintf("http://%s/providers", client.addr)
 	body, err := json.Marshal(info)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return decodeError(resp.Body)
+		return nil, decodeError(resp.Body)
 	}
-	return nil
+	var respMsg core.ProviderInfo
+	err = json.NewDecoder(resp.Body).Decode(&respMsg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &respMsg, nil
 }
 
 func (client *Client) GetProviders() ([]core.ProviderInfo, error) {
@@ -163,20 +169,25 @@ func (client *Client) DeleteProvider(providerID string) error {
 	return nil
 }
 
-func (client *Client) RegisterRenter(info *core.RenterInfo) error {
+func (client *Client) RegisterRenter(info *core.RenterInfo) (*core.RenterInfo, error) {
 	url := fmt.Sprintf("http://%s/renters", client.addr)
 	body, err := json.Marshal(info)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return decodeError(resp.Body)
+		return nil, decodeError(resp.Body)
 	}
-	return nil
+	var renter core.RenterInfo
+	err = json.NewDecoder(resp.Body).Decode(&renter)
+	if err != nil {
+		return nil, err
+	}
+	return &renter, nil
 }
 
 func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {

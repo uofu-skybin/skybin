@@ -141,20 +141,20 @@ func (provider *Provider) addActivity(activity Activity) {
 
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
 
-	// renterKey, err := provider.getRenterPublicKey(contract.RenterId)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
-	// }
+	renterKey, err := provider.getRenterPublicKey(contract.RenterId)
+	if err != nil {
+		return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
+	}
 
-	// parsedKey, err := parsePublicKey(renterKey)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Parsing of renter's public key failed")
-	// }
-	// // Verify renters signature
-	// err = core.VerifyContractSignature(contract, contract.RenterSignature, *parsedKey)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Invalid Renter signature: %s", err)
-	// }
+	parsedKey, err := parsePublicKey(renterKey)
+	if err != nil {
+		return nil, fmt.Errorf("Parsing of renter's public key failed")
+	}
+	// Verify renters signature
+	err = core.VerifyContractSignature(contract, contract.RenterSignature, *parsedKey)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid Renter signature: %s", err)
+	}
 
 	// TODO determine if contract is amiable for provider here
 	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved

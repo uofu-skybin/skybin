@@ -300,34 +300,34 @@ func (server *providerServer) getContracts(w http.ResponseWriter, r *http.Reques
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 
-	info := core.ProviderInfo{
-		ID:          server.provider.Config.ProviderID,
-		PublicKey:   "string",
-		Addr:        server.provider.Config.ApiAddr,
-		SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
-		StorageRate: 1,
-	}
+	// info := core.ProviderInfo{
+	// 	ID:          server.provider.Config.ProviderID,
+	// 	PublicKey:   "string",
+	// 	Addr:        server.provider.Config.ApiAddr,
+	// 	SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
+	// 	StorageRate: 1,
+	// }
 
 	// TODO: change these fields to match new
-	// info := getInfoResp{
-	// 	ProviderId:      server.provider.Config.ProviderID,
-	// 	TotalStorage:    1 << 30,
-	// 	ReservedStorage: reserved,
-	// 	UsedStorage:     used,
-	// 	FreeStorage:     free,
-	// 	TotalContracts:  len(server.provider.contracts),
-	// }
+	info := getInfoResp{
+		ProviderId:      server.provider.Config.ProviderID,
+		TotalStorage:    1 << 30,
+		ReservedStorage: reserved,
+		UsedStorage:     used,
+		FreeStorage:     free,
+		TotalContracts:  len(server.provider.contracts),
+	}
 
 	server.writeResp(w, http.StatusOK, &info)
 }
 
 func (server *providerServer) postInfo(w http.ResponseWriter, r *http.Request) {
-	var params Config
+	var params core.ProviderInfo
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, &errorResp{"Bad json"})
 	}
-	server.provider.Config = &params
+	// server.provider.Config = &params
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 

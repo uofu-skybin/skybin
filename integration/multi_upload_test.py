@@ -12,7 +12,7 @@ DEFAULT_NUM_FILES = 10
 DEFAULT_MIN_SIZE = 1024
 DEFAULT_MAX_SIZE = 10 * 1024 * 1024
 
-def test_multi_upload(ctxt, num_files=DEFAULT_NUM_FILES,
+def multi_upload_test(ctxt, num_files=DEFAULT_NUM_FILES,
                       min_size=DEFAULT_MIN_SIZE,
                       max_size=DEFAULT_MAX_SIZE):
     ctxt.log('multi upload test')
@@ -28,7 +28,8 @@ def test_multi_upload(ctxt, num_files=DEFAULT_NUM_FILES,
     ctxt.log('reserving space')
     # Reserve space in fragments
     frag_size = 5000000
-    for _ in range((total_size+frag_size)//frag_size):
+    bytes_to_reserve = total_size * 4
+    for _ in range(bytes_to_reserve//frag_size):
         ctxt.renter.reserve_space(frag_size)
 
     ctxt.log('uploading files')
@@ -58,19 +59,16 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
-        alias='multiFileUploadTest',
     )
     try:
-        test_multi_upload(
+        multi_upload_test(
             ctxt,
             num_files=args.num_files,
             min_size=args.min_size,
             max_size=args.max_size,
         )
-    except Exception as err:
-        ctxt.teardown()
-        raise err
-    ctxt.teardown()
+    finally:
+        ctxt.teardown()        
 
 if __name__ == "__main__":
     main()

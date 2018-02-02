@@ -9,7 +9,7 @@ from test_framework import setup_test
 
 DEFAULT_FILE_SIZE = 1024 * 1024
 
-def test_single_upload(ctxt, file_size=DEFAULT_FILE_SIZE):
+def single_upload_test(ctxt, file_size=DEFAULT_FILE_SIZE):
     ctxt.log('single upload test')
     input_path = ctxt.create_test_file(size=file_size)
 
@@ -32,14 +32,11 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
-        alias='singleFileUploadTest'
     )
     try:
-        test_single_upload(ctxt, file_size=args.file_size)
-    except Exception as err:
+        single_upload_test(ctxt, file_size=args.file_size)
+    finally:
         ctxt.teardown()
-        raise err
-    ctxt.teardown()
 
 if __name__ == "__main__":
     main()

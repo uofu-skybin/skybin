@@ -116,6 +116,9 @@ class RenterService(Service):
         base_api_url = 'http://{}'.format(address)
         self._api = RenterAPI(base_api_url)
 
+    def get_info(self):
+        return self._api.get_info()
+
     def reserve_space(self, amount):
         return self._api.reserve_space(amount)
 
@@ -260,7 +263,7 @@ def setup_test(num_providers=1,
                test_file_dir=DEFAULT_TEST_FILE_DIR,
                log_enabled=LOG_ENABLED,
                remove_test_files=REMOVE_TEST_FILES,
-               alias='test'):
+               renter_alias='test_renter'):
     """Create a test context.
 
     Args:
@@ -282,7 +285,8 @@ def setup_test(num_providers=1,
         for _ in range(num_providers):
             pvdr = create_provider(ctxt.metaserver.address, repo_dir=repo_dir)
             ctxt.providers.append(pvdr)
-        ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir, alias=alias)
+        ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir,
+                                    alias=renter_alias)
     except Exception as err:
         ctxt.teardown()
         raise err

@@ -55,7 +55,7 @@ func runRenter(args ...string) {
 			log.Fatal("Unable to register with metaserver. Error: ", err)
 		}
 		r.Config.IsRegistered = true
-		r.Config.RenterAlias = *aliasFlag
+		r.Config.Alias = *aliasFlag
 		err = util.SaveJson(path.Join(homedir, "renter", "config.json"), r.Config)
 		if err != nil {
 			log.Fatal("Unable to update config file. Error: ", err)

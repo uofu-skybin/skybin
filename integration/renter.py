@@ -8,6 +8,12 @@ class RenterAPI:
     def __init__(self, base_url):
         self.base_url = base_url
 
+    def get_info(self):
+        resp = requests.get(self.base_url + '/info')
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content)
+
     def reserve_space(self, amount):
         resp = requests.post(self.base_url + '/reserve-storage', json={'amount': amount})
         if resp.status_code != 201:
@@ -40,8 +46,8 @@ class RenterAPI:
         return json.loads(resp.content)
 
     def remove_file(self, file_id):
-        url = '{}/files/{}'.format(self.base_url, file_id)
-        resp = requests.delete(url)
+        url = '{}/files/remove'.format(self.base_url)
+        resp = requests.post(url, json={'fileID': file_id})
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
 

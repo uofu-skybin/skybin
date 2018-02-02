@@ -9,13 +9,14 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
+	mathrand "math/rand"
 	"net/http"
 	"os"
 	"skybin/core"
 	"skybin/provider"
-	"time"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
@@ -26,269 +27,308 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 	if finfo.IsDir() {
 		return nil, errors.New("Folder uploads not supported yet")
 	}
+	if r.storageAvailable() <= finfo.Size() {
+		return nil, errors.New("Not enough storage")
+	}
 
-	// Find storage for the file
-	blobs, err := r.findStorage(finfo.Size())
+	// Compress
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to open source file. Error: %s", err)
+	}
+	defer srcFile.Close()
+	temp1, err := ioutil.TempFile("", "skybin_upload")
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create temp file. Error: %s", err)
+	}
+	defer temp1.Close()
+	defer os.Remove(temp1.Name())
+	cw := zlib.NewWriter(temp1)
+	_, err = io.Copy(cw, srcFile)
+	if err != nil {
+		return nil, fmt.Errorf("Compression error. Error: %s", err)
+	}
+	cw.Close()
+
+	// Encrypt
+	aesKey := make([]byte, 32)
+	_, err = rand.Reader.Read(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create encryption key. Error: %s", err)
+	}
+	aesIV := make([]byte, aes.BlockSize)
+	_, err = rand.Reader.Read(aesIV)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read initialization vector. Error: %s", err)
+	}
+	aesCipher, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create encryption cipher. Error: %s", err)
+	}
+	temp2, err := ioutil.TempFile("", "skybin_upload")
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create temp file. Error: %s", err)
+	}
+	defer temp2.Close()
+	defer os.Remove(temp2.Name())
+	streamWriter := cipher.StreamWriter{
+		S: cipher.NewCFBEncrypter(aesCipher, aesIV),
+		W: temp2,
+	}
+	_, err = temp1.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to seek file. Error: %s", err)
+	}
+	_, err = io.Copy(streamWriter, temp1)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt file. Error: %s", err)
+	}
+
+	// Compute erasure codes
+	tempStat, err := temp2.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to stat temp file. Error: %s", err)
+	}
+	blockSize := (tempStat.Size() + kDefaultDataBlocks - 1) / kDefaultDataBlocks
+	if blockSize > kMaxBlockSize {
+		blockSize = kMaxBlockSize
+	}
+	// Pad file up to next nearest block size multiple if necessary.
+	// Its size must be a block size multiple.
+	paddingBytes := (blockSize - (tempStat.Size() % blockSize)) % blockSize
+	if paddingBytes != 0 {
+		err := temp2.Truncate(tempStat.Size() + paddingBytes)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to pad file. Error: %s", err)
+		}
+	}
+	nDataBlocks := int((tempStat.Size() + blockSize - 1) / blockSize)
+	nParityBlocks := kDefaultParityBlocks
+	if nDataBlocks > kDefaultDataBlocks {
+		nParityBlocks = (nDataBlocks + 1) / 2
+	}
+	encoder, err := reedsolomon.NewStream(nDataBlocks, nParityBlocks)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create erasure encoder. Error: %s", err)
+	}
+	var blockReaders []io.Reader
+	for i := 0; i < nDataBlocks; i++ {
+		blockReaders = append(blockReaders, io.NewSectionReader(temp2, blockSize*int64(i), blockSize))
+	}
+	var parityFiles []*os.File
+	for i := 0; i < nParityBlocks; i++ {
+		f, err := ioutil.TempFile("", "skybin_upload")
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create parity file. Error: %s", err)
+		}
+		defer f.Close()
+		defer os.Remove(f.Name())
+		parityFiles = append(parityFiles, f)
+	}
+	err = encoder.Encode(blockReaders, convertToWriterSlice(parityFiles))
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create erasure codes. Error: %s", err)
+	}
+
+	// Prepare block metadata
+	blockReaders = []io.Reader{}
+	for blockNum := 0; blockNum < nDataBlocks; blockNum++ {
+		blockReaders = append(blockReaders, io.NewSectionReader(temp2, blockSize*int64(blockNum), blockSize))
+	}
+	for i := 0; i < nParityBlocks; i++ {
+		_, err := parityFiles[i].Seek(0, os.SEEK_SET)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to seek parity file. Error: %s", err)
+		}
+		blockReaders = append(blockReaders, parityFiles[i])
+	}
+
+	var blocks []core.Block
+	for blockNum, blockReader := range blockReaders {
+		blockId, err := genId()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create block ID. Error: %s", err)
+		}
+		h := sha256.New()
+		n, err := io.Copy(h, blockReader)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to calculate block hash. Error: %s", err)
+		}
+		blockHash := string(h.Sum(nil))
+		block := core.Block{
+			ID:         blockId,
+			Num:        blockNum,
+			Size:       n,
+			Sha256Hash: blockHash,
+		}
+		blocks = append(blocks, block)
+	}
+
+	// Prepare file metadata. This is done before uploading blocks to ease error handling.
+	fileId, err := genId()
+	if err != nil {
+		return nil, err
+	}
+	aesKeyEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt aes key. Error: %s", err)
+	}
+	aesIVEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesIV, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt aes IV. Error: %s", err)
+	}
+	uploadSize := blockSize * int64(nDataBlocks)
+	for _, f := range parityFiles {
+		st, err := f.Stat()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to stat parity file. Error: %s", err)
+		}
+		uploadSize += st.Size()
+	}
+	file := &core.File{
+		ID:              fileId,
+		Name:            destPath,
+		IsDir:           false,
+		AccessList:      make([]core.Permission, 0),
+		AesKey:          string(aesKeyEncrypted),
+		AesIV:           string(aesIVEncrypted),
+		Versions: []core.Version{
+			{
+				// TODO: Include version number?
+				Size: finfo.Size(),
+				UploadSize: uploadSize,
+				PaddingBytes: paddingBytes,
+				ModTime: finfo.ModTime(),
+				NumDataBlocks: nDataBlocks,
+				NumParityBlocks: nParityBlocks,
+				Blocks: blocks,
+			},
+		},
+	}
+
+	// Seek back to beginning of parity files
+	for _, parityFile := range parityFiles {
+		_, err := parityFile.Seek(0, os.SEEK_SET)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Find storage. Once this is reserved, errors must be handled more carefully.
+	blobs, err := r.findStorage(nDataBlocks+nParityBlocks, blockSize)
 	if err != nil {
 		return nil, err
 	}
 
-	var aesKey []byte
-	var aesKeyEncrypted []byte
-	var aesIV []byte
-	var aesIVEncrypted []byte
-	var aesBlock cipher.Block
-	var tempFile *os.File
-	var blocks []core.Block
-	var blockIdx int
-	var uploadSize int64
-	var fileId string
-	var file *core.File
-
-	// Generate encryption keys
-	aesKey = make([]byte, 32)
-	_, err = rand.Reader.Read(aesKey)
-	if err != nil {
-		err = fmt.Errorf("Unable to create encryption key. Error: %v", err)
-		goto error
-	}
-	aesIV = make([]byte, aes.BlockSize)
-	_, err = rand.Reader.Read(aesIV)
-	if err != nil {
-		err = fmt.Errorf("Unable to read initialization vector. Error: %v", err)
-		goto error
-	}
-	fileId, err = genId()
-	if err != nil {
-		goto error
-	}
-	aesKeyEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesKey, nil)
-	if err != nil {
-		err = fmt.Errorf("Unable to encrypt aes key. Error: %v", err)
-		goto error
-	}
-	aesIVEncrypted, err = rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesIV, nil)
-	if err != nil {
-		err = fmt.Errorf("Unable to encrypt aes IV. Error: %v", err)
-		goto error
-	}
-	aesBlock, err = aes.NewCipher(aesKey)
-	if err != nil {
-		err = fmt.Errorf("Unable to create block cipher for encryption. Error: %v", err)
-		goto error
+	// Update block locations
+	for i := 0; i < len(blocks); i++ {
+		blocks[i].Locations = append(blocks[i].Locations, core.BlockLocation{
+			ProviderId: blobs[i].ProviderId,
+			Addr:       blobs[i].Addr,
+			ContractId: blobs[i].ContractId,
+		})
 	}
 
-	// Prepare temp file for upload
-	tempFile, err = prepareFile(srcPath, cipher.NewCFBEncrypter(aesBlock, aesIV))
-	if err != nil {
-		goto error
+	// Upload the blocks
+	blockReaders = []io.Reader{}
+	for blockNum := 0; blockNum < nDataBlocks; blockNum++ {
+		blockReaders = append(blockReaders, io.NewSectionReader(temp2, blockSize*int64(blockNum), blockSize))
 	}
-	defer tempFile.Close()
-	defer os.Remove(tempFile.Name())
-
-	// Prepare blocks for upload
-	blocks, err = prepareBlocks(tempFile, blobs)
-	if err != nil {
-		goto error
+	for i := 0; i < nParityBlocks; i++ {
+		blockReaders = append(blockReaders, parityFiles[i])
 	}
-
-	// Upload blocks
-	_, err = tempFile.Seek(0, os.SEEK_SET)
-	if err != nil {
-		err = fmt.Errorf("Unable to seek file. Error: %v", err)
-		goto error
-	}
-	uploadSize = 0
-	for blockIdx = 0; blockIdx < len(blocks); blockIdx++ {
-		block := blocks[blockIdx]
-		uploadSize += block.Size
-		location := block.Locations[0]
-		pvdr := provider.NewClient(location.Addr, &http.Client{})
-		lr := io.LimitReader(tempFile, block.Size)
-		err = pvdr.PutBlock(r.Config.RenterId, block.ID, lr)
+	var blockNum int
+	var reader io.Reader
+	for blockNum, reader = range blockReaders {
+		block := blocks[blockNum]
+		blob := blobs[blockNum]
+		client := provider.NewClient(blob.Addr, &http.Client{})
+		err = client.PutBlock(r.Config.RenterId, block.ID, reader)
 		if err != nil {
-			err = fmt.Errorf("Unable to upload block. Error: %v", err)
-			goto uploadError
+			goto unwind
 		}
-	}
-
-	// Save file metadata
-	file = &core.File{
-		ID:         fileId,
-		Name:       destPath,
-		IsDir:      false,
-		AccessList: []core.Permission{},
-		AesKey:     string(aesKeyEncrypted),
-		AesIV:      string(aesIVEncrypted),
-		Versions: []core.Version{
-			core.Version{
-				Size:       finfo.Size(),
-				UploadSize: uploadSize,
-				Blocks:     blocks,
-				ModTime:    finfo.ModTime(),
-			},
-		},
 	}
 	err = r.saveFile(file)
 	if err != nil {
-		goto uploadError
+		goto unwind
 	}
-
-	// Finally, add back storage blobs that we didn't use
-	r.reclaimBlobs(blobs, uploadSize)
 	return file, nil
 
-uploadError:
-	for i := 0; i < blockIdx; i++ {
+unwind:
+	for i := 0; i < blockNum; i++ {
 		err := r.removeBlock(&blocks[i])
 		if err != nil {
-			// TODO: append block to list to be removed later...
+			// TODO: add block to list of blocks to be removed later
 		}
 	}
-
-error:
-	r.freelist = append(r.freelist, blobs...)
+	for _, blob := range blobs {
+		r.addBlob(blob)
+	}
+	err2 := r.saveSnapshot()
+	if err2 != nil {
+		// TODO:
+	}
 	return nil, err
 }
 
-func (r *Renter) findStorage(amount int64) ([]*storageBlob, error) {
-	var n int64 = 0
-	var blobs []*storageBlob
-	for idx := len(r.freelist) - 1; n < amount && idx >= 0; idx-- {
-		blob := r.freelist[idx]
+func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, error) {
+	type candidate struct {
+		*storageBlob
+		idx int // Index of the blob in the freelist
+	}
 
-		// Check if the provider is online and has the space we think
-		client := provider.NewClient(blob.Addr, &http.Client{
-			Timeout: time.Second * 3,
-		})
+	var candidates []candidate
+	for idx, blob := range r.freelist {
+		if blob.Amount >= blockSize {
+			candidates = append(candidates,
+				candidate{storageBlob: blob, idx: idx})
+		}
+	}
+
+	var blobs []*storageBlob
+	for len(blobs) < nblocks && len(candidates) > 0 {
+		idx := mathrand.Intn(len(candidates))
+		candidate := candidates[idx]
+
+		// Check if the provider is online
+		client := provider.NewClient(candidate.Addr, &http.Client{})
 		_, err := client.GetInfo()
 		if err != nil {
+			candidates = append(candidates[:idx], candidates[idx+1:]...)
 			continue
 		}
 
-		// Remove blob from free list
-		r.freelist = append(r.freelist[:idx], r.freelist[idx+1:]...)
+		blob := &storageBlob{
+			ProviderId: candidate.ProviderId,
+			Amount:     blockSize,
+			Addr:       candidate.Addr,
+			ContractId: candidate.ContractId,
+		}
 		blobs = append(blobs, blob)
-		n += blob.Amount
+
+		candidate.Amount -= blob.Amount
+		if candidate.Amount < blockSize {
+			candidates = append(candidates[:idx], candidates[idx+1:]...)
+		}
+		if candidate.Amount < kMinBlobSize {
+			r.freelist = append(r.freelist[:candidate.idx], r.freelist[candidate.idx+1:]...)
+		}
 	}
 
-	// Did we find enough space?
-	if n < amount {
-		r.freelist = append(r.freelist, blobs...)
-		return nil, errors.New("Cannot find enough space")
+	if len(blobs) < nblocks {
+		for _, blob := range blobs {
+			r.addBlob(blob)
+		}
+		return nil, errors.New("Cannot find enough storage.")
 	}
 
 	return blobs, nil
 }
 
-func (r *Renter) reclaimBlobs(blobs []*storageBlob, uploadSize int64) {
-	var n int64 = 0
-	for _, blob := range blobs {
-		if blob.Amount+n > uploadSize {
-			used := uploadSize - n
-			remaining := blob.Amount - used
-			if remaining > kMinBlobSize {
-				bcopy := *blob
-				bcopy.Amount = remaining
-				r.freelist = append(r.freelist, &bcopy)
-			}
-		}
-		n += blob.Amount
+func (r *Renter) storageAvailable() int64 {
+	var total int64 = 0
+	for _, blob := range r.freelist {
+		total += blob.Amount
 	}
-}
-
-func prepareFile(srcPath string, encrypter cipher.Stream) (*os.File, error) {
-
-	// Compress
-	temp1, err := ioutil.TempFile("", "skybin_upload")
-	if err != nil {
-		return nil, errors.New("Unable to create temp file to prepare upload")
-	}
-	defer temp1.Close()
-	defer os.Remove(temp1.Name())
-	cw := zlib.NewWriter(temp1)
-	srcFile, err := os.Open(srcPath)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to open file. Error: %s", err)
-	}
-	defer srcFile.Close()
-	_, err = io.Copy(cw, srcFile)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to compress file. Error: %s", err)
-	}
-	cw.Close()
-	_, err = temp1.Seek(0, os.SEEK_SET)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to seek to start of temp file. Error: %s", err)
-	}
-
-	// Encrypt
-	temp2, err := ioutil.TempFile("", "skybin_upload")
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create temp file for encrypting upload. Error: %s", err)
-	}
-
-	streamWriter := cipher.StreamWriter{
-		S: encrypter,
-		W: temp2,
-	}
-	_, err = io.Copy(streamWriter, temp1)
-	if err != nil {
-		err = fmt.Errorf("Unable to encrypt upload. Error: %v", err)
-		goto error
-
-	}
-	_, err = temp2.Seek(0, os.SEEK_SET)
-	if err != nil {
-		err = fmt.Errorf("Unable to seek to start of temp file. Error: %v", err)
-		goto error
-	}
-
-	return temp2, nil
-
-error:
-	temp2.Close()
-	os.Remove(temp2.Name())
-	return nil, err
-}
-
-func prepareBlocks(tempFile *os.File, blobs []*storageBlob) ([]core.Block, error) {
-	var blocks []core.Block
-	for _, blob := range blobs {
-		lr := io.LimitReader(tempFile, blob.Amount)
-		h := sha256.New()
-		blockSize, err := io.Copy(h, lr)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to hash block. Error: %s", err)
-		}
-		if blockSize == 0 {
-
-			// EOF
-			return blocks, nil
-		}
-		blockHash := string(h.Sum(nil))
-		blockId, err := genId()
-		if err != nil {
-			return nil, fmt.Errorf("Unable to generate block ID. Error: %s", err)
-		}
-		block := core.Block{
-			ID:         blockId,
-			Sha256Hash: blockHash,
-			Size:       blockSize,
-			Locations: []core.BlockLocation{
-				{
-					ProviderId: blob.ProviderId,
-					Addr:       blob.Addr,
-					ContractId: blob.ContractId,
-				},
-			},
-		}
-		blocks = append(blocks, block)
-	}
-	return blocks, nil
-}
-
-func (r *Renter) saveFile(f *core.File) error {
-	r.files = append(r.files, f)
-	return r.saveSnapshot()
+	return total
 }

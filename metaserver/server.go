@@ -30,10 +30,12 @@ func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 	authMiddleware := authorization.GetAuthMiddleware(server.signingKey)
 
 	router.Handle("/auth/provider", server.authorizer.GetAuthChallengeHandler("providerID")).Methods("GET")
-	router.Handle("/auth/provider", server.authorizer.GetRespondAuthChallengeHandler("providerID", server.signingKey, server.getProviderPublicKey)).Methods("POST")
+	router.Handle("/auth/provider", server.authorizer.GetRespondAuthChallengeHandler(
+		"providerID", server.signingKey, server.getProviderPublicKey)).Methods("POST")
 
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler("renterID", server.signingKey, server.getRenterPublicKey)).Methods("POST")
+	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
+		"renterID", server.signingKey, server.getRenterPublicKey)).Methods("POST")
 
 	router.Handle("/providers", server.getProvidersHandler()).Methods("GET")
 	router.Handle("/providers", server.postProviderHandler()).Methods("POST")

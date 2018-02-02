@@ -6,15 +6,21 @@ import (
 	"skybin/core"
 
 	"github.com/gorilla/mux"
+	"skybin/util"
+	"crypto/rsa"
 )
 
 // Retrieves the given renter's public RSA key.
-func (server *MetaServer) getRenterPublicKey(renterID string) (string, error) {
+func (server *MetaServer) getRenterPublicKey(renterID string) (*rsa.PublicKey, error) {
 	renter, err := server.db.FindRenterByID(renterID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return renter.PublicKey, nil
+	key, err := util.UnmarshalPublicKey([]byte(renter.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 type postRenterResp struct {

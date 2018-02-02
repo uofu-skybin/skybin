@@ -45,15 +45,15 @@ func runRenter(args ...string) {
 			log.Fatal("must supply alias if not registered")
 		}
 		info := core.RenterInfo{
-			ID:        r.Config.RenterId,
 			Alias:     *aliasFlag,
 			PublicKey: string(pubKeyBytes),
 		}
 		metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
-		err = metaService.RegisterRenter(&info)
+		config, err := metaService.RegisterRenter(&info)
 		if err != nil {
 			log.Fatal("Unable to register with metaserver. Error: ", err)
 		}
+		r.Config.RenterId = config.ID
 		r.Config.IsRegistered = true
 		r.Config.Alias = *aliasFlag
 		err = util.SaveJson(path.Join(homedir, "renter", "config.json"), r.Config)

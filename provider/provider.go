@@ -1,10 +1,14 @@
 package provider
 
 import (
+	"crypto/rsa"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"skybin/core"
+	"skybin/metaserver"
 	"skybin/util"
 	"time"
 )
@@ -16,19 +20,22 @@ type Config struct {
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 
-	TotalStorage int64 `json:"totalStorage"`
+	SpaceAvail  int64 `json:"spaceAvail"`
+	StorageRate int64 `json:"storageRate"`
+	// StorageRates []core.StorageRate `json:"storageRates,omitempty"`
 
 	// Is this provider registered with metaservice?
 	IsRegistered bool `json:"isRegistered"`
 }
 
 type Provider struct {
-	Config    *Config
-	Homedir   string
-	contracts []*core.Contract
-	stats     Stats
-	activity  []Activity
-	renters   map[string]*RenterInfo
+	Config     *Config
+	Homedir    string
+	PrivateKey *rsa.PrivateKey
+	contracts  []*core.Contract
+	stats      Stats
+	activity   []Activity
+	renters    map[string]*RenterInfo
 }
 
 // Provider node statistics
@@ -112,30 +119,48 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.renters = s.Renters
 	}
 
+	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
+	if err != nil {
+		return nil, err
+	}
+	provider.PrivateKey = privKey
+
 	return provider, err
 }
 
 func (provider *Provider) addActivity(activity Activity) {
 	provider.activity = append(provider.activity, activity)
 	if len(provider.activity) > maxActivity {
-
 		// Drop the oldest activity.
-		// O(N) but fine for small feed.
 		provider.activity = provider.activity[1:]
 	}
 }
 
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
+	renterKey, err := provider.getRenterPublicKey(contract.RenterId)
+	if err != nil {
+		return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
+	}
+
+	// Verify renters signature
+	err = core.VerifyContractSignature(contract, contract.RenterSignature, *renterKey)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid Renter signature: %s", err)
+	}
 
 	// TODO determine if contract is amiable for provider here
 	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
-	// if contract.StorageSpace > avail {
-	// 	msg := fmt.Sprintf("Contract was not accepted.")
-	// 	return nil, fmt.Errorf(msg)
-	// }
+	avail := int64(9999999999)
+	if contract.StorageSpace > avail {
+		return nil, fmt.Errorf("Provider does not have sufficient storage available")
+	}
 
 	// Sign contract
-	contract.ProviderSignature = "signature"
+	provSig, err := core.SignContract(contract, provider.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("Error signing contract")
+	}
+	contract.ProviderSignature = provSig
 
 	// Add storage space to the renter
 	renter, exists := provider.renters[contract.RenterId]
@@ -160,6 +185,43 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	}
 	provider.addActivity(activity)
 
-	provider.saveSnapshot()
+	err = provider.saveSnapshot()
+	if err != nil {
+
+		// TODO: Remove contract. I don't do this here
+		// since we need to move to an improved storage scheme anyways.
+		return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
+	}
 	return contract, nil
+}
+
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return util.UnmarshalPrivateKey(data)
+}
+
+// TODO: this needs an open public key endpoint
+func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
+	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	rent, err := client.GetRenter(renterId)
+	if err != nil {
+		return nil, err
+	}
+	key, err := util.UnmarshalPublicKey([]byte(rent.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+// THis method will clean up expired files and confirm that they were
+// paid for any storage they used
+func (provider *Provider) maintanence() {
+	// check payments
+	// clean up old contracts
+	// delete unpaid files
 }

@@ -6,15 +6,21 @@ import (
 	"skybin/core"
 
 	"github.com/gorilla/mux"
+	"skybin/util"
+	"crypto/rsa"
 )
 
 // Retrieves the given provider's public RSA key.
-func (server *MetaServer) getProviderPublicKey(providerID string) (string, error) {
+func (server *MetaServer) getProviderPublicKey(providerID string) (*rsa.PublicKey, error) {
 	provider, err := server.db.FindProviderByID(providerID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return provider.PublicKey, nil
+	key, err := util.UnmarshalPublicKey([]byte(provider.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 type getProvidersResp struct {

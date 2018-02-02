@@ -47,16 +47,16 @@ func runProvider(args ...string) {
 			log.Fatal("Could not read public key file. Error: ", err)
 		}
 		info := core.ProviderInfo{
-			ID:         p.Config.ProviderID,
 			PublicKey:  string(pubKeyBytes),
 			Addr:       addr,
 			SpaceAvail: 1 << 32,
 		}
 		metaService := metaserver.NewClient(p.Config.MetaAddr, &http.Client{})
-		err = metaService.RegisterProvider(&info)
+		config, err := metaService.RegisterProvider(&info)
 		if err != nil {
 			log.Fatalf("Unable to register with metaservice. Error: %s", err)
 		}
+		p.Config.ProviderID = config.ID
 		p.Config.IsRegistered = true
 		err = util.SaveJson(path.Join(homedir, "provider", "config.json"), p.Config)
 		if err != nil {

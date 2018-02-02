@@ -15,8 +15,19 @@ type ProviderInfo struct {
 	PublicKey   string `json:"publicKey"`
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
-	StorageRate int    `json:"storageRate,omitempty"`
+	StorageRate int64  `json:"storageRate"`
 }
+
+// Alternative approach from metadata server
+// type StorageRate struct {
+// 	// The fee “Fee” in currency “Currency” for storing
+// 	// “StorageAmount” bytes for “PeriodSec” seconds
+// 	Currency       string `json:"currency"`
+// 	StorageAmount  int64  `json:"storageAmount"`
+// 	Fee            string `json:"fee"`
+// 	PeriodSec      string `json:"periodSec"`
+// 	PaymentAddress string `json:"paymentAddress"`
+// }
 
 type RenterInfo struct {
 	ID        string   `json:"id"`

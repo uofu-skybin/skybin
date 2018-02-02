@@ -84,11 +84,6 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	server.provider.stats.StorageUsed += n
 	renter.StorageUsed += n
 	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
-	server.provider.renters[renterID] = renter
-
-	if err != nil {
-		server.logger.Println("Unable to save snapshot. Error:", err)
-	}
 
 	activity := Activity{
 		RequestType: postBlockType,
@@ -98,6 +93,9 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 	server.provider.addActivity(activity)
 	err = server.provider.saveSnapshot()
+	if err != nil {
+		server.logger.Println("Unable to save snapshot. Error:", err)
+	}
 	server.writeResp(w, http.StatusCreated, &errorResp{})
 }
 
@@ -152,7 +150,7 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
 	blockquery, exists := r.URL.Query()["blockID"]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
+		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: "No block given"})
 		return
 	}
 	blockID := blockquery[0]
@@ -164,7 +162,12 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		return
 	}
 	renterID := renterquery[0]
-	renter := server.provider.renters[renterID]
+	renter, exists := server.provider.renters[renterID]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{Error: "No contracts found for given renter"})
+		return
+	}
 
 	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
 	fi, err := os.Stat(path)
@@ -189,8 +192,6 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	server.provider.renters[renterID] = renter
-
 	activity := Activity{
 		RequestType: deleteBlockType,
 		BlockId:     blockID,
@@ -199,5 +200,8 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 	}
 	server.provider.addActivity(activity)
 	err = server.provider.saveSnapshot()
-	server.writeResp(w, http.StatusOK, &errorResp{"Block Deleted"})
+	if err != nil {
+		server.logger.Println("Error saving snapshot: ", err)
+	}
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }

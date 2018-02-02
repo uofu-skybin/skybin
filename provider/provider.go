@@ -2,9 +2,6 @@ package provider
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -140,18 +137,13 @@ func (provider *Provider) addActivity(activity Activity) {
 }
 
 func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
-
 	renterKey, err := provider.getRenterPublicKey(contract.RenterId)
 	if err != nil {
 		return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
 	}
 
-	parsedKey, err := parsePublicKey(renterKey)
-	if err != nil {
-		return nil, fmt.Errorf("Parsing of renter's public key failed")
-	}
 	// Verify renters signature
-	err = core.VerifyContractSignature(contract, contract.RenterSignature, *parsedKey)
+	err = core.VerifyContractSignature(contract, contract.RenterSignature, *renterKey)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid Renter signature: %s", err)
 	}
@@ -193,7 +185,13 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	}
 	provider.addActivity(activity)
 
-	provider.saveSnapshot()
+	err = provider.saveSnapshot()
+	if err != nil {
+
+		// TODO: Remove contract. I don't do this here
+		// since we need to move to an improved storage scheme anyways.
+		return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
+	}
 	return contract, nil
 }
 
@@ -206,14 +204,18 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 }
 
 // TODO: this needs an open public key endpoint
-func (provider *Provider) getRenterPublicKey(renterId string) (string, error) {
+func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
 	rent, err := client.GetRenter(renterId)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return rent.PublicKey, nil
+	key, err := util.UnmarshalPublicKey([]byte(rent.PublicKey))
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // THis method will clean up expired files and confirm that they were
@@ -222,23 +224,4 @@ func (provider *Provider) maintanence() {
 	// check payments
 	// clean up old contracts
 	// delete unpaid files
-}
-
-// TODO: This should be in a helper
-func parsePublicKey(key string) (*rsa.PublicKey, error) {
-	block, _ := pem.Decode([]byte(key))
-	if block == nil {
-		return nil, errors.New("could not decode PEM")
-	}
-
-	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, errors.New("invalid public key")
-	}
-
-	if publicKey.(*rsa.PublicKey) == nil {
-		return nil, errors.New("key is not a public key")
-	}
-
-	return publicKey.(*rsa.PublicKey), nil
 }

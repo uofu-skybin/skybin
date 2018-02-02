@@ -4,10 +4,8 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
@@ -98,7 +96,8 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.
 	})
 }
 
-func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string, signingKey []byte, getUserPublicKey func(string) (string, error)) http.HandlerFunc {
+func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string, signingKey []byte,
+	getUserPublicKey func(string) (*rsa.PublicKey, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.FormValue(userIDString)
 		signedNonce := r.FormValue("signedNonce")
@@ -122,29 +121,11 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		}
 
 		// Retrieve the user's public key.
-		publicKeyString, err := getUserPublicKey(userID)
+		publicKey, err := getUserPublicKey(userID)
 		if err != nil {
 			authorizer.logger.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := AuthChallengeError{Error: "could not find user's public key"}
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
-
-		block, _ := pem.Decode([]byte(publicKeyString))
-		if block == nil {
-			authorizer.logger.Println("Could not decode PEM.")
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Error: "could not decode user's public key"}
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
-
-		publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-		if err != nil {
-			authorizer.logger.Println("Could not parse public key for user.")
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := AuthChallengeError{Error: "could not parse user's public key"}
 			json.NewEncoder(w).Encode(resp)
 			return
 		}
@@ -169,7 +150,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 			return
 		}
 
-		err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, decodedNonce[:], decoded)
+		err = rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, decodedNonce[:], decoded)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			resp := AuthChallengeError{Error: err.Error()}

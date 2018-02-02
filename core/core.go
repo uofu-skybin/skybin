@@ -16,7 +16,6 @@ type ProviderInfo struct {
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int64  `json:"storageRate"`
-	// StorageRates []StorageRate `json:"storageRates,omitempty"`
 }
 
 // Alternative approach from metadata server

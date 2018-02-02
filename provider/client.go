@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,11 +45,12 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+
 	var respMsg postContractResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
 	return respMsg.Contract, nil
 }
@@ -63,11 +65,12 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+
 	var respMsg postContractResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
 	return respMsg.Contract, nil
 }
@@ -85,11 +88,12 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+
 	var respMsg postContractResp
 	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
-		return err
+		defer resp.Body.Close()
+		return decodeError(resp.Body)
 	}
 	return nil
 }
@@ -100,9 +104,10 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
 	return resp.Body, nil
 }
@@ -113,9 +118,10 @@ func (client *Client) AuditBlock(renterID string, blockID string) (io.ReadCloser
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
 	return resp.Body, nil
 }
@@ -133,9 +139,10 @@ func (client *Client) RemoveBlock(renterID string, blockID string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		return err
+		defer resp.Body.Close()
+		return decodeError(resp.Body)
 	}
 
 	return nil
@@ -153,13 +160,14 @@ func (client *Client) GetInfo() (*core.ProviderInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
+
 	var provInfo *core.ProviderInfo
 	err = json.NewDecoder(resp.Body).Decode(&provInfo)
-
 	if err != nil {
 		return nil, err
 	}
@@ -182,9 +190,10 @@ func (client *Client) GetRenterInfo() (*RenterInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, err
+		defer resp.Body.Close()
+		return nil, decodeError(resp.Body)
 	}
 	var renterInfo *RenterInfo
 	err = json.NewDecoder(resp.Body).Decode(&renterInfo)
@@ -194,4 +203,13 @@ func (client *Client) GetRenterInfo() (*RenterInfo, error) {
 	}
 
 	return renterInfo, nil
+}
+
+func decodeError(r io.Reader) error {
+	var respMsg errorResp
+	err := json.NewDecoder(r).Decode(&respMsg)
+	if err != nil {
+		return err
+	}
+	return errors.New(respMsg.Error)
 }

@@ -78,6 +78,11 @@ func (server *localServer) postInfo(w http.ResponseWriter, r *http.Request) {
 	server.provider.Config.StorageRate = params.StorageRate
 	server.provider.Config.ApiAddr = params.ApiAddr
 
+	err = server.provider.updateMeta()
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{"Error updating metadata server."})
+	}
+
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
@@ -94,7 +99,7 @@ type getActivityResp struct {
 	Activity []Activity `json:"activity"`
 }
 
-//TODO: refactor this into a single function???
+//TODO: refactor this into a single function between local and public???
 func (server *localServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
 	w.WriteHeader(status)
 	data, err := json.MarshalIndent(body, "", "    ")

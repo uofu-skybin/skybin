@@ -108,6 +108,7 @@ func (provider *Provider) saveSnapshot() error {
 		Stats:     provider.stats,
 		Renters:   provider.renters,
 	}
+	provider.updateMeta()
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 
@@ -238,6 +239,27 @@ func (provider *Provider) maintanence() {
 	// check payments
 	// clean up old contracts
 	// delete unpaid files
+
+}
+
+func (provider *Provider) updateMeta() error {
+
+	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
+	if err != nil {
+		log.Fatal("Could not read public key file. Error: ", err)
+	}
+	info := core.ProviderInfo{
+		ID:          provider.Config.ProviderID,
+		PublicKey:   string(pubKeyBytes),
+		Addr:        provider.Config.ApiAddr,
+		SpaceAvail:  provider.Config.SpaceAvail - provider.stats.StorageReserved,
+		StorageRate: provider.Config.StorageRate,
+	}
+	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+
+	metaService.UpdateProvider(&info)
+	return nil
 }
 
 func (provider *Provider) registerWithMeta() error {

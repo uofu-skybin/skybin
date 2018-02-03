@@ -104,6 +104,8 @@ func initProvider(homedir string) {
 		MetaAddr:       core.DefaultMetaAddr,
 		PrivateKeyFile: privateKeyPath,
 		PublicKeyFile:  publicKeyPath,
+		SpaceAvail:     107374182400, //100 gB
+		StorageRate:    19,
 	}
 	err = util.SaveJson(path.Join(homedir, "provider", "config.json"), &providerConfig)
 	checkErr(err)

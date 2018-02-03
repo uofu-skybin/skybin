@@ -101,7 +101,9 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
 		return nil, decodeError(resp.Body)
 	}
 	return resp.Body, nil

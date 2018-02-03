@@ -55,14 +55,14 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
 	// Renters could use this to confirm the provider info from metadata
 	// TODO: change provider dashboard ui to hit /stats instead of /info
-	router.HandleFunc("/info", server.getStats).Methods("GET")
+	router.HandleFunc("/info", server.getInfo).Methods("GET")
 
 	// Local API
 	// TODO: Move these to the local provider server later
-	router.HandleFunc("/info", server.postInfo).Methods("POST")
-	router.HandleFunc("/stats", server.getStats).Methods("GET")
-	router.HandleFunc("/activity", server.getActivity).Methods("GET")
-	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+	// local.HandleFunc("/info", server.postInfo).Methods("POST")
+	// local.HandleFunc("/stats", server.getStats).Methods("GET")
+	// local.HandleFunc("/activity", server.getActivity).Methods("GET")
+	// local.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
 }

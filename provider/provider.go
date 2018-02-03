@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -22,7 +23,6 @@ type Config struct {
 
 	SpaceAvail  int64 `json:"spaceAvail"`
 	StorageRate int64 `json:"storageRate"`
-	// StorageRates []core.StorageRate `json:"storageRates,omitempty"`
 
 	// Is this provider registered with metaservice?
 	IsRegistered bool `json:"isRegistered"`
@@ -30,12 +30,13 @@ type Config struct {
 
 type Provider struct {
 	Config     *Config
-	Homedir    string
+	Homedir    string //move this maybe
 	PrivateKey *rsa.PrivateKey
-	contracts  []*core.Contract
-	stats      Stats
-	activity   []Activity
-	renters    map[string]*RenterInfo
+
+	contracts []*core.Contract
+	stats     Stats
+	activity  []Activity
+	renters   map[string]*RenterInfo
 }
 
 // Provider node statistics
@@ -75,6 +76,25 @@ const (
 	getBlockType    = "GET BLOCK"
 	deleteBlockType = "DELETE BLOCK"
 )
+
+func InitProvider(homedir string) (*Provider, error) {
+	// Potentially move all of this into this function
+	provider, err := LoadFromDisk(path.Join(homedir, "provider"))
+	if err != nil {
+		log.Println(err)
+	}
+	if !provider.Config.IsRegistered {
+		provider.registerWithMeta()
+	}
+
+	privKey, err := loadPrivateKey(path.Join(homedir, "provider", "providerid"))
+	if err != nil {
+		return nil, err
+	}
+	provider.PrivateKey = privKey
+
+	return provider, nil
+}
 
 type snapshot struct {
 	Contracts []*core.Contract       `json:"contracts"`
@@ -119,12 +139,6 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.renters = s.Renters
 	}
 
-	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
-	if err != nil {
-		return nil, err
-	}
-	provider.PrivateKey = privKey
-
 	return provider, err
 }
 
@@ -149,8 +163,8 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// TODO determine if contract is amiable for provider here
-	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
-	avail := int64(9999999999)
+	avail := provider.Config.SpaceAvail - provider.stats.StorageReserved
+
 	if contract.StorageSpace > avail {
 		return nil, fmt.Errorf("Provider does not have sufficient storage available")
 	}
@@ -224,4 +238,31 @@ func (provider *Provider) maintanence() {
 	// check payments
 	// clean up old contracts
 	// delete unpaid files
+}
+
+func (provider *Provider) registerWithMeta() error {
+
+	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
+	if err != nil {
+		log.Fatal("Could not read public key file. Error: ", err)
+	}
+	info := core.ProviderInfo{
+		ID:          provider.Config.ProviderID,
+		PublicKey:   string(pubKeyBytes),
+		Addr:        provider.Config.ApiAddr,
+		SpaceAvail:  provider.Config.SpaceAvail,
+		StorageRate: provider.Config.StorageRate,
+	}
+	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	config, err := metaService.RegisterProvider(&info)
+	if err != nil {
+		log.Fatalf("Unable to register with metaservice. Error: %s", err)
+	}
+	provider.Config.ProviderID = config.ID
+	provider.Config.IsRegistered = true
+	err = util.SaveJson(path.Join(provider.Homedir, "config.json"), provider.Config)
+	if err != nil {
+		log.Fatalf("Unable to update config after registering with metaserver. Error: %s", err)
+	}
+	return nil
 }

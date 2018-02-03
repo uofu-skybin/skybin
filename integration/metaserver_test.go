@@ -59,7 +59,7 @@ func registerRenter(client *metaserver.Client, alias string) (*core.RenterInfo, 
 		Files:     make([]string, 0),
 	}
 
-	err = client.RegisterRenter(&renter)
+	_, err = client.RegisterRenter(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func registerProvider(client *metaserver.Client) (*core.ProviderInfo, error) {
 		StorageRate: 5,
 	}
 
-	err = client.RegisterProvider(&provider)
+	_, err = client.RegisterProvider(&provider)
 	if err != nil {
 		return nil, err
 	}
@@ -555,6 +555,10 @@ func TestGetFiles(t *testing.T) {
 	result, err := client.GetFiles(renter.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if len(result) != len(files) {
+		t.Fatal("wrong number of files returned")
 	}
 
 	for _, file := range files {

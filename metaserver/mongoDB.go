@@ -4,6 +4,7 @@ import (
 	"skybin/core"
 
 	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 )
 
 const dbName = "skybin"
@@ -34,50 +35,14 @@ func (db *mongoDB) getMongoCollection(name string) (*mgo.Collection, *mgo.Sessio
 	return c, session, nil
 }
 
-// Renter operations
-//==================
-
-// Return a list of all renters in the database
-func (db *mongoDB) FindAllRenters() ([]core.RenterInfo, error) {
-	c, session, err := db.getMongoCollection("renters")
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
-	var result []core.RenterInfo
-	err = c.Find(nil).All(&result)
-
-	return result, nil
-}
-
-// Return the renter with the specified ID.
-func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
-	c, session, err := db.getMongoCollection("renters")
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: renterID}
-	var result core.RenterInfo
-	err = c.Find(selector).One(&result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
-// Insert the provided renter into the database.
-func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
-	c, session, err := db.getMongoCollection("renters")
+func (db *mongoDB) findAllFromCollection(collection string, result interface{}) error {
+	c, session, err := db.getMongoCollection(collection)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	err = c.Insert(renter)
+	err = c.Find(nil).All(result)
 	if err != nil {
 		return err
 	}
@@ -85,16 +50,15 @@ func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
 	return nil
 }
 
-// Update the provided renter in the databse.
-func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
-	c, session, err := db.getMongoCollection("renters")
+func (db *mongoDB) findOneFromCollectionByID(collection string, ID string, result interface{}) error {
+	c, session, err := db.getMongoCollection(collection)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	selector := struct{ ID string }{ID: renter.ID}
-	err = c.Update(selector, renter)
+	selector := struct{ ID string }{ID: ID}
+	err = c.Find(selector).One(result)
 	if err != nil {
 		return err
 	}
@@ -102,20 +66,100 @@ func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
 	return nil
 }
 
-// Delete the specified renter from the database.
-func (db *mongoDB) DeleteRenter(renterID string) error {
-	c, session, err := db.getMongoCollection("renters")
+func (db *mongoDB) insertIntoCollection(collection string, doc interface{}) error {
+	c, session, err := db.getMongoCollection(collection)
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	selector := struct{ ID string }{ID: renterID}
+	err = c.Insert(doc)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *mongoDB) updateInCollection(collection string, ID string, doc interface{}) error {
+	c, session, err := db.getMongoCollection(collection)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	selector := struct{ ID string }{ID: ID}
+	err = c.Update(selector, doc)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *mongoDB) deleteInCollectionByID(collection string, ID string) error {
+	c, session, err := db.getMongoCollection(collection)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	selector := struct{ ID string }{ID: ID}
 	err = c.Remove(selector)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+// Renter operations
+//==================
+
+// Return a list of all renters in the database
+func (db *mongoDB) FindAllRenters() ([]core.RenterInfo, error) {
+	var result []core.RenterInfo
+	err := db.findAllFromCollection("renters", &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Return the renter with the specified ID.
+func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
+	var result core.RenterInfo
+	err := db.findOneFromCollectionByID("renters", renterID, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Insert the provided renter into the database.
+func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
+	err := db.insertIntoCollection("renters", renter)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Update the provided renter in the databse.
+func (db *mongoDB) UpdateRenter(renter *core.RenterInfo) error {
+	err := db.updateInCollection("renters", renter.ID, renter)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Delete the specified renter from the database.
+func (db *mongoDB) DeleteRenter(renterID string) error {
+	err := db.deleteInCollectionByID("renters", renterID)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -124,83 +168,48 @@ func (db *mongoDB) DeleteRenter(renterID string) error {
 
 // Return a list of all the providers in the database.
 func (db *mongoDB) FindAllProviders() ([]core.ProviderInfo, error) {
-	c, session, err := db.getMongoCollection("providers")
+	var result []core.ProviderInfo
+	err := db.findAllFromCollection("providers", &result)
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close()
-
-	var result []core.ProviderInfo
-	err = c.Find(nil).All(&result)
-
 	return result, nil
 }
 
 // Return the provider with the specified ID.
 func (db *mongoDB) FindProviderByID(providerID string) (*core.ProviderInfo, error) {
-	c, session, err := db.getMongoCollection("providers")
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: providerID}
 	var result core.ProviderInfo
-	err = c.Find(selector).One(&result)
+	err := db.findOneFromCollectionByID("providers", providerID, &result)
 	if err != nil {
 		return nil, err
 	}
-
 	return &result, nil
 }
 
 // Insert the given provider into the database.
 func (db *mongoDB) InsertProvider(provider *core.ProviderInfo) error {
-	c, session, err := db.getMongoCollection("providers")
+	err := db.insertIntoCollection("providers", provider)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	err = c.Insert(provider)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Update the given provider in the databse.
 func (db *mongoDB) UpdateProvider(provider *core.ProviderInfo) error {
-	c, session, err := db.getMongoCollection("providers")
+	err := db.updateInCollection("providers", provider.ID, provider)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: provider.ID}
-	err = c.Update(selector, provider)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Delete the specified provider from the dtabase.
 func (db *mongoDB) DeleteProvider(providerID string) error {
-	c, session, err := db.getMongoCollection("providers")
+	err := db.deleteInCollectionByID("providers", providerID)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: providerID}
-	err = c.Remove(selector)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -209,33 +218,21 @@ func (db *mongoDB) DeleteProvider(providerID string) error {
 
 // Return a list of all files in the database.
 func (db *mongoDB) FindAllFiles() ([]core.File, error) {
-	c, session, err := db.getMongoCollection("files")
+	var result []core.File
+	err := db.findAllFromCollection("files", &result)
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close()
-
-	var result []core.File
-	err = c.Find(nil).All(&result)
-
 	return result, nil
 }
 
 // Return the latest version of the file with the specified ID.
 func (db *mongoDB) FindFileByID(fileID string) (*core.File, error) {
-	c, session, err := db.getMongoCollection("files")
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: fileID}
 	var result core.File
-	err = c.Find(selector).One(&result)
+	err := db.findOneFromCollectionByID("files", fileID, &result)
 	if err != nil {
 		return nil, err
 	}
-
 	return &result, nil
 }
 
@@ -257,16 +254,11 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 
 	// Retrieve files from collection.
 	files := session.DB(dbName).C("files")
-
+	fileSelector := bson.M{"id": bson.M{"$in": filesToFind}}
 	var foundFiles []core.File
-	for _, item := range filesToFind {
-		selector = struct{ ID string }{ID: item}
-		var result core.File
-		err = files.Find(selector).One(&result)
-		if err != nil {
-			return nil, err
-		}
-		foundFiles = append(foundFiles, result)
+	err = files.Find(fileSelector).All(&foundFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	return foundFiles, nil
@@ -290,16 +282,11 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 
 	// Retrieve files from collection.
 	files := session.DB(dbName).C("files")
-
+	fileSelector := bson.M{"id": bson.M{"$in": filesToFind}}
 	var foundFiles []core.File
-	for _, item := range filesToFind {
-		selector = struct{ ID string }{ID: item}
-		var result core.File
-		err = files.Find(selector).One(&result)
-		if err != nil {
-			return nil, err
-		}
-		foundFiles = append(foundFiles, result)
+	err = files.Find(fileSelector).All(&foundFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	return foundFiles, nil
@@ -325,51 +312,28 @@ func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 
 // Insert the given file into the database.
 func (db *mongoDB) InsertFile(file *core.File) error {
-	c, session, err := db.getMongoCollection("files")
+	err := db.insertIntoCollection("files", file)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	err = c.Insert(file)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Update the given file in the database.
 func (db *mongoDB) UpdateFile(file *core.File) error {
-	c, session, err := db.getMongoCollection("files")
+	err := db.updateInCollection("files", file.ID, file)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: file.ID}
-	err = c.Update(selector, file)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Delete all versions of the given file from the database.
 func (db *mongoDB) DeleteFile(fileID string) error {
-	c, session, err := db.getMongoCollection("files")
+	err := db.deleteInCollectionByID("files", fileID)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: fileID}
-	err = c.Remove(selector)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -378,33 +342,21 @@ func (db *mongoDB) DeleteFile(fileID string) error {
 
 // Return a list of all contracts in the database.
 func (db *mongoDB) FindAllContracts() ([]core.Contract, error) {
-	c, session, err := db.getMongoCollection("contracts")
+	var result []core.Contract
+	err := db.findAllFromCollection("contracts", &result)
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close()
-
-	var result []core.Contract
-	err = c.Find(nil).All(&result)
-
 	return result, nil
 }
 
 // Return the contract with the specified ID
 func (db *mongoDB) FindContractByID(contractID string) (*core.Contract, error) {
-	c, session, err := db.getMongoCollection("contracts")
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: contractID}
 	var result core.Contract
-	err = c.Find(selector).One(&result)
+	err := db.findOneFromCollectionByID("contracts", contractID, &result)
 	if err != nil {
 		return nil, err
 	}
-
 	return &result, nil
 }
 
@@ -428,50 +380,27 @@ func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, erro
 
 // Insert the given contract into the database.
 func (db *mongoDB) InsertContract(contract *core.Contract) error {
-	c, session, err := db.getMongoCollection("contracts")
+	err := db.insertIntoCollection("contracts", contract)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	err = c.Insert(contract)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Update the given contract.
 func (db *mongoDB) UpdateContract(contract *core.Contract) error {
-	c, session, err := db.getMongoCollection("contracts")
+	err := db.updateInCollection("contracts", contract.ID, contract)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: contract.ID}
-	err = c.Update(selector, contract)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // Delete the contract.
 func (db *mongoDB) DeleteContract(contractID string) error {
-	c, session, err := db.getMongoCollection("contracts")
+	err := db.deleteInCollectionByID("contracts", contractID)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
-
-	selector := struct{ ID string }{ID: contractID}
-	err = c.Remove(selector)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }

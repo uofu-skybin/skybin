@@ -187,6 +187,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 	}
 	file := &core.File{
 		ID:              fileId,
+		OwnerID:         r.Config.RenterId,
 		Name:            destPath,
 		IsDir:           false,
 		AccessList:      make([]core.Permission, 0),

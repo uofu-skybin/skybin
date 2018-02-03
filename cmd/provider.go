@@ -71,17 +71,17 @@ func runProvider(args ...string) {
 		addr = p.Config.ApiAddr
 	}
 
-	// this is a hack to avoid breaking tests
-	// potentially add second flag to specify the port
-	// or pursue another solution
-	if len(addr) == 0 {
-		go func() {
-			localAddr := "localhost:29876"
-			localServer := provider.NewLocalServer(p, logger)
-			log.Println("starting local provider server at", localAddr)
-			log.Fatal(http.ListenAndServe(localAddr, localServer))
-		}()
-	}
+	go func() {
+		// this is a hack to avoid breaking tests
+		// potentially add second flag to specify the port
+		// or pursue another solution
+		// if len(addr) == 0 {
+		localAddr := "localhost:29876"
+		localServer := provider.NewLocalServer(p, logger)
+		log.Println("starting local provider server at", localAddr)
+		log.Fatal(http.ListenAndServe(localAddr, localServer))
+		// }
+	}()
 
 	server := provider.NewServer(p, logger)
 	log.Println("starting public provider server at", addr)

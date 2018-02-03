@@ -31,18 +31,24 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
 
-	var myHandler = http.HandlerFunc(server.postContract)
-	router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
+	// var myHandler = http.HandlerFunc(server.postContract)
+	// router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
 
-	// TODO: add middleware
-	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
+
 	// TODO: add middleware
-	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
+	postBlockHandler := http.HandlerFunc(server.postBlock)
+	router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
+
+	// TODO: add middleware
+	deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
+	router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
+
+	// router.Handle("/blocks", authMiddleware.Handler(server.deleteBlock)).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
@@ -52,7 +58,10 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		server.provider.getRenterPublicKey)).Methods("POST")
 
 	// TODO: add middleware
-	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
+	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
+
+	getRenterHandler := http.HandlerFunc(server.getRenter)
+	router.Handle("/renter-info", authMiddleware.Handler(getRenterHandler)).Methods("GET")
 	// Renters could use this to confirm the provider info from metadata
 	// TODO: change provider dashboard ui to hit /stats instead of /info
 	router.HandleFunc("/info", server.getInfo).Methods("GET")

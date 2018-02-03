@@ -557,6 +557,10 @@ func TestGetFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if len(result) != len(files) {
+		t.Fatal("wrong number of files returned")
+	}
+
 	for _, file := range files {
 		compared := false
 		for _, item := range result {

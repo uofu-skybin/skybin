@@ -460,7 +460,7 @@ func (client *Client) PutFileVersion(renterID string, fileID string, version *co
 		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions/%d", client.addr, renterID, fileID, version.Number)
+	url := fmt.Sprintf("http://%s/renters/%s/files/%s/versions/%d", client.addr, renterID, fileID, version.Num)
 
 	b, err := json.Marshal(version)
 	if err != nil {

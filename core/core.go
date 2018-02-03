@@ -57,13 +57,13 @@ type Block struct {
 
 	// Offset of the block in the file, relative to the file's other blocks.
 	// For the first block, this is zero.
-	Num int `json:"blockNum"`
+	Num int `json:"num"`
 
 	// Size of the block in bytes
 	Size int64 `json:"size"`
 
 	// sha256 hash of the block
-	Sha256Hash string `json:"hash"`
+	Sha256Hash string `json:"sha256hash"`
 
 	// Locations of providers where the block is stored
 	Locations []BlockLocation `json:"locations"`
@@ -82,7 +82,7 @@ type Permission struct {
 
 type File struct {
 	ID         string       `json:"id"`
-	OwnerID    string       `json:"ownerID"`
+	OwnerID    string       `json:"ownerId"`
 	Name       string       `json:"name"`
 	IsDir      bool         `json:"isDir"`
 	AccessList []Permission `json:"accessList"`
@@ -92,7 +92,7 @@ type File struct {
 }
 
 type Version struct {
-	Number          int       `json:"number"`
+	Num             int       `json:"num"`
 	Size            int64     `json:"size"`
 	ModTime         time.Time `json:"modTime"`
 	UploadSize      int64     `json:"uploadSize"`

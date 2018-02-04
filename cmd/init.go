@@ -39,7 +39,7 @@ func runInit(args ...string) {
 	}
 
 	if _, err := os.Stat(homedir); err == nil {
-		log.Fatalf("error: %s already exists", homedir)
+		log.Fatalf("error: %s already exists\n", homedir)
 	}
 
 	// Create repo
@@ -57,7 +57,8 @@ func initRenter(homedir string, keyfile string) {
 	var rsaKey *rsa.PrivateKey
 	var err error
 	if len(keyfile) != 0 {
-		keybytes, err := ioutil.ReadFile(keyfile)
+		var keybytes []byte
+		keybytes, err = ioutil.ReadFile(keyfile)
 		checkErr(err)
 		rsaKey, err = util.UnmarshalPrivateKey(keybytes)
 	} else {

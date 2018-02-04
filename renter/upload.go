@@ -195,7 +195,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		AesIV:           string(aesIVEncrypted),
 		Versions: []core.Version{
 			{
-				// TODO: Include version number?
+				Num: 1,
 				Size: finfo.Size(),
 				UploadSize: uploadSize,
 				PaddingBytes: paddingBytes,

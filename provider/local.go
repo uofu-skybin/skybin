@@ -47,8 +47,8 @@ func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 		ProviderId:      server.provider.Config.ProviderID,
 		TotalStorage:    server.provider.Config.SpaceAvail,
 		ReservedStorage: reserved,
-		UsedStorage:     used, //maybe delete
-		FreeStorage:     free, //maybe delete
+		UsedStorage:     used, //maybe delete these fields
+		FreeStorage:     free, //maybe delete these fields
 		TotalContracts:  len(server.provider.contracts),
 	}
 
@@ -78,7 +78,7 @@ func (server *localServer) postInfo(w http.ResponseWriter, r *http.Request) {
 	server.provider.Config.StorageRate = params.StorageRate
 	server.provider.Config.ApiAddr = params.ApiAddr
 
-	err = server.provider.updateMeta()
+	err = server.provider.UpdateMeta()
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, &errorResp{"Error updating metadata server."})
 	}

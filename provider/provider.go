@@ -108,7 +108,7 @@ func (provider *Provider) saveSnapshot() error {
 		Stats:     provider.stats,
 		Renters:   provider.renters,
 	}
-	provider.updateMeta()
+	provider.UpdateMeta()
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 
@@ -235,14 +235,16 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 
 // THis method will clean up expired files and confirm that they were
 // paid for any storage they used
-func (provider *Provider) maintanence() {
+func (provider *Provider) maintenance() {
 	// check payments
 	// clean up old contracts
 	// delete unpaid files
 
 }
 
-func (provider *Provider) updateMeta() error {
+// Currently called after forming every contract could also be moved into maintenance
+// (It will still need to be called in the postInfo method)
+func (provider *Provider) UpdateMeta() error {
 
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {

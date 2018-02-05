@@ -28,7 +28,7 @@ echo "starting metaserver"
 sleep 1
 
 echo "starting provider"
-../skybin provider &
+../skybin provider -local localhost:29876 &
 
 echo "starting renter"
 ../skybin renter -alias test &

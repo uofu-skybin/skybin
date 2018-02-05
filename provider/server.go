@@ -38,17 +38,14 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
 
+	// TODO: fix middleware
+	// postBlockHandler := http.HandlerFunc(server.postBlock)
+	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
+	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
+	// router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-
-	// TODO: add middleware
-	postBlockHandler := http.HandlerFunc(server.postBlock)
-	router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
-
-	// TODO: add middleware
-	deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
-	router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
-
-	// router.Handle("/blocks", authMiddleware.Handler(server.deleteBlock)).Methods("DELETE")
+	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
+	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
@@ -57,7 +54,6 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
 
-	// TODO: add middleware
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
 
 	getRenterHandler := http.HandlerFunc(server.getRenter)

@@ -59,7 +59,7 @@ func registerRenter(client *metaserver.Client, alias string) (*core.RenterInfo, 
 		Files:     make([]string, 0),
 	}
 
-	err = client.RegisterRenter(&renter)
+	_, err = client.RegisterRenter(&renter)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func registerProvider(client *metaserver.Client) (*core.ProviderInfo, error) {
 		StorageRate: 5,
 	}
 
-	err = client.RegisterProvider(&provider)
+	_, err = client.RegisterProvider(&provider)
 	if err != nil {
 		return nil, err
 	}
@@ -557,6 +557,10 @@ func TestGetFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if len(result) != len(files) {
+		t.Fatal("wrong number of files returned")
+	}
+
 	for _, file := range files {
 		compared := false
 		for _, item := range result {
@@ -634,7 +638,7 @@ func TestUploadNewFileVersion(t *testing.T) {
 	}
 
 	// Retrieve the version and make sure it matches.
-	version.Number = 1
+	version.Num = 1
 
 	result, err := client.GetFileVersion(renter.ID, file.ID, 1)
 	if err != nil {
@@ -675,7 +679,7 @@ func TestGetFileVersions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		version.Number = i + 1
+		version.Num = i + 1
 		versions = append(versions, version)
 	}
 
@@ -688,7 +692,7 @@ func TestGetFileVersions(t *testing.T) {
 	for _, version := range versions {
 		compared := false
 		for _, item := range result {
-			if item.Number == version.Number {
+			if item.Num == version.Num {
 				if diff := deep.Equal(version, item); diff != nil {
 					t.Fatal(diff)
 				}
@@ -697,7 +701,7 @@ func TestGetFileVersions(t *testing.T) {
 			}
 		}
 		if !compared {
-			t.Fatal("Version ", version.Number, " missing from output")
+			t.Fatal("Version ", version.Num, " missing from output")
 		}
 	}
 }
@@ -775,7 +779,7 @@ func TestUpdateFileVersion(t *testing.T) {
 	}
 
 	// Update the version we just uploaded.
-	version.Number = 1
+	version.Num = 1
 	version.Size = 2000
 
 	err = client.PutFileVersion(renter.ID, file.ID, &version)

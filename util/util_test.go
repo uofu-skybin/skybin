@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"testing"
+	"strings"
 )
 
 func TestMarshalKey(t *testing.T) {
@@ -51,5 +52,19 @@ func TestMarshalKey(t *testing.T) {
 	err = rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, h[:], sig1)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnMarshalInvalidKey(t *testing.T) {
+	badKeys := []string{"", "not a key", strings.Repeat("a", 3000)}
+	for _, badKey := range badKeys {
+		_, err := UnmarshalPrivateKey([]byte(badKey))
+		if err == nil {
+			t.Fatalf("expected error unmarshalling invalid private key %s", badKey)
+		}
+		_, err = UnmarshalPublicKey([]byte(badKey))
+		if err == nil {
+			t.Fatalf("expected error unmarshalling invalid public key %s", badKey)
+		}
 	}
 }

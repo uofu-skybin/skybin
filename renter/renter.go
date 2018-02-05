@@ -143,10 +143,11 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	}
 	file := &core.File{
 		ID:         id,
+		OwnerID:    r.Config.RenterId,
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
-		Versions: []core.Version{},
+		Versions:   []core.Version{},
 	}
 	err = r.saveFile(file)
 	if err != nil {

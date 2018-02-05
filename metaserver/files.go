@@ -204,7 +204,7 @@ func (server *MetaServer) getFileVersionHandler() http.HandlerFunc {
 			return
 		}
 		for _, item := range file.Versions {
-			if item.Number == versionNum {
+			if item.Num == versionNum {
 				json.NewEncoder(w).Encode(item)
 				return
 			}
@@ -250,7 +250,7 @@ func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 		}
 		removeIndex := -1
 		for i, item := range file.Versions {
-			if item.Number == version {
+			if item.Num == version {
 				removeIndex = i
 				break
 			}
@@ -295,7 +295,7 @@ func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 		}
 
 		// Add 1 for index shift, 1 to get version number
-		version.Number = len(file.Versions) + 1
+		version.Num = len(file.Versions) + 1
 		file.Versions = append(file.Versions, version)
 
 		err = server.db.UpdateFile(file)
@@ -341,7 +341,7 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 
 		updateIndex := -1
 		for i, item := range file.Versions {
-			if item.Number == version {
+			if item.Num == version {
 				updateIndex = i
 			}
 		}

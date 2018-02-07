@@ -117,6 +117,24 @@ func (client *Client) Download(fileId string, destpath string) error {
 	return nil
 }
 
+func (client *Client) RenameFile(fileId string, name string) error {
+	url := fmt.Sprintf("http://%s/files/rename", client.addr)
+	req := renameFileReq{
+		FileId: fileId,
+		Name: name,
+	}
+	data, _ := json.Marshal(&req)
+	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+	return nil
+}
+
 func (client *Client) CreateFolder(name string) (*core.File, error) {
 	url := fmt.Sprintf("http://%s/files/create-folder", client.addr)
 	req := createFolderReq{

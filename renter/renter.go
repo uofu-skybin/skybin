@@ -156,6 +156,31 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	return file, nil
 }
 
+func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
+	file, err := r.Lookup(fileId)
+	if err != nil {
+		return nil, err
+	}
+	for _, file2 := range r.files {
+		if file2.Name == name {
+			return nil, errors.New("Cannot rename file. Name already taken")
+		}
+	}
+	if file.IsDir {
+		children := r.findChildren(file)
+		for _, child := range children {
+			suffix := strings.TrimPrefix(child.Name, file.Name)
+			child.Name = name + suffix
+		}
+	}
+	file.Name = name
+	err = r.saveSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
 func (r *Renter) ListFiles() ([]*core.File, error) {
 	return r.files, nil
 }

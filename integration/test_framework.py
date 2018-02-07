@@ -6,6 +6,7 @@ Framework and helpers for running integration tests.
 from renter import RenterAPI
 import json
 import os
+import sys
 import random
 import shutil
 import string
@@ -128,6 +129,12 @@ class RenterService(Service):
     def download_file(self, file_id, destination):
         return self._api.download_file(file_id, destination)
 
+    def rename_file(self, file_id, name):
+        return self._api.rename_file(file_id, name)
+
+    def create_folder(self, name):
+        return self._api.create_folder(name)
+
     def share_file(self, file_id, user_id):
         return self._api.share_file(file_id, user_id)
 
@@ -181,7 +188,7 @@ class TestContext:
         if not condition:
             print('FAIL:', message)
             self.teardown()
-            os.exit(1)
+            sys.exit(1)
 
     def log(self, *args):
         """Print the given arguments."""

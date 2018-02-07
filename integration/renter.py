@@ -37,6 +37,25 @@ class RenterAPI:
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
 
+    def rename_file(self, file_id, name):
+        url = self.base_url + '/files/rename'
+        resp = requests.post(url, json={
+            'fileId': file_id,
+            'name': name,
+        })
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content)
+
+    def create_folder(self, name):
+        url = self.base_url + '/files/create-folder'
+        resp = requests.post(url, json={
+            'name': name,
+        })
+        if resp.status_code != 201:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content)
+
     def share_file(self, file_id, user_id):
         resp = requests.post(self.base_url + '/files/{}/permissions'.format(file_id), json={
             'userId': user_id

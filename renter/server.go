@@ -197,9 +197,31 @@ func (server *renterServer) shareFile(w http.ResponseWriter, r *http.Request) {
 	// TODO: implement
 }
 
+type renameFileReq struct {
+	FileId string `json:"fileId"`
+	Name string `json:"name"`
+}
+
 func (server *renterServer) renameFile(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement
-	w.WriteHeader(http.StatusNotImplemented)
+	var req renameFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+
+	}
+
+	f, err := server.renter.RenameFile(req.FileId, req.Name)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, f)
 }
 
 func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {

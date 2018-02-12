@@ -292,6 +292,36 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 	return foundFiles, nil
 }
 
+func (db *mongoDB) AddFileToRenterDirectory(renterID string, fileID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	renters := session.DB(dbName).C("renters")
+
+	selector := bson.M{"id": renterID}
+	push := bson.M{"$push": bson.M{"files": fileID}}
+	err := renters.Update(selector, push)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) RemoveFileFromRenterDirectory(renterID string, fileID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	renters := session.DB(dbName).C("renters")
+
+	selector := bson.M{"id": renterID}
+	push := bson.M{"$pull": bson.M{"files": fileID}}
+	err := renters.Update(selector, push)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Return a list of files that the renter owns.
 func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 	c, session, err := db.getMongoCollection("files")
@@ -331,6 +361,21 @@ func (db *mongoDB) UpdateFile(file *core.File) error {
 // Delete all versions of the given file from the database.
 func (db *mongoDB) DeleteFile(fileID string) error {
 	err := db.deleteInCollectionByID("files", fileID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) DeleteFileVersion(fileID string, version int) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	selector := bson.M{"id": fileID}
+	pull := bson.M{"$pull": bson.M{"versions": bson.M{"num": version}}}
+	err := files.Update(selector, pull)
 	if err != nil {
 		return err
 	}

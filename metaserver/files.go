@@ -20,18 +20,13 @@ func (server *MetaServer) getFilesHandler() http.HandlerFunc {
 		// Make sure the specified renter actually exists.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		// Retrieve the renter's files.
 		files, err := server.db.FindFilesInRenterDirectory(renter.ID)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server errorr"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		json.NewEncoder(w).Encode(files)
@@ -43,9 +38,7 @@ func (server *MetaServer) postFileHandler() http.HandlerFunc {
 		var file core.File
 		err := json.NewDecoder(r.Body).Decode(&file)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -54,9 +47,7 @@ func (server *MetaServer) postFileHandler() http.HandlerFunc {
 		// Make sure the renter exists.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -66,9 +57,7 @@ func (server *MetaServer) postFileHandler() http.HandlerFunc {
 		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
 		err = server.db.InsertFile(&file)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -77,9 +66,7 @@ func (server *MetaServer) postFileHandler() http.HandlerFunc {
 		// BUG(kincaid): Consider trying to roll things back if this fails.
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
@@ -93,10 +80,7 @@ func (server *MetaServer) getFileHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			server.logger.Println(err)
-			resp := errorResp{Error: "could not find file"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		json.NewEncoder(w).Encode(file)
@@ -110,17 +94,13 @@ func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 		// Delete the file from the database.
 		err := server.db.DeleteFile(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 		// Remove the file from the renter's directory.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			resp := errorResp{Error: "could not find renter"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		removeIndex := -1
@@ -130,19 +110,13 @@ func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 			}
 		}
 		if removeIndex == -1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println("could not find file in renter's directory")
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		renter.Files = append(renter.Files[:removeIndex], renter.Files[removeIndex+1:]...)
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -156,29 +130,21 @@ func (server *MetaServer) putFileHandler() http.HandlerFunc {
 		var file core.File
 		err := json.NewDecoder(r.Body).Decode(&file)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		if file.ID != params["fileID"] {
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := fileResp{Error: "must not change file ID"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must not change file ID", http.StatusUnauthorized, w)
 			return
 		} else if file.OwnerID != params["renterID"] {
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := fileResp{Error: "must not change file owner"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must not change file owner", http.StatusUnauthorized, w)
 			return
 		}
 
 		err = server.db.UpdateFile(&file)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -191,16 +157,12 @@ func (server *MetaServer) getFileVersionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		versionNum, err := strconv.Atoi(params["version"])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "must supply int for version"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must supply int for version", http.StatusBadRequest, w)
 			return
 		}
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		for _, item := range file.Versions {
@@ -209,9 +171,7 @@ func (server *MetaServer) getFileVersionHandler() http.HandlerFunc {
 				return
 			}
 		}
-		w.WriteHeader(http.StatusNotFound)
-		resp := fileResp{Error: "could not find specified version"}
-		json.NewEncoder(w).Encode(resp)
+		writeErr("could not find specified version", http.StatusNotFound, w)
 	})
 }
 
@@ -221,9 +181,7 @@ func (server *MetaServer) getFileVersionsHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		json.NewEncoder(w).Encode(file.Versions)
@@ -236,16 +194,12 @@ func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "must supply int for version"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must supply int for version", http.StatusBadRequest, w)
 			return
 		}
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		removeIndex := -1
@@ -256,17 +210,13 @@ func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 			}
 		}
 		if removeIndex == -1 {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: "could not find specified version"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not find specified version", http.StatusNotFound, w)
 			return
 		}
 		file.Versions = append(file.Versions[:removeIndex], file.Versions[removeIndex+1:]...)
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -280,30 +230,22 @@ func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 		var version core.Version
 		err := json.NewDecoder(r.Body).Decode(&version)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
-		// Add 1 for index shift, 1 to get version number
 		version.Num = len(file.Versions) + 1
 		file.Versions = append(file.Versions, version)
 
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -316,26 +258,20 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "must supply int for version"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must supply int for version", http.StatusBadRequest, w)
 			return
 		}
 
 		var newVersion core.Version
 		err = json.NewDecoder(r.Body).Decode(&newVersion)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
@@ -346,9 +282,7 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 			}
 		}
 		if updateIndex == -1 {
-			w.WriteHeader(http.StatusNotFound)
-			resp := errorResp{Error: "version not found"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not find specified version", http.StatusNotFound, w)
 			return
 		}
 
@@ -356,10 +290,7 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -373,9 +304,7 @@ func (server *MetaServer) getFilePermissionsHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		json.NewEncoder(w).Encode(file.AccessList)
@@ -389,9 +318,7 @@ func (server *MetaServer) getFilePermissionHandler() http.HandlerFunc {
 
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		for _, item := range file.AccessList {
@@ -400,9 +327,8 @@ func (server *MetaServer) getFilePermissionHandler() http.HandlerFunc {
 				return
 			}
 		}
-		w.WriteHeader(http.StatusNotFound)
-		resp := fileResp{Error: "could not find specified permission"}
-		json.NewEncoder(w).Encode(resp)
+		writeErr("could not find specified permission", http.StatusNotFound, w)
+
 	})
 }
 
@@ -413,35 +339,27 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		var permission core.Permission
 		err := json.NewDecoder(r.Body).Decode(&permission)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		// Make sure a valid renter is specified in the permission.
 		renter, err := server.db.FindRenterByID(permission.RenterId)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
 		// Make sure the renter is not already in the ACL
 		for _, item := range file.AccessList {
 			if item.RenterId == renter.ID {
-				w.WriteHeader(http.StatusBadRequest)
-				resp := fileResp{Error: "already shared with this renter"}
-				json.NewEncoder(w).Encode(resp)
+				writeErr("already shared with this renter", http.StatusBadRequest, w)
 				return
 			}
 		}
@@ -450,10 +368,7 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		file.AccessList = append(file.AccessList, permission)
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -461,10 +376,7 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		renter.Shared = append(renter.Shared, file.ID)
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -479,17 +391,13 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 		var newPermission core.Permission
 		err := json.NewDecoder(r.Body).Decode(&newPermission)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := fileResp{Error: "could not parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
@@ -500,9 +408,7 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 			}
 		}
 		if updateIndex == -1 {
-			w.WriteHeader(http.StatusNotFound)
-			resp := errorResp{Error: "permission not found"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not find permission", http.StatusNotFound, w)
 			return
 		}
 
@@ -510,10 +416,7 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -529,9 +432,7 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		// Remove the user from the file's ACL
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		removeIndex := -1
@@ -542,27 +443,20 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 			}
 		}
 		if removeIndex == -1 {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: "could not find specified permission"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not find specified permission", http.StatusNotFound, w)
 			return
 		}
 		file.AccessList = append(file.AccessList[:removeIndex], file.AccessList[removeIndex+1:]...)
 		err = server.db.UpdateFile(file)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := fileResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
 		// Remove the file from the sharee's directory
 		renter, err := server.db.FindRenterByID(params["sharedID"])
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -582,10 +476,7 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			server.logger.Println(err)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 

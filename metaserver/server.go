@@ -82,7 +82,7 @@ func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 
 type MetaServer struct {
 	dataDir    string
-	db         metaDB
+	db         *mongoDB
 	providers  []core.ProviderInfo
 	renters    []core.RenterInfo
 	logger     *log.Logger

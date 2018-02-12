@@ -62,9 +62,7 @@ func (server *MetaServer) postFileHandler() http.HandlerFunc {
 		}
 
 		// Insert the file's ID into the renter's directory.
-		renter.Files = append(renter.Files, file.ID)
-		// BUG(kincaid): Consider trying to roll things back if this fails.
-		err = server.db.UpdateRenter(renter)
+		err = server.db.AddFileToRenterDirectory(renter.ID, file.ID)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return
@@ -103,18 +101,7 @@ func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
-		removeIndex := -1
-		for i, fileID := range renter.Files {
-			if fileID == params["fileID"] {
-				removeIndex = i
-			}
-		}
-		if removeIndex == -1 {
-			writeAndLogInternalError(err, w, server.logger)
-			return
-		}
-		renter.Files = append(renter.Files[:removeIndex], renter.Files[removeIndex+1:]...)
-		err = server.db.UpdateRenter(renter)
+		err = server.db.RemoveFileFromRenterDirectory(renter.ID, params["fileID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return
@@ -197,24 +184,8 @@ func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 			writeErr("must supply int for version", http.StatusBadRequest, w)
 			return
 		}
-		file, err := server.db.FindFileByID(params["fileID"])
-		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-		removeIndex := -1
-		for i, item := range file.Versions {
-			if item.Num == version {
-				removeIndex = i
-				break
-			}
-		}
-		if removeIndex == -1 {
-			writeErr("could not find specified version", http.StatusNotFound, w)
-			return
-		}
-		file.Versions = append(file.Versions[:removeIndex], file.Versions[removeIndex+1:]...)
-		err = server.db.UpdateFile(file)
+
+		err = server.db.DeleteFileVersion(params["fileID"], version)
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return

@@ -84,7 +84,10 @@ func InitProvider(homedir string) (*Provider, error) {
 		log.Println(err)
 	}
 	if !provider.Config.IsRegistered {
-		provider.registerWithMeta()
+		err = provider.registerWithMeta()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "provider", "providerid"))
@@ -108,7 +111,10 @@ func (provider *Provider) saveSnapshot() error {
 		Stats:     provider.stats,
 		Renters:   provider.renters,
 	}
-	provider.UpdateMeta()
+	err := provider.UpdateMeta()
+	if err != nil {
+		return fmt.Errorf("Error updating metaserver: %s", err)
+	}
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 
@@ -258,9 +264,15 @@ func (provider *Provider) UpdateMeta() error {
 		StorageRate: provider.Config.StorageRate,
 	}
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
-
-	metaService.UpdateProvider(&info)
+	err = metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return fmt.Errorf("Error authenticating with metaserver: %s", err)
+	}
+	err = metaService.UpdateProvider(&info)
+	if err != nil {
+		log.Println("TODO")
+		return fmt.Errorf("Error updating provider: %s", err)
+	}
 	return nil
 }
 
@@ -268,7 +280,7 @@ func (provider *Provider) registerWithMeta() error {
 
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {
-		log.Fatal("Could not read public key file. Error: ", err)
+		return fmt.Errorf("Could not read public key file. Error: ", err)
 	}
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
@@ -280,13 +292,13 @@ func (provider *Provider) registerWithMeta() error {
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	config, err := metaService.RegisterProvider(&info)
 	if err != nil {
-		log.Fatalf("Unable to register with metaservice. Error: %s", err)
+		return fmt.Errorf("Unable to register with metaservice. Error: %s", err)
 	}
 	provider.Config.ProviderID = config.ID
 	provider.Config.IsRegistered = true
 	err = util.SaveJson(path.Join(provider.Homedir, "config.json"), provider.Config)
 	if err != nil {
-		log.Fatalf("Unable to update config after registering with metaserver. Error: %s", err)
+		return fmt.Errorf("Unable to update config after registering with metaserver. Error: %s", err)
 	}
 	return nil
 }

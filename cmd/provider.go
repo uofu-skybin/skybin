@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -56,7 +57,11 @@ func runProvider(args ...string) {
 	} else {
 		// change provider configuration to use new public addr and update w/meta
 		p.Config.ApiAddr = addr
-		p.UpdateMeta()
+		err = p.UpdateMeta()
+		if err != nil {
+			msg := fmt.Sprintf("Error updating with metaserver: %s", err)
+			log.Println(msg)
+		}
 	}
 	server := provider.NewServer(p, logger)
 	log.Println("starting public provider server at", addr)

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -80,7 +81,8 @@ func (server *localServer) postInfo(w http.ResponseWriter, r *http.Request) {
 
 	err = server.provider.UpdateMeta()
 	if err != nil {
-		server.writeResp(w, http.StatusBadRequest, &errorResp{"Error updating metadata server."})
+		msg := fmt.Sprintf("Error updating metadata server: %s", err)
+		server.writeResp(w, http.StatusBadRequest, &errorResp{msg})
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})

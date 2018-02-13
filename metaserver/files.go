@@ -205,18 +205,9 @@ func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
+		err = server.db.InsertFileVersion(params["fileID"], &version)
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-
-		version.Num = len(file.Versions) + 1
-		file.Versions = append(file.Versions, version)
-
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 

@@ -14,6 +14,11 @@ type mongoDB struct {
 	session *mgo.Session
 }
 
+type fileVersion struct {
+	Number int
+	ID     string
+}
+
 func newMongoDB() (*mongoDB, error) {
 	session, err := mgo.Dial(dbAddress)
 	if err != nil {
@@ -343,6 +348,35 @@ func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 // Insert the given file into the database.
 func (db *mongoDB) InsertFile(file *core.File) error {
 	err := db.insertIntoCollection("files", file)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) InsertFileVersion(fileID string, version *core.Version) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+	currentVersions := session.DB(dbName).C("versions")
+
+	selector := bson.M{"id": fileID}
+	// Atomically get the next version number from the currentVersions collection
+	versionUpdate := bson.M{"$inc": bson.M{"number": 1}}
+	versionChange := mgo.Change{
+		Update:    versionUpdate,
+		Upsert:    true,
+		ReturnNew: true,
+	}
+	var result fileVersion
+	_, err := currentVersions.Find(selector).Apply(versionChange, &result)
+	if err != nil {
+		return err
+	}
+	version.Num = result.Number
+	push := bson.M{"$push": bson.M{"versions": version}}
+	err = files.Update(selector, push)
 	if err != nil {
 		return err
 	}

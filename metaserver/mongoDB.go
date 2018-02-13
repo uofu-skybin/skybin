@@ -304,8 +304,23 @@ func (db *mongoDB) AddFileToRenterDirectory(renterID string, fileID string) erro
 	renters := session.DB(dbName).C("renters")
 
 	selector := bson.M{"id": renterID}
-	push := bson.M{"$push": bson.M{"files": fileID}}
-	err := renters.Update(selector, push)
+	add := bson.M{"$addToSet": bson.M{"files": fileID}}
+	err := renters.Update(selector, add)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) AddFileToRenterSharedDirectory(renterID string, fileID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	renters := session.DB(dbName).C("renters")
+
+	selector := bson.M{"id": renterID}
+	add := bson.M{"$addToSet": bson.M{"shared": fileID}}
+	err := renters.Update(selector, add)
 	if err != nil {
 		return err
 	}
@@ -319,8 +334,8 @@ func (db *mongoDB) RemoveFileFromRenterDirectory(renterID string, fileID string)
 	renters := session.DB(dbName).C("renters")
 
 	selector := bson.M{"id": renterID}
-	push := bson.M{"$pull": bson.M{"files": fileID}}
-	err := renters.Update(selector, push)
+	pull := bson.M{"$pull": bson.M{"files": fileID}}
+	err := renters.Update(selector, pull)
 	if err != nil {
 		return err
 	}
@@ -426,6 +441,21 @@ func (db *mongoDB) DeleteFileVersion(fileID string, version int) error {
 	selector := bson.M{"id": fileID}
 	pull := bson.M{"$pull": bson.M{"versions": bson.M{"num": version}}}
 	err := files.Update(selector, pull)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) AddPermissionToFileACL(fileID string, permission *core.Permission) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	selector := bson.M{"id": fileID, "accesslist.renterid": bson.M{"$ne": permission.RenterId}}
+	push := bson.M{"$push": bson.M{"accesslist": permission}}
+	err := files.Update(selector, push)
 	if err != nil {
 		return err
 	}

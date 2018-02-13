@@ -392,6 +392,22 @@ func (db *mongoDB) UpdateFile(file *core.File) error {
 	return nil
 }
 
+func (db *mongoDB) UpdateFileVersion(fileID string, version *core.Version) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	selector := bson.M{"id": fileID, "versions.num": version.Num}
+	// Atomically get the next version number from the currentVersions collection
+	versionUpdate := bson.M{"$set": bson.M{"versions.$": version}}
+	err := files.Update(selector, versionUpdate)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Delete all versions of the given file from the database.
 func (db *mongoDB) DeleteFile(fileID string) error {
 	err := db.deleteInCollectionByID("files", fileID)

@@ -220,7 +220,7 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
-			writeErr("must supply int for version", http.StatusBadRequest, w)
+			writeErr("must supply int for version", http.StatusNotFound, w)
 			return
 		}
 
@@ -231,28 +231,14 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
-		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+		if version != newVersion.Num {
+			writeErr("must not update version number", http.StatusBadRequest, w)
 			return
 		}
 
-		updateIndex := -1
-		for i, item := range file.Versions {
-			if item.Num == version {
-				updateIndex = i
-			}
-		}
-		if updateIndex == -1 {
-			writeErr("could not find specified version", http.StatusNotFound, w)
-			return
-		}
-
-		file.Versions[updateIndex] = newVersion
-
-		err = server.db.UpdateFile(file)
+		err = server.db.UpdateFileVersion(params["fileID"], &newVersion)
 		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 

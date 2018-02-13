@@ -343,51 +343,14 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 
 		// Remove the user from the file's ACL
-		file, err := server.db.FindFileByID(params["fileID"])
+		err := server.db.RemoveFilePermissionFromACL(params["fileID"], params["sharedID"])
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-		removeIndex := -1
-		for i, item := range file.AccessList {
-			if item.RenterId == params["sharedID"] {
-				removeIndex = i
-				break
-			}
-		}
-		if removeIndex == -1 {
-			writeErr("could not find specified permission", http.StatusNotFound, w)
-			return
-		}
-		file.AccessList = append(file.AccessList[:removeIndex], file.AccessList[removeIndex+1:]...)
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
 		// Remove the file from the sharee's directory
-		renter, err := server.db.FindRenterByID(params["sharedID"])
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
-			return
-		}
-
-		removeIndex = -1
-		for i, item := range renter.Shared {
-			if item == params["fileID"] {
-				removeIndex = i
-				break
-			}
-		}
-		// It's okay if we can't remove the file, since the sharee might have done that already
-		if removeIndex == -1 {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		renter.Shared = append(renter.Shared[:removeIndex], renter.Shared[removeIndex+1:]...)
-
-		err = server.db.UpdateRenter(renter)
+		err = server.db.RemoveFileFromRenterSharedDirectory(params["sharedID"], params["fileID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return

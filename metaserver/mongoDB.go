@@ -342,6 +342,21 @@ func (db *mongoDB) RemoveFileFromRenterDirectory(renterID string, fileID string)
 	return nil
 }
 
+func (db *mongoDB) RemoveFileFromRenterSharedDirectory(renterID string, fileID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	renters := session.DB(dbName).C("renters")
+
+	selector := bson.M{"id": renterID}
+	pull := bson.M{"$pull": bson.M{"shared": fileID}}
+	err := renters.Update(selector, pull)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Return a list of files that the renter owns.
 func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 	c, session, err := db.getMongoCollection("files")
@@ -472,6 +487,21 @@ func (db *mongoDB) UpdateFilePermission(fileID string, permission *core.Permissi
 	// Atomically get the next version number from the currentVersions collection
 	update := bson.M{"$set": bson.M{"accesslist.$": permission}}
 	err := files.Update(selector, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *mongoDB) RemoveFilePermissionFromACL(fileID string, renterID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	selector := bson.M{"id": fileID, "accesslist.renterid": renterID}
+	pull := bson.M{"$pull": bson.M{"accesslist": bson.M{"renterid": renterID}}}
+	err := files.Update(selector, pull)
 	if err != nil {
 		return err
 	}

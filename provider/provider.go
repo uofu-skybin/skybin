@@ -16,29 +16,32 @@ import (
 
 type Config struct {
 	ProviderID     string `json:"providerId"`
-	ApiAddr        string `json:"apiAddress"`
+	PublicApiAddr  string `json:"publicApiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
-	LocalAddr      string `json:"localApiAddress"`
+	LocalApiAddr   string `json:"localApiAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
-
-	SpaceAvail  int64 `json:"spaceAvail"`
-	StorageRate int64 `json:"storageRate"`
-
-	// Is this provider registered with metaservice?
-	IsRegistered bool `json:"isRegistered"`
+	SpaceAvail     int64 `json:"spaceAvail"`
+	StorageRate    int64 `json:"storageRate"`
 }
 
 type Provider struct {
 	Config     *Config
 	Homedir    string //move this maybe
 	PrivateKey *rsa.PrivateKey
-
 	contracts []*core.Contract
 	stats     Stats
 	activity  []Activity
 	renters   map[string]*RenterInfo
 }
+
+const (
+	// By default, a provider is configured to provide 10 GB of storage to the network.
+	DefaultStorageSpace = 10 * 1e9
+
+	// A provider should provide at least this much space.
+	MinStorageSpace = 100 * 1e6
+)
 
 // Provider node statistics
 type Stats struct {
@@ -77,28 +80,6 @@ const (
 	getBlockType    = "GET BLOCK"
 	deleteBlockType = "DELETE BLOCK"
 )
-
-func InitProvider(homedir string) (*Provider, error) {
-	// Potentially move all of this into this function
-	provider, err := LoadFromDisk(path.Join(homedir, "provider"))
-	if err != nil {
-		log.Println(err)
-	}
-	if !provider.Config.IsRegistered {
-		err = provider.registerWithMeta()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	privKey, err := loadPrivateKey(path.Join(homedir, "provider", "providerid"))
-	if err != nil {
-		return nil, err
-	}
-	provider.PrivateKey = privKey
-
-	return provider, nil
-}
 
 type snapshot struct {
 	Contracts []*core.Contract       `json:"contracts"`
@@ -146,6 +127,12 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.stats = s.Stats
 		provider.renters = s.Renters
 	}
+
+	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
+	if err != nil {
+		return nil, err
+	}
+	provider.PrivateKey = privKey
 
 	return provider, err
 }
@@ -252,7 +239,6 @@ func (provider *Provider) maintenance() {
 // Currently called after forming every contract could also be moved into maintenance
 // (It will still need to be called in the postInfo method)
 func (provider *Provider) UpdateMeta() error {
-
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {
 		log.Fatal("Could not read public key file. Error: ", err)
@@ -260,7 +246,7 @@ func (provider *Provider) UpdateMeta() error {
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
-		Addr:        provider.Config.ApiAddr,
+		Addr:        provider.Config.PublicApiAddr,
 		SpaceAvail:  provider.Config.SpaceAvail - provider.stats.StorageReserved,
 		StorageRate: provider.Config.StorageRate,
 	}
@@ -271,35 +257,7 @@ func (provider *Provider) UpdateMeta() error {
 	}
 	err = metaService.UpdateProvider(&info)
 	if err != nil {
-		log.Println("TODO")
 		return fmt.Errorf("Error updating provider: %s", err)
-	}
-	return nil
-}
-
-func (provider *Provider) registerWithMeta() error {
-
-	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
-	if err != nil {
-		return fmt.Errorf("Could not read public key file. Error: ", err)
-	}
-	info := core.ProviderInfo{
-		ID:          provider.Config.ProviderID,
-		PublicKey:   string(pubKeyBytes),
-		Addr:        provider.Config.ApiAddr,
-		SpaceAvail:  provider.Config.SpaceAvail,
-		StorageRate: provider.Config.StorageRate,
-	}
-	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	config, err := metaService.RegisterProvider(&info)
-	if err != nil {
-		return fmt.Errorf("Unable to register with metaservice. Error: %s", err)
-	}
-	provider.Config.ProviderID = config.ID
-	provider.Config.IsRegistered = true
-	err = util.SaveJson(path.Join(provider.Homedir, "config.json"), provider.Config)
-	if err != nil {
-		return fmt.Errorf("Unable to update config after registering with metaserver. Error: %s", err)
 	}
 	return nil
 }

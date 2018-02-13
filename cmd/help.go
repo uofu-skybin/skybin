@@ -3,6 +3,7 @@ package cmd
 import (
 	"log"
 	"os"
+	"strings"
 )
 
 var helpCmd = Cmd{
@@ -18,18 +19,26 @@ func runHelp(args ...string) {
 		return
 	}
 
-	name := args[0]
-
-	for _, cmd := range Commands {
-		if cmd.Name == name {
-			log.Println()
-			log.Printf("%s - %s\n", cmd.Name, cmd.Description)
-			log.Println()
-			log.Printf("usage: %s %s\n", os.Args[0], cmd.Usage)
-			log.Println()
-			return
+	var command *Cmd
+	commands := Commands
+	for _, arg := range args {
+		command = nil
+		for _, cmd := range commands {
+			if cmd.Name == arg {
+				command = cmd
+				commands = cmd.Subcommands
+				break
+			}
+		}
+		if command == nil {
+			log.Fatalf("Unrecognized command '%s'\n", strings.Join(args, " "))
 		}
 	}
 
-	log.Printf("Unrecognized command '%s'\n", name)
+	fullName := strings.Join(args, " ")
+
+	log.Println()
+	log.Printf("%s - %s\n", fullName, command.Description)
+	log.Println()
+	log.Printf("usage: %s %s\n", os.Args[0], command.Usage)
 }

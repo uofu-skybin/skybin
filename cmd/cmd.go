@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"os/user"
 	"path"
-	"skybin/renter"
-	"skybin/util"
 	"text/tabwriter"
 )
 
@@ -16,23 +13,23 @@ type Cmd struct {
 	Usage       string
 	Description string
 	Run         func(args ...string)
+	Subcommands []*Cmd
 }
 
-var Commands = []Cmd{
-	initCmd,
-	reserveCmd,
-	uploadCmd,
-	listCmd,
-	downloadCmd,
-	rmCmd,
-	mkdirCmd,
-	renterCmd,
-	providerCmd,
-	metaServerCmd,
+var Commands = []*Cmd{
+	&reserveCmd,
+	&uploadCmd,
+	&listCmd,
+	&downloadCmd,
+	&rmCmd,
+	&mkdirCmd,
+	&renterCmd,
+	&providerCmd,
+	&metaServerCmd,
 }
 
 func init() {
-	Commands = append(Commands, helpCmd)
+	Commands = append(Commands, &helpCmd)
 }
 
 func PrintUsage() {
@@ -53,7 +50,7 @@ func PrintUsage() {
 	fmt.Println()
 }
 
-func defaultHomeDir() (string, error) {
+func defaultSkybinHome() (string, error) {
 	user, err := user.Current()
 	if err != nil {
 		return "", err
@@ -61,11 +58,11 @@ func defaultHomeDir() (string, error) {
 	return path.Join(user.HomeDir, ".skybin"), nil
 }
 
-func findHomeDir() (string, error) {
+func findSkybinHomedir() (string, error) {
 	homedir := os.Getenv("SKYBIN_HOME")
 	if len(homedir) == 0 {
 		var err error
-		homedir, err = defaultHomeDir()
+		homedir, err = defaultSkybinHome()
 		if err != nil {
 			return "", err
 		}
@@ -73,17 +70,28 @@ func findHomeDir() (string, error) {
 	return homedir, nil
 }
 
-func getRenterClient() (*renter.Client, error) {
-	homedir, err := findHomeDir()
-	if err != nil {
-		return nil, err
+func findRenterHomedir() (string, error) {
+	homedir := os.Getenv("SKYBIN_RENTER_HOME")
+	if len(homedir) == 0 {
+		var err error
+		homedir, err = findSkybinHomedir()
+		if err != nil {
+			return "", err
+		}
+		homedir = path.Join(homedir, "renter")
 	}
+	return homedir, nil
+}
 
-	var config renter.Config
-	err = util.LoadJson(path.Join(homedir, "renter", "config.json"), &config)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot load renter config. Error: %s", err)
+func findProviderHomedir() (string, error) {
+	homedir := os.Getenv("SKYBIN_PROVIDER_HOME")
+	if len(homedir) == 0 {
+		var err error
+		homedir, err = findSkybinHomedir()
+		if err != nil {
+			return "", err
+		}
+		homedir = path.Join(homedir, "provider")
 	}
-
-	return renter.NewClient(config.ApiAddr, &http.Client{}), nil
+	return homedir, nil
 }

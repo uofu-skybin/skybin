@@ -11,6 +11,7 @@ import shutil
 import string
 import subprocess
 import time
+import sys
 
 # Default location for skybin repos
 DEFAULT_REPOS_DIR = './repos'
@@ -19,7 +20,7 @@ DEFAULT_REPOS_DIR = './repos'
 DEFAULT_TEST_FILE_DIR = './files'
 
 # Whether test logging is enabled by default
-LOG_ENABLED = True 
+LOG_ENABLED = True
 
 # Whether test files are removed by default
 REMOVE_TEST_FILES = True
@@ -37,14 +38,6 @@ def update_config_file(path, **kwargs):
         config[k] = v
     with open(path, 'w') as config_file:
         json.dump(config, config_file, indent=4, sort_keys=True)
-
-def init_repo(homedir):
-    """Create a skybin repo"""
-    args = [SKYBIN_CMD, 'init', '-home', homedir]
-    process = subprocess.Popen(args, stderr=subprocess.PIPE)
-    if process.wait() != 0:
-        _, stderr = process.communicate()
-        raise ValueError('skybin init failed. stderr={}'.format(stderr))
 
 def create_file_name():
     """Create a randomized name for a test file."""
@@ -79,15 +72,27 @@ def create_test_file(file_dir, size):
     return filepath
 
 def check_service_startup(process):
-    """Check that a service started without error."""
-    # Wait for startup
-    time.sleep(0.5)
+    """Check that a service process started without error."""
     if process.poll():
         rc = process.wait()
         _, stderr = process.communicate()
         raise ValueError(
             'service exited with error. code={}. stderr={}'.format(rc, stderr)
         )
+
+def setup_db():
+    """Run the setup db script."""
+    process = subprocess.Popen(['mongo', 'setup_db.js'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if process.wait() != 0:
+        _, stderr = process.communicate()
+        raise ValueError('setup_db failed. stderr={}'.format(stderr))
+
+def teardown_db():
+    """Run the teardown db script."""
+    process = subprocess.Popen(['mongo', 'teardown_db.js'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if process.wait() != 0:
+        _, stderr = process.communicate()
+        raise ValueError('teardown_db failed. stderr={}'.format(stderr))
 
 class Service:
     """State container for a running skybin service
@@ -147,11 +152,13 @@ class TestContext:
       test_file_dir: location where test files are placed
       log_enabled: whether test logging is turned on
       remove_test_files: whether to remove test files on teardown
+      teardown_db: whether to run the teardown_db script on teardown
     """
 
     def __init__(self, test_file_dir,
                  log_enabled=False,
-                 remove_test_files=True):
+                 remove_test_files=True,
+                 teardown_db=True):
         self.metaserver = None
         self.providers = []
         self.renter = None
@@ -159,6 +166,7 @@ class TestContext:
         self.log_enabled = log_enabled
         self._test_files = []
         self._remove_test_files = remove_test_files
+        self._teardown_db = teardown_db
 
     def _remove_files(self):
         for filename in self._test_files:
@@ -181,7 +189,7 @@ class TestContext:
         if not condition:
             print('FAIL:', message)
             self.teardown()
-            os.exit(1)
+            sys.exit(1)
 
     def log(self, *args):
         """Print the given arguments."""
@@ -193,6 +201,8 @@ class TestContext:
         rm_files = self._remove_test_files
         if rm_files:
             self._remove_files()
+        if self._teardown_db:
+            teardown_db()
         if self.metaserver:
             self.metaserver.teardown(rm_files)
         for p in self.providers:
@@ -207,63 +217,76 @@ def create_metaserver():
     address = '127.0.0.1:{}'.format(port)
     args = [SKYBIN_CMD, 'metaserver', '-addr', address]
     process = subprocess.Popen(args, stderr=subprocess.PIPE)
-    check_service_startup(process)
     return Service(process=process, address=address)
+
+def init_renter(homedir, alias, metaserver_addr, api_addr):
+    """Set up a skybin renter directory"""
+    args = [SKYBIN_CMD, 'renter', 'init', '-homedir', homedir,
+            '-alias', alias,
+            '-meta-addr', metaserver_addr,
+            '-api-addr', api_addr]
+    process = subprocess.Popen(args, stderr=subprocess.PIPE)
+    if process.wait() != 0:
+        _, stderr = process.communicate()
+        raise ValueError('renter init failed. stderr={}'.format(stderr))
+
+def init_provider(homedir, metaserver_addr, public_api_addr):
+    """Set up a skybin provider directory"""
+    args = [SKYBIN_CMD, 'provider', 'init', '-homedir', homedir,
+            '-meta-addr', metaserver_addr,
+            '-public-api-addr', public_api_addr]
+    process = subprocess.Popen(args, stderr=subprocess.PIPE)
+    if process.wait() != 0:
+        _, stderr = process.communicate()
+        raise ValueError('provider init failed. stderr={}'.format(stderr))
 
 def create_renter(metaserver_addr, repo_dir, alias):
     """Create and start a new renter instance."""
 
     # Create repo
     homedir = '{}/renter{}'.format(repo_dir, random.randint(1, 1024))
-    init_repo(homedir)
-
-    # Update default renter config
-    api_address = '127.0.0.1:{}'.format(rand_port())
-    config_path = '{}/renter/config.json'.format(homedir)
-    update_config_file(config_path,
-        apiAddress=api_address,
-        metaServerAddress=metaserver_addr,
+    api_addr = '127.0.0.1:{}'.format(rand_port())
+    init_renter(
+        homedir,
+        alias=alias,
+        metaserver_addr=metaserver_addr,
+        api_addr=api_addr
     )
 
     # Start renter server
     env = os.environ.copy()
-    env['SKYBIN_HOME'] = homedir
-    args = [SKYBIN_CMD, 'renter', '-alias', alias]
+    env['SKYBIN_RENTER_HOME'] = homedir
+    args = [SKYBIN_CMD, 'renter', 'daemon']
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
 
-    check_service_startup(process)
-
-    return RenterService(process=process, address=api_address, homedir=homedir)
+    return RenterService(process=process, address=api_addr, homedir=homedir)
 
 def create_provider(metaserver_addr, repo_dir):
     """Create and start a new provider instance."""
 
     homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
-    init_repo(homedir)
-
-    api_address = '127.0.0.1:{}'.format(rand_port())
-    config_path = '{}/provider/config.json'.format(homedir)
-    update_config_file(
-        config_path,
-        apiAddress=api_address,
-        metaServerAddress=metaserver_addr,
+    api_addr = '127.0.0.1:{}'.format(rand_port())
+    init_provider(
+        homedir,
+        metaserver_addr=metaserver_addr,
+        public_api_addr=api_addr,
     )
 
+    # Start the provider daemon with no local API
     env = os.environ.copy()
-    env['SKYBIN_HOME'] = homedir
-    args = [SKYBIN_CMD, 'provider']
+    env['SKYBIN_PROVIDER_HOME'] = homedir
+    args = [SKYBIN_CMD, 'provider', 'daemon', '--disable-local-api']
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
 
-    check_service_startup(process)
-
-    return Service(process=process, address=api_address, homedir=homedir)
+    return Service(process=process, address=api_addr, homedir=homedir)
 
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,
                test_file_dir=DEFAULT_TEST_FILE_DIR,
                log_enabled=LOG_ENABLED,
                remove_test_files=REMOVE_TEST_FILES,
-               renter_alias='test_renter'):
+               teardown_db=True,
+               renter_alias=None):
     """Create a test context.
 
     Args:
@@ -272,21 +295,33 @@ def setup_test(num_providers=1,
       test_file_dir: directory to place test files in
       log_enabled: whether test logging is turned on
       remove_test_files: whether test files are removed on teardown
+      teardown_db: whether to run the teardown_db script on teardown
+      renter_alias: renter alias to use
     """
     if not os.path.exists(test_file_dir):
         os.makedirs(test_file_dir)
     if not os.path.exists(repo_dir):
         os.makedirs(repo_dir)
+    if not renter_alias:
+        renter_alias = 'test_renter' + ''.join(str(random.randint(1, 9)) for _ in range(4))
     ctxt = TestContext(test_file_dir=test_file_dir,
                        log_enabled=log_enabled,
-                       remove_test_files=remove_test_files)
+                       remove_test_files=remove_test_files,
+                       teardown_db=teardown_db)
     try:
+        setup_db()
         ctxt.metaserver = create_metaserver()
+        time.sleep(1.0)
+        check_service_startup(ctxt.metaserver.process)
         for _ in range(num_providers):
             pvdr = create_provider(ctxt.metaserver.address, repo_dir=repo_dir)
             ctxt.providers.append(pvdr)
         ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir,
                                     alias=renter_alias)
+        time.sleep(1.0)
+        for pvdr in ctxt.providers:
+            check_service_startup(pvdr.process)
+        check_service_startup(ctxt.renter.process)
     except Exception as err:
         ctxt.teardown()
         raise err

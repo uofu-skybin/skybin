@@ -114,9 +114,14 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 // Info is information about a renter
 type Info struct {
 	ID              string `json:"id"`
+	Alias           string `json:"alias"`
+	ApiAddr         string `json:"apiAddress"`
+	HomeDir         string `json:"homedir"`
 	ReservedStorage int64  `json:"reservedStorage"`
 	FreeStorage     int64  `json:"freeStorage"`
+	UsedStorage     int64  `json:"usedStorage"`
 	TotalContracts  int    `json:"totalContracts"`
+	TotalFiles      int    `json:"totalFiles"`
 }
 
 func (r *Renter) Info() (*Info, error) {
@@ -130,9 +135,14 @@ func (r *Renter) Info() (*Info, error) {
 	}
 	return &Info{
 		ID:              r.Config.RenterId,
+		Alias:           r.Config.Alias,
+		ApiAddr:         r.Config.ApiAddr,
+		HomeDir:         r.Homedir,
 		ReservedStorage: reserved,
+		UsedStorage:     reserved - free,
 		FreeStorage:     free,
 		TotalContracts:  len(r.contracts),
+		TotalFiles:      len(r.files),
 	}, nil
 }
 

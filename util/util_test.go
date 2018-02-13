@@ -68,3 +68,117 @@ func TestUnMarshalInvalidKey(t *testing.T) {
 		}
 	}
 }
+
+func TestParseByteAmountInvalid(t *testing.T) {
+	var err error
+	_, err = ParseByteAmount("not a number gb")
+	if err == nil {
+		t.Fatal("parsed invalid amount")
+	}
+	_, err = ParseByteAmount("10000000000000000000000000000000000000 TB")
+	if err == nil {
+		t.Fatal("allowed too large of amount")
+	}
+	_, err = ParseByteAmount("10 NT")
+	if err == nil {
+		t.Fatal("allowed invalid prefix")
+	}
+	_, err = ParseByteAmount("10.532 B")
+	if err == nil {
+		t.Fatal("allowed fractional byte amount")
+	}
+}
+
+func TestParseByteAmount(t *testing.T) {
+	var amt int64
+	var err error
+
+	amt, err = ParseByteAmount("10 tb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(10) * int64(1e12) {
+		t.Fatal("wrong amount for TB suffix")
+	}
+
+	amt, err = ParseByteAmount("1 gb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(1e9) {
+		t.Fatal("wrong amount for GB suffix")
+	}
+
+	amt, err = ParseByteAmount("198 MB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(198) * int64(1e6) {
+		t.Fatal("wrong amount for MB suffix")
+	}
+
+	amt, err = ParseByteAmount("928 KB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(928 * 1000) {
+		t.Fatal("wrong amount for KB suffix")
+	}
+
+	amt, err = ParseByteAmount("42 B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(42) {
+		t.Fatal("wrong amount for B suffix")
+	}
+
+	amt, err = ParseByteAmount(" 12   ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(12) {
+		t.Fatal("wrong amount with leading/trailing whitespace")
+	}
+
+	amt, err = ParseByteAmount(" 1398 KB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(1398 * 1000) {
+		t.Fatal("wrong amount with > 1000 of a unit")
+	}
+
+	amt, err = ParseByteAmount(" -43")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amt != int64(-43) {
+		t.Fatal("wrong amount for negative bytes")
+	}
+}
+
+func TestValidateNetAddr(t *testing.T) {
+	var err error
+
+	err = ValidateNetAddr("")
+	if err == nil {
+		t.Fatal("allowed empty addr")
+	}
+	err = ValidateNetAddr("not valid")
+	if err == nil {
+		t.Fatal("allowed invalid addr")
+	}
+	err = ValidateNetAddr(":3000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ValidateNetAddr("localhost:4000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ValidateNetAddr("127.0.0.1:4000")
+	if err != nil {
+		t.Fatal(err)
+	}
+}

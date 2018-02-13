@@ -2,7 +2,11 @@
 
 This directory contains useful scripts for running and testing SkyBin locally. 
 
-To get started, run `setup.sh &`. This will setup SkyBin in a `repo` subfolder within 
-this directory and start metadata, provider, and renter services. 
+To start a local metaserver, provider, and renter, run the `setup.sh` script in 
+the background. Run `teardown.sh` to kill these services and remove related files.
 
-Run `teardown.sh` to stop the services and delete the SkyBin setup.
+Most other files in the directory are test scripts ending in `test.py`. To run one 
+of these, use Python in the terminal, e.g.
+
+`$ python single_upload_test.py`
+

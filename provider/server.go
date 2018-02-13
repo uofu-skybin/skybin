@@ -111,7 +111,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	info := core.ProviderInfo{
 		ID:          server.provider.Config.ProviderID,
 		PublicKey:   "string",
-		Addr:        server.provider.Config.ApiAddr,
+		Addr:        server.provider.Config.PublicApiAddr,
 		SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
 		StorageRate: 1,
 	}

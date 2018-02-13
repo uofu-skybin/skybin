@@ -77,7 +77,7 @@ func (server *localServer) postInfo(w http.ResponseWriter, r *http.Request) {
 
 	server.provider.Config.SpaceAvail = params.SpaceAvail
 	server.provider.Config.StorageRate = params.StorageRate
-	server.provider.Config.ApiAddr = params.ApiAddr
+	server.provider.Config.PublicApiAddr = params.PublicApiAddr
 
 	err = server.provider.UpdateMeta()
 	if err != nil {

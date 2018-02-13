@@ -327,28 +327,9 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
+		err = server.db.UpdateFilePermission(params["fileID"], &newPermission)
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-
-		updateIndex := -1
-		for i, item := range file.AccessList {
-			if item.RenterId == params["sharedID"] {
-				updateIndex = i
-			}
-		}
-		if updateIndex == -1 {
-			writeErr("could not find permission", http.StatusNotFound, w)
-			return
-		}
-
-		file.AccessList[updateIndex] = newPermission
-
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 

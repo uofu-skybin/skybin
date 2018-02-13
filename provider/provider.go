@@ -18,6 +18,7 @@ type Config struct {
 	ProviderID     string `json:"providerId"`
 	ApiAddr        string `json:"apiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
+	LocalAddr      string `json:"localApiAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
 

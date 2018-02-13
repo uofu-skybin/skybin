@@ -462,6 +462,22 @@ func (db *mongoDB) AddPermissionToFileACL(fileID string, permission *core.Permis
 	return nil
 }
 
+func (db *mongoDB) UpdateFilePermission(fileID string, permission *core.Permission) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	selector := bson.M{"id": fileID, "accesslist.renterid": permission.RenterId}
+	// Atomically get the next version number from the currentVersions collection
+	update := bson.M{"$set": bson.M{"accesslist.$": permission}}
+	err := files.Update(selector, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Contract operations
 //====================
 

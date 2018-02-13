@@ -292,37 +292,21 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		}
 
 		// Make sure a valid renter is specified in the permission.
-		renter, err := server.db.FindRenterByID(permission.RenterId)
+		_, err = server.db.FindRenterByID(permission.RenterId)
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
+		// Add the permission to the ACL
+		err = server.db.AddPermissionToFileACL(params["fileID"], &permission)
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
-		// Make sure the renter is not already in the ACL
-		for _, item := range file.AccessList {
-			if item.RenterId == renter.ID {
-				writeErr("already shared with this renter", http.StatusBadRequest, w)
-				return
-			}
-		}
-
-		// Add the permission to the file's ACL
-		file.AccessList = append(file.AccessList, permission)
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
-			return
-		}
-
-		// Add the file's ID to the renter's directory
-		renter.Shared = append(renter.Shared, file.ID)
-		err = server.db.UpdateRenter(renter)
+		// Add the file to the renter's directory
+		err = server.db.AddFileToRenterSharedDirectory(permission.RenterId, params["fileID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return

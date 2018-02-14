@@ -1044,9 +1044,10 @@ func TestGetRenterAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Information should match renter.
+	// Information should match renter (plus file we uploaded).
+	renter.Files = append(renter.Files, file.ID)
 	if diff := deep.Equal(renter, renterInfo); diff != nil {
-		// t.Fatal(diff)
+		t.Fatal(diff)
 	}
 
 	// Make sure provider cannot access non-public renter info
@@ -1057,4 +1058,74 @@ func TestGetRenterAuthentication(t *testing.T) {
 	if len(renterInfo.Files) != 0 {
 		t.Fatal("files included with renter")
 	}
+}
+
+func TestPutRenterAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterPutAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testRenterPutAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to modify the first renter with the second.
+	newInfo := &core.RenterInfo{
+		ID:    renter.ID,
+		Alias: "foo",
+	}
+	err = otherRenterClient.UpdateRenter(newInfo)
+	if err == nil {
+		t.Fatal("no error when modifying other user")
+	}
+
+	// Make sure the original renter was unaffected
+	resultInfo, err := renterClient.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(renter, resultInfo); diff != nil {
+		t.Fatal(diff)
+	}
+
+}
+
+func TestDeleteRenterAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeleteAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testRenterDeleteAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to modify the first renter with the second.
+	err = otherRenterClient.DeleteRenter(renter.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user")
+	}
+
+	// Make sure the original renter was unaffected
+	_, err = renterClient.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }

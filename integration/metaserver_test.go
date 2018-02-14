@@ -801,21 +801,22 @@ func TestUpdateFileVersion(t *testing.T) {
 // Share file
 func TestShareFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	sharerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	shareeClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
-	sharer, err := registerRenter(client, "fileShareSharerTest")
+	sharer, err := registerRenter(sharerClient, "fileShareSharerTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Register another renter
-	sharedWith, err := registerRenter(client, "fileShareSharedWithTest")
+	sharedWith, err := registerRenter(shareeClient, "fileShareSharedWithTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file, err := uploadFile(client, sharer.ID, "testShareFile", "testShareFile")
+	file, err := uploadFile(sharerClient, sharer.ID, "testShareFile", "testShareFile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -824,19 +825,19 @@ func TestShareFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, &permission)
+	err = sharerClient.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure the file shows up in the sharee's files.
-	_, err = client.GetSharedFile(sharedWith.ID, file.ID)
+	_, err = shareeClient.GetSharedFile(sharedWith.ID, file.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure the file shows up in the file's ACL.
-	result, err := client.GetFile(sharer.ID, file.ID)
+	result, err := sharerClient.GetFile(sharer.ID, file.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -856,21 +857,22 @@ func TestShareFile(t *testing.T) {
 // Get shared files
 func TestGetSharedFiles(t *testing.T) {
 	httpClient := http.Client{}
-	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	sharerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	shareeClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
-	sharer, err := registerRenter(client, "fileGetSharedFilesSharerTest")
+	sharer, err := registerRenter(sharerClient, "fileGetSharedFilesSharerTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Register another renter
-	sharedWith, err := registerRenter(client, "fileGetSharedFilesSharedWithTest")
+	sharedWith, err := registerRenter(shareeClient, "fileGetSharedFilesSharedWithTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file, err := uploadFile(client, sharer.ID, "testGetSharedFiles", "testGetSharedFiles")
+	file, err := uploadFile(sharerClient, sharer.ID, "testGetSharedFiles", "testGetSharedFiles")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,13 +881,13 @@ func TestGetSharedFiles(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, &permission)
+	err = sharerClient.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure the file shows up in the sharee's files
-	files, err := client.GetSharedFiles(sharedWith.ID)
+	files, err := shareeClient.GetSharedFiles(sharedWith.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -906,21 +908,22 @@ func TestGetSharedFiles(t *testing.T) {
 // Unshare file
 func TestUnshareFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	sharerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	shareeClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
-	sharer, err := registerRenter(client, "fileUnshareSharerTest")
+	sharer, err := registerRenter(sharerClient, "fileUnshareSharerTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Register another renter
-	sharedWith, err := registerRenter(client, "fileUnshareSharedWithTest")
+	sharedWith, err := registerRenter(shareeClient, "fileUnshareSharedWithTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file, err := uploadFile(client, sharer.ID, "testUnshareFile", "testUnshareFile")
+	file, err := uploadFile(sharerClient, sharer.ID, "testUnshareFile", "testUnshareFile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -929,19 +932,19 @@ func TestUnshareFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, &permission)
+	err = sharerClient.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Unshare the file.
-	err = client.UnshareFile(sharer.ID, file.ID, sharedWith.ID)
+	err = sharerClient.UnshareFile(sharer.ID, file.ID, sharedWith.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Make sure the fil doesn't show up in the sharee' directory.
-	files, err := client.GetSharedFiles(sharedWith.ID)
+	// Make sure the file doesn't show up in the sharee' directory.
+	files, err := shareeClient.GetSharedFiles(sharedWith.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -953,7 +956,7 @@ func TestUnshareFile(t *testing.T) {
 	}
 
 	// Make sure the file's ACL is empty
-	result, err := client.GetFile(sharer.ID, file.ID)
+	result, err := sharerClient.GetFile(sharer.ID, file.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -965,21 +968,22 @@ func TestUnshareFile(t *testing.T) {
 // Remove shared file
 func TestRemoveSharedFile(t *testing.T) {
 	httpClient := http.Client{}
-	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	sharerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	shareeClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
 
 	// Register a renter
-	sharer, err := registerRenter(client, "fileRemoveSharedSharerTest")
+	sharer, err := registerRenter(sharerClient, "fileRemoveSharedSharerTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Register another renter
-	sharedWith, err := registerRenter(client, "fileRemoveSharedSharedWithTest")
+	sharedWith, err := registerRenter(shareeClient, "fileRemoveSharedSharedWithTest")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	file, err := uploadFile(client, sharer.ID, "testRemoveSharedFile", "testRemoveSharedFile")
+	file, err := uploadFile(sharerClient, sharer.ID, "testRemoveSharedFile", "testRemoveSharedFile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -988,19 +992,19 @@ func TestRemoveSharedFile(t *testing.T) {
 	permission := core.Permission{
 		RenterId: sharedWith.ID,
 	}
-	err = client.ShareFile(sharer.ID, file.ID, &permission)
+	err = sharerClient.ShareFile(sharer.ID, file.ID, &permission)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Unshare the file.
-	err = client.RemoveSharedFile(sharedWith.ID, file.ID)
+	// Remove the shared file from sharee's directory
+	err = shareeClient.RemoveSharedFile(sharedWith.ID, file.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure the file doesn't show up in the user's directory.
-	files, err := client.GetSharedFiles(sharedWith.ID)
+	files, err := shareeClient.GetSharedFiles(sharedWith.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1198,4 +1202,482 @@ func TestDeleteProviderAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 
+}
+
+func TestRenterGetFilesAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetFilesAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testGetFilesAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the first renter's files with the second renter.
+	_, err = otherRenterClient.GetFiles(renter.ID)
+	if err == nil {
+		t.Fatal("no error when accessing other renter's files")
+	}
+}
+
+func TestRenterPostFileAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testPostFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testPostFileAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to post a file to the first renter's directory with the second renter.
+	file := core.File{
+		ID:   "renterPostFileAuthTest",
+		Name: "renterPostFileAuthTest",
+	}
+	err = otherRenterClient.PostFile(renter.ID, &file)
+	if err == nil {
+		t.Fatal("no error when posting to other renter's directory")
+	}
+}
+
+func TestRenterGetFileAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testGetFileAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testGetFileAuth", "testGetFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the other renter.
+	_, err = otherRenterClient.GetFile(otherRenter.ID, file.ID)
+	if err == nil {
+		t.Fatal("no error when accessing unshared file")
+	}
+
+	// Share the file
+	permission := core.Permission{
+		RenterId: otherRenter.ID,
+	}
+	err = renterClient.ShareFile(renter.ID, file.ID, &permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the (now) authorized renter
+	_, err = otherRenterClient.GetFile(otherRenter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRenterDeleteFileAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeleteFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testRenterDeleteFileAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testDeleteFileAuth", "testDeleteFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the uploaded file with the other renter.
+	err = otherRenterClient.DeleteFile(otherRenter.ID, file.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user's file")
+	}
+
+	// Make sure the file still exists
+	_, err = renterClient.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func TestRenterPutFileAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterPutFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testRenterPutFileAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testPutFileAuth", "testPutFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the uploaded file with the other renter.
+	newFile := &core.File{
+		ID:      file.ID,
+		Name:    "foo",
+		OwnerID: file.OwnerID,
+	}
+	err = otherRenterClient.UpdateFile(otherRenter.ID, newFile)
+	if err == nil {
+		t.Fatal("no error when modifying other user's file")
+	}
+
+	// Make sure the file has not been modified
+	resultFile, err := renterClient.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(file, resultFile); diff != nil {
+		t.Fatal(diff)
+	}
+
+}
+
+func TestRenterGetFileVersionAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetFileVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testGetFileVersionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testGetFileVersionAuth", "testGetFileVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	version := &core.Version{}
+	err = renterClient.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the other renter.
+	_, err = otherRenterClient.GetFileVersion(otherRenter.ID, file.ID, 1)
+	if err == nil {
+		t.Fatal("no error when accessing unshared file version")
+	}
+
+	// Share the file
+	permission := core.Permission{
+		RenterId: otherRenter.ID,
+	}
+	err = renterClient.ShareFile(renter.ID, file.ID, &permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the (now) authorized renter
+	_, err = otherRenterClient.GetFileVersion(otherRenter.ID, file.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRenterGetFileVersionsAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetFileVersionsAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testGetFileVersionsAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testGetFileVersionsAuth", "testGetFileVersionsAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	version := &core.Version{}
+	err = renterClient.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the other renter.
+	_, err = otherRenterClient.GetFileVersions(otherRenter.ID, file.ID)
+	if err == nil {
+		t.Fatal("no error when accessing unshared file versions")
+	}
+
+	// Share the file
+	permission := core.Permission{
+		RenterId: otherRenter.ID,
+	}
+	err = renterClient.ShareFile(renter.ID, file.ID, &permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the (now) authorized renter
+	_, err = otherRenterClient.GetFileVersions(otherRenter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRenterDeleteVersionAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeleteversionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testRenterDeleteversionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testDeleteversionAuth", "testDeleteversionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	version := &core.Version{}
+	err = renterClient.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the uploaded version with the other renter.
+	err = otherRenterClient.DeleteFileVersion(renter.ID, file.ID, 1)
+	if err == nil {
+		t.Fatal("no error when deleting other user's version")
+	}
+
+	// Make sure the file still exists
+	_, err = renterClient.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func TestRenterPostVersionAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testPostVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testPostVersionAuth", "testPostVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testPostVersionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to post a version to the first renter's file with the second renter.
+	version := &core.Version{}
+	err = otherRenterClient.PostFileVersion(otherRenter.ID, file.ID, version)
+	if err == nil {
+		t.Fatal("no error when posting version to other renter's file")
+	}
+}
+
+func TestRenterPutVersionAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterPutVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testRenterPutVersionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testPutVersionAuth", "testPutVersionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	version := &core.Version{Num: 1, Blocks: make([]core.Block, 0)}
+	err = renterClient.PostFileVersion(renter.ID, file.ID, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to modify the version with the other renter.
+	newVersion := &core.Version{
+		Num:           1,
+		NumDataBlocks: 1,
+	}
+
+	err = otherRenterClient.PutFileVersion(otherRenter.ID, file.ID, newVersion)
+	if err == nil {
+		t.Fatal("no error when putting other user's file version")
+	}
+
+	// Make sure the file has not been modified
+	resultVersion, err := renterClient.GetFileVersion(renter.ID, file.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(version, resultVersion); diff != nil {
+		t.Fatal(diff)
+	}
+
+}
+
+func TestRenterDeletePermissionAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	lastRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeletePermissionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testRenterDeletePermissionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lastRenter, err := registerRenter(lastRenterClient, "testRenterDeletePermissionAuth3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testDeletePermissionAuth", "testDeletePermissionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	permission := &core.Permission{RenterId: lastRenter.ID}
+	err = renterClient.ShareFile(renter.ID, file.ID, permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the uploaded permission with the other renter.
+	err = otherRenterClient.UnshareFile(renter.ID, file.ID, lastRenter.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user's permission")
+	}
+
+	// Make sure the other file is still accessible by the user
+	_, err = lastRenterClient.GetFile(renter.ID, file.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func TestRenterPostPermissionAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testPostPermissionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testPostPermissionAuth", "testPostPermissionAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testPostPermissionAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to post a version to the first renter's file with the second renter.
+	permission := &core.Permission{}
+	err = otherRenterClient.ShareFile(otherRenter.ID, file.ID, permission)
+	if err == nil {
+		t.Fatal("no error when posting permission to other renter's file")
+	}
 }

@@ -100,6 +100,18 @@ func (server *MetaServer) getRenterHandler() http.HandlerFunc {
 func (server *MetaServer) putRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Make sure the person making the request is the renter.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != params["id"] {
+			writeErr("cannot modify other renters", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Make sure renter exists.
 		renter, err := server.db.FindRenterByID(params["id"])
 		if err != nil {
@@ -143,7 +155,19 @@ func (server *MetaServer) deleteRenterHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		err := server.db.DeleteRenter(params["id"])
+
+		// Make sure the person making the request is the renter.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != params["id"] {
+			writeErr("cannot delete other renters", http.StatusUnauthorized, w)
+			return
+		}
+
+		err = server.db.DeleteRenter(params["id"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return

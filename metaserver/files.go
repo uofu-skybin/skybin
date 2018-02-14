@@ -220,7 +220,7 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
-			writeErr("must supply int for version", http.StatusBadRequest, w)
+			writeErr("must supply int for version", http.StatusNotFound, w)
 			return
 		}
 
@@ -231,28 +231,14 @@ func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
-		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+		if version != newVersion.Num {
+			writeErr("must not update version number", http.StatusBadRequest, w)
 			return
 		}
 
-		updateIndex := -1
-		for i, item := range file.Versions {
-			if item.Num == version {
-				updateIndex = i
-			}
-		}
-		if updateIndex == -1 {
-			writeErr("could not find specified version", http.StatusNotFound, w)
-			return
-		}
-
-		file.Versions[updateIndex] = newVersion
-
-		err = server.db.UpdateFile(file)
+		err = server.db.UpdateFileVersion(params["fileID"], &newVersion)
 		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -306,37 +292,21 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		}
 
 		// Make sure a valid renter is specified in the permission.
-		renter, err := server.db.FindRenterByID(permission.RenterId)
+		_, err = server.db.FindRenterByID(permission.RenterId)
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
+		// Add the permission to the ACL
+		err = server.db.AddPermissionToFileACL(params["fileID"], &permission)
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
-		// Make sure the renter is not already in the ACL
-		for _, item := range file.AccessList {
-			if item.RenterId == renter.ID {
-				writeErr("already shared with this renter", http.StatusBadRequest, w)
-				return
-			}
-		}
-
-		// Add the permission to the file's ACL
-		file.AccessList = append(file.AccessList, permission)
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
-			return
-		}
-
-		// Add the file's ID to the renter's directory
-		renter.Shared = append(renter.Shared, file.ID)
-		err = server.db.UpdateRenter(renter)
+		// Add the file to the renter's directory
+		err = server.db.AddFileToRenterSharedDirectory(permission.RenterId, params["fileID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return
@@ -357,28 +327,9 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 			return
 		}
 
-		file, err := server.db.FindFileByID(params["fileID"])
+		err = server.db.UpdateFilePermission(params["fileID"], &newPermission)
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-
-		updateIndex := -1
-		for i, item := range file.AccessList {
-			if item.RenterId == params["sharedID"] {
-				updateIndex = i
-			}
-		}
-		if updateIndex == -1 {
-			writeErr("could not find permission", http.StatusNotFound, w)
-			return
-		}
-
-		file.AccessList[updateIndex] = newPermission
-
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -392,51 +343,14 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 
 		// Remove the user from the file's ACL
-		file, err := server.db.FindFileByID(params["fileID"])
+		err := server.db.RemoveFilePermissionFromACL(params["fileID"], params["sharedID"])
 		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
-			return
-		}
-		removeIndex := -1
-		for i, item := range file.AccessList {
-			if item.RenterId == params["sharedID"] {
-				removeIndex = i
-				break
-			}
-		}
-		if removeIndex == -1 {
-			writeErr("could not find specified permission", http.StatusNotFound, w)
-			return
-		}
-		file.AccessList = append(file.AccessList[:removeIndex], file.AccessList[removeIndex+1:]...)
-		err = server.db.UpdateFile(file)
-		if err != nil {
-			writeErr(err.Error(), http.StatusNotFound, w)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
 		// Remove the file from the sharee's directory
-		renter, err := server.db.FindRenterByID(params["sharedID"])
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
-			return
-		}
-
-		removeIndex = -1
-		for i, item := range renter.Shared {
-			if item == params["fileID"] {
-				removeIndex = i
-				break
-			}
-		}
-		// It's okay if we can't remove the file, since the sharee might have done that already
-		if removeIndex == -1 {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		renter.Shared = append(renter.Shared[:removeIndex], renter.Shared[removeIndex+1:]...)
-
-		err = server.db.UpdateRenter(renter)
+		err = server.db.RemoveFileFromRenterSharedDirectory(params["sharedID"], params["fileID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return

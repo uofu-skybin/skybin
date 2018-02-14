@@ -96,6 +96,18 @@ func (server *MetaServer) getProviderHandler() http.HandlerFunc {
 func (server *MetaServer) putProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Make sure the person making the request is the provider.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if providerID, present := claims["providerID"]; !present || providerID.(string) != params["id"] {
+			writeErr("cannot modify other providers", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Make sure provider exists.
 		provider, err := server.db.FindProviderByID(params["id"])
 		if err != nil {
@@ -134,7 +146,19 @@ func (server *MetaServer) deleteProviderHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		err := server.db.DeleteProvider(params["id"])
+
+		// Make sure the person making the request is the provider.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if providerID, present := claims["providerID"]; !present || providerID.(string) != params["id"] {
+			writeErr("cannot delete other providers", http.StatusUnauthorized, w)
+			return
+		}
+
+		err = server.db.DeleteProvider(params["id"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return

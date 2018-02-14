@@ -1129,3 +1129,73 @@ func TestDeleteRenterAuthentication(t *testing.T) {
 	}
 
 }
+
+func TestPutProviderAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	providerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherProviderClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a provider
+	provider, err := registerProvider(providerClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another provider.
+	_, err = registerProvider(otherProviderClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to modify the first provider with the second.
+	newInfo := &core.ProviderInfo{
+		ID:   provider.ID,
+		Addr: "foo",
+	}
+	err = otherProviderClient.UpdateProvider(newInfo)
+	if err == nil {
+		t.Fatal("no error when modifying other user")
+	}
+
+	// Make sure the original provider was unaffected
+	resultInfo, err := providerClient.GetProvider(provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := deep.Equal(provider, resultInfo); diff != nil {
+		t.Fatal(diff)
+	}
+
+}
+
+func TestDeleteProviderAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	providerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherProviderClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a provider
+	provider, err := registerProvider(providerClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another provider.
+	_, err = registerProvider(otherProviderClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the first provider with the second.
+	err = otherProviderClient.DeleteProvider(provider.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user")
+	}
+
+	// Make sure the original provider was unaffected
+	_, err = providerClient.GetProvider(provider.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}

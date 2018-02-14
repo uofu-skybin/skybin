@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"skybin/core"
+	"skybin/util"
 	"strconv"
+
+	"github.com/dgrijalva/jwt-go"
 
 	"github.com/gorilla/mux"
 )
@@ -14,9 +17,37 @@ type fileResp struct {
 	Error  string    `json:"error,omitempty"`
 }
 
+func canAccessFile(file *core.File, claims jwt.MapClaims) bool {
+	renterID, present := claims["renterID"]
+	if !present {
+		return false
+	}
+	if renterID.(string) == file.OwnerID {
+		return true
+	}
+	for _, permission := range file.AccessList {
+		if permission.RenterId == renterID.(string) {
+			return true
+		}
+	}
+	return false
+}
+
 func (server *MetaServer) getFilesHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != params["renterID"] {
+			writeErr("cannot access other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Make sure the specified renter actually exists.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
@@ -35,14 +66,25 @@ func (server *MetaServer) getFilesHandler() http.HandlerFunc {
 
 func (server *MetaServer) postFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != params["renterID"] {
+			writeErr("cannot access other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		var file core.File
-		err := json.NewDecoder(r.Body).Decode(&file)
+		err = json.NewDecoder(r.Body).Decode(&file)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
-
-		params := mux.Vars(r)
 
 		// Make sure the renter exists.
 		renter, err := server.db.FindRenterByID(params["renterID"])
@@ -76,11 +118,25 @@ func (server *MetaServer) getFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
+
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		// Make sure the person making the request is either the renter who owns the file or present in the file's ACL.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		if !canAccessFile(file, claims) {
+			writeErr("not authorized to access file", http.StatusUnauthorized, w)
+			return
+		}
+
 		json.NewEncoder(w).Encode(file)
 	})
 }
@@ -88,9 +144,27 @@ func (server *MetaServer) getFileHandler() http.HandlerFunc {
 func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot delete other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		// BUG(kincaid): Make sure the renter owns the file they are deleting.
 		// Delete the file from the database.
-		err := server.db.DeleteFile(params["fileID"])
+		err = server.db.DeleteFile(params["fileID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
@@ -114,22 +188,39 @@ func (server *MetaServer) putFileHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
-		var file core.File
-		err := json.NewDecoder(r.Body).Decode(&file)
+		var newFile core.File
+		err := json.NewDecoder(r.Body).Decode(&newFile)
 		if err != nil {
 			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 
-		if file.ID != params["fileID"] {
+		oldFile, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		if newFile.ID != oldFile.ID {
 			writeErr("must not change file ID", http.StatusUnauthorized, w)
 			return
-		} else if file.OwnerID != params["renterID"] {
+		} else if newFile.OwnerID != oldFile.OwnerID {
 			writeErr("must not change file owner", http.StatusUnauthorized, w)
 			return
 		}
 
-		err = server.db.UpdateFile(&file)
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != newFile.OwnerID {
+			writeErr("cannot modify other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
+		err = server.db.UpdateFile(&newFile)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
@@ -152,6 +243,19 @@ func (server *MetaServer) getFileVersionHandler() http.HandlerFunc {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		// Make sure the person making the request is either the renter who owns the file or present in the file's ACL.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		if !canAccessFile(file, claims) {
+			writeErr("not authorized to access file", http.StatusUnauthorized, w)
+			return
+		}
+
 		for _, item := range file.Versions {
 			if item.Num == versionNum {
 				json.NewEncoder(w).Encode(item)
@@ -166,11 +270,24 @@ func (server *MetaServer) getFileVersionsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
+
 		file, err := server.db.FindFileByID(params["fileID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		if !canAccessFile(file, claims) {
+			writeErr("not authorized to access file", http.StatusUnauthorized, w)
+			return
+		}
+
 		json.NewEncoder(w).Encode(file.Versions)
 	})
 }
@@ -182,6 +299,23 @@ func (server *MetaServer) deleteFileVersionHandler() http.HandlerFunc {
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
 			writeErr("must supply int for version", http.StatusBadRequest, w)
+			return
+		}
+
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot delete other users' versions", http.StatusUnauthorized, w)
 			return
 		}
 
@@ -198,8 +332,25 @@ func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot delete other users' versions", http.StatusUnauthorized, w)
+			return
+		}
+
 		var version core.Version
-		err := json.NewDecoder(r.Body).Decode(&version)
+		err = json.NewDecoder(r.Body).Decode(&version)
 		if err != nil {
 			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
@@ -218,6 +369,24 @@ func (server *MetaServer) postFileVersionHandler() http.HandlerFunc {
 func (server *MetaServer) putFileVersionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot delete other users' versions", http.StatusUnauthorized, w)
+			return
+		}
+
 		version, err := strconv.Atoi(params["version"])
 		if err != nil {
 			writeErr("must supply int for version", http.StatusNotFound, w)
@@ -255,6 +424,18 @@ func (server *MetaServer) getFilePermissionsHandler() http.HandlerFunc {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if !canAccessFile(file, claims) {
+			writeErr("not authorized to access file", http.StatusUnauthorized, w)
+			return
+		}
+
 		json.NewEncoder(w).Encode(file.AccessList)
 	})
 }
@@ -269,12 +450,25 @@ func (server *MetaServer) getFilePermissionHandler() http.HandlerFunc {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if !canAccessFile(file, claims) {
+			writeErr("not authorized to access file", http.StatusUnauthorized, w)
+			return
+		}
+
 		for _, item := range file.AccessList {
 			if item.RenterId == params["sharedID"] {
 				json.NewEncoder(w).Encode(item)
 				return
 			}
 		}
+
 		writeErr("could not find specified permission", http.StatusNotFound, w)
 
 	})
@@ -284,8 +478,25 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot share other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		var permission core.Permission
-		err := json.NewDecoder(r.Body).Decode(&permission)
+		err = json.NewDecoder(r.Body).Decode(&permission)
 		if err != nil {
 			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
@@ -320,8 +531,25 @@ func (server *MetaServer) putFilePermissionHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot modify other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		var newPermission core.Permission
-		err := json.NewDecoder(r.Body).Decode(&newPermission)
+		err = json.NewDecoder(r.Body).Decode(&newPermission)
 		if err != nil {
 			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
@@ -342,8 +570,25 @@ func (server *MetaServer) deleteFilePermissionHandler() http.HandlerFunc {
 		// BUG(kincaid): Validate that the file's owner id matches the user's or the user is in the file's ACL
 		params := mux.Vars(r)
 
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the file.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+			writeErr("cannot unshare other users' files", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Remove the user from the file's ACL
-		err := server.db.RemoveFilePermissionFromACL(params["fileID"], params["sharedID"])
+		err = server.db.RemoveFilePermissionFromACL(params["fileID"], params["sharedID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return

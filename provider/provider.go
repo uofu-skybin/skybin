@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -15,28 +16,32 @@ import (
 
 type Config struct {
 	ProviderID     string `json:"providerId"`
-	ApiAddr        string `json:"apiAddress"`
+	PublicApiAddr  string `json:"publicApiAddress"`
 	MetaAddr       string `json:"metaServerAddress"`
+	LocalApiAddr   string `json:"localApiAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
-
-	SpaceAvail  int64 `json:"spaceAvail"`
-	StorageRate int64 `json:"storageRate"`
-	// StorageRates []core.StorageRate `json:"storageRates,omitempty"`
-
-	// Is this provider registered with metaservice?
-	IsRegistered bool `json:"isRegistered"`
+	SpaceAvail     int64 `json:"spaceAvail"`
+	StorageRate    int64 `json:"storageRate"`
 }
 
 type Provider struct {
 	Config     *Config
-	Homedir    string
+	Homedir    string //move this maybe
 	PrivateKey *rsa.PrivateKey
-	contracts  []*core.Contract
-	stats      Stats
-	activity   []Activity
-	renters    map[string]*RenterInfo
+	contracts []*core.Contract
+	stats     Stats
+	activity  []Activity
+	renters   map[string]*RenterInfo
 }
+
+const (
+	// By default, a provider is configured to provide 10 GB of storage to the network.
+	DefaultStorageSpace = 10 * 1e9
+
+	// A provider should provide at least this much space.
+	MinStorageSpace = 100 * 1e6
+)
 
 // Provider node statistics
 type Stats struct {
@@ -87,6 +92,10 @@ func (provider *Provider) saveSnapshot() error {
 		Contracts: provider.contracts,
 		Stats:     provider.stats,
 		Renters:   provider.renters,
+	}
+	err := provider.UpdateMeta()
+	if err != nil {
+		return fmt.Errorf("Error updating metaserver: %s", err)
 	}
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
@@ -149,8 +158,8 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// TODO determine if contract is amiable for provider here
-	// avail := provider.Config.TotalStorage - provider.stats.StorageReserved
-	avail := int64(9999999999)
+	avail := provider.Config.SpaceAvail - provider.stats.StorageReserved
+
 	if contract.StorageSpace > avail {
 		return nil, fmt.Errorf("Provider does not have sufficient storage available")
 	}
@@ -220,8 +229,35 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 
 // THis method will clean up expired files and confirm that they were
 // paid for any storage they used
-func (provider *Provider) maintanence() {
+func (provider *Provider) maintenance() {
 	// check payments
 	// clean up old contracts
 	// delete unpaid files
+
+}
+
+// Currently called after forming every contract could also be moved into maintenance
+// (It will still need to be called in the postInfo method)
+func (provider *Provider) UpdateMeta() error {
+	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
+	if err != nil {
+		log.Fatal("Could not read public key file. Error: ", err)
+	}
+	info := core.ProviderInfo{
+		ID:          provider.Config.ProviderID,
+		PublicKey:   string(pubKeyBytes),
+		Addr:        provider.Config.PublicApiAddr,
+		SpaceAvail:  provider.Config.SpaceAvail - provider.stats.StorageReserved,
+		StorageRate: provider.Config.StorageRate,
+	}
+	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	err = metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return fmt.Errorf("Error authenticating with metaserver: %s", err)
+	}
+	err = metaService.UpdateProvider(&info)
+	if err != nil {
+		return fmt.Errorf("Error updating provider: %s", err)
+	}
+	return nil
 }

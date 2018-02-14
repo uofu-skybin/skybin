@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
 	mathrand "math/rand"
@@ -17,6 +16,8 @@ import (
 	"os"
 	"skybin/core"
 	"skybin/provider"
+
+	"github.com/klauspost/reedsolomon"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
@@ -186,23 +187,23 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		uploadSize += st.Size()
 	}
 	file := &core.File{
-		ID:              fileId,
-		OwnerID:         r.Config.RenterId,
-		Name:            destPath,
-		IsDir:           false,
-		AccessList:      make([]core.Permission, 0),
-		AesKey:          string(aesKeyEncrypted),
-		AesIV:           string(aesIVEncrypted),
+		ID:         fileId,
+		OwnerID:    r.Config.RenterId,
+		Name:       destPath,
+		IsDir:      false,
+		AccessList: make([]core.Permission, 0),
+		AesKey:     string(aesKeyEncrypted),
+		AesIV:      string(aesIVEncrypted),
 		Versions: []core.Version{
 			{
-				Num: 1,
-				Size: finfo.Size(),
-				UploadSize: uploadSize,
-				PaddingBytes: paddingBytes,
-				ModTime: finfo.ModTime(),
-				NumDataBlocks: nDataBlocks,
+				Num:             1,
+				Size:            finfo.Size(),
+				UploadSize:      uploadSize,
+				PaddingBytes:    paddingBytes,
+				ModTime:         finfo.ModTime(),
+				NumDataBlocks:   nDataBlocks,
 				NumParityBlocks: nParityBlocks,
-				Blocks: blocks,
+				Blocks:          blocks,
 			},
 		},
 	}
@@ -244,7 +245,9 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		block := blocks[blockNum]
 		blob := blobs[blockNum]
 		client := provider.NewClient(blob.Addr, &http.Client{})
+		client.AuthorizeRenter(r.privKey, r.Config.RenterId)
 		err = client.PutBlock(r.Config.RenterId, block.ID, reader)
+
 		if err != nil {
 			goto unwind
 		}

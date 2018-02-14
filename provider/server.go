@@ -31,17 +31,20 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
 
-	var myHandler = http.HandlerFunc(server.postContract)
-	router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
+	// var myHandler = http.HandlerFunc(server.postContract)
+	// router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
 
-	// TODO: add middleware
-	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
+	// TODO: fix middleware
+	// postBlockHandler := http.HandlerFunc(server.postBlock)
+	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
+	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
+	// router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-	// TODO: add middleware
+	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
 	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
@@ -51,18 +54,20 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
 
-	// TODO: add middleware
-	router.HandleFunc("/renter-info", server.getRenter).Methods("GET")
+	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
+
+	getRenterHandler := http.HandlerFunc(server.getRenter)
+	router.Handle("/renter-info", authMiddleware.Handler(getRenterHandler)).Methods("GET")
 	// Renters could use this to confirm the provider info from metadata
 	// TODO: change provider dashboard ui to hit /stats instead of /info
-	router.HandleFunc("/info", server.getStats).Methods("GET")
+	router.HandleFunc("/info", server.getInfo).Methods("GET")
 
 	// Local API
 	// TODO: Move these to the local provider server later
-	router.HandleFunc("/info", server.postInfo).Methods("POST")
-	router.HandleFunc("/stats", server.getStats).Methods("GET")
-	router.HandleFunc("/activity", server.getActivity).Methods("GET")
-	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+	// local.HandleFunc("/info", server.postInfo).Methods("POST")
+	// local.HandleFunc("/stats", server.getStats).Methods("GET")
+	// local.HandleFunc("/activity", server.getActivity).Methods("GET")
+	// local.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
 }
@@ -106,7 +111,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	info := core.ProviderInfo{
 		ID:          server.provider.Config.ProviderID,
 		PublicKey:   "string",
-		Addr:        server.provider.Config.ApiAddr,
+		Addr:        server.provider.Config.PublicApiAddr,
 		SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
 		StorageRate: 1,
 	}

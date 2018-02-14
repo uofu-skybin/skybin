@@ -58,6 +58,7 @@ func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 		err = server.db.InsertRenter(&renter)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(renter)

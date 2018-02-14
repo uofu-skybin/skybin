@@ -1795,5 +1795,72 @@ func TestRenterDeleteContractAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
 
+func TestRenterGetSharedFilesAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetSharedFilesAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testGetSharedFilesAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the first renter's files with the second renter.
+	_, err = otherRenterClient.GetSharedFiles(renter.ID)
+	if err == nil {
+		t.Fatal("no error when accessing other renter's shared files")
+	}
+}
+
+func TestRenterDeleteSharedFileAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	lastRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeleteSharedFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testRenterDeleteSharedFileAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = registerRenter(lastRenterClient, "testRenterDeleteSharedFileAuth3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := uploadFile(renterClient, renter.ID, "testDeleteSharedFileAuth", "testDeleteSharedFileAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Share the file
+	permission := core.Permission{
+		RenterId: otherRenter.ID,
+	}
+	err = renterClient.ShareFile(renter.ID, file.ID, &permission)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to remove the shared file with the last renter.
+	err = lastRenterClient.RemoveSharedFile(otherRenter.ID, file.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user's file")
+	}
 }

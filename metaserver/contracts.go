@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"skybin/core"
+	"skybin/util"
 
 	"github.com/gorilla/mux"
 )
@@ -16,6 +17,18 @@ type contractResp struct {
 func (server *MetaServer) getContractsHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != params["renterID"] {
+			writeErr("cannot access other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Make sure the specified renter actually exists.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
@@ -43,6 +56,13 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 
 		params := mux.Vars(r)
 
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
 		// Make sure the renter exists.
 		_, err = server.db.FindRenterByID(params["renterID"])
 		if err != nil {
@@ -50,7 +70,10 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			return
 		}
 
-		// BUG(kincaid): Make sure the contract's renter ID is set to that of the renter.
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != contract.RenterId {
+			writeErr("cannot post contracts for other users", http.StatusUnauthorized, w)
+			return
+		}
 
 		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
 		err = server.db.InsertContract(&contract)
@@ -67,11 +90,24 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 func (server *MetaServer) getContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
 		contract, err := server.db.FindContractByID(params["contractID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != contract.RenterId {
+			writeErr("cannot retrieve other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
 		json.NewEncoder(w).Encode(contract)
 	})
 }
@@ -92,6 +128,23 @@ func (server *MetaServer) putContractHandler() http.HandlerFunc {
 			return
 		}
 
+		oldContract, err := server.db.FindContractByID(contract.ID)
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the contract.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != oldContract.RenterId {
+			writeErr("cannot modify other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
 		err = server.db.UpdateContract(&contract)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
@@ -104,7 +157,25 @@ func (server *MetaServer) putContractHandler() http.HandlerFunc {
 func (server *MetaServer) deleteContractHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		err := server.db.DeleteContract(params["contractID"])
+
+		contract, err := server.db.FindContractByID(params["contractID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the contract.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != contract.RenterId {
+			writeErr("cannot delete other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
+		err = server.db.DeleteContract(params["contractID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return

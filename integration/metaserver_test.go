@@ -1681,3 +1681,119 @@ func TestRenterPostPermissionAuth(t *testing.T) {
 		t.Fatal("no error when posting permission to other renter's file")
 	}
 }
+
+func TestRenterGetContractsAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetContractsAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testGetContractsAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the first renter's files with the second renter.
+	_, err = otherRenterClient.GetRenterContracts(renter.ID)
+	if err == nil {
+		t.Fatal("no error when accessing other renter's contracts")
+	}
+}
+
+func TestRenterPostContractAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testPostContractAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	_, err = registerRenter(otherRenterClient, "testPostContractAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to post a contract to the first renter's file with the second renter.
+	contract := &core.Contract{RenterId: renter.ID}
+	err = otherRenterClient.PostContract(renter.ID, contract)
+	if err == nil {
+		t.Fatal("no error when posting contract for other renter")
+	}
+}
+
+func TestRenterGetContractAuth(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testGetContractAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testGetContractAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contract := &core.Contract{ID: "testGetContractAuth", RenterId: renter.ID}
+	err = renterClient.PostContract(renter.ID, contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to access the file with the other renter.
+	_, err = otherRenterClient.GetContract(otherRenter.ID, contract.ID)
+	if err == nil {
+		t.Fatal("no error when accessing other renters contract")
+	}
+}
+
+func TestRenterDeleteContractAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherRenterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterDeleteContractAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another renter.
+	otherRenter, err := registerRenter(otherRenterClient, "testRenterDeleteContractAuth2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contract := &core.Contract{ID: "testDeleteContractAuth", RenterId: renter.ID}
+	err = renterClient.PostContract(renter.ID, contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to delete the uploaded file with the other renter.
+	err = otherRenterClient.DeleteContract(otherRenter.ID, contract.ID)
+	if err == nil {
+		t.Fatal("no error when deleting other user's contract")
+	}
+
+	// Make sure the file still exists
+	_, err = renterClient.GetContract(renter.ID, contract.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}

@@ -1011,3 +1011,50 @@ func TestRemoveSharedFile(t *testing.T) {
 		}
 	}
 }
+
+func TestGetRenterAuthentication(t *testing.T) {
+	httpClient := http.Client{}
+	renterClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	providerClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(renterClient, "testRenterGetAuth")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// "Upload" a file as the renter
+	file := core.File{
+		ID:   "renterGetAuthTest",
+		Name: "renterGetAuthTest",
+	}
+	err = renterClient.PostFile(renter.ID, &file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a provider.
+	_, err = registerProvider(providerClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the renter can retrieve all of its information.
+	renterInfo, err := renterClient.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Information should match renter.
+	if diff := deep.Equal(renter, renterInfo); diff != nil {
+		// t.Fatal(diff)
+	}
+
+	// Make sure provider cannot access non-public renter info
+	renterInfo, err = providerClient.GetRenter(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(renterInfo.Files) != 0 {
+		t.Fatal("files included with renter")
+	}
+}

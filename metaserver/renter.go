@@ -65,6 +65,12 @@ func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 	})
 }
 
+type PublicRenterResp struct {
+	ID        string `json:"id"`
+	Alias     string `json:"alias"`
+	PublicKey string `json:"publicKey"`
+}
+
 func (server *MetaServer) getRenterHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +80,20 @@ func (server *MetaServer) getRenterHandler() http.HandlerFunc {
 			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
-		json.NewEncoder(w).Encode(renter)
+
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		if renterID, present := claims["renterID"]; present && renterID.(string) == params["id"] {
+			json.NewEncoder(w).Encode(renter)
+			return
+		} else {
+			publicInfo := PublicRenterResp{ID: renter.ID, Alias: renter.Alias, PublicKey: renter.PublicKey}
+			json.NewEncoder(w).Encode(publicInfo)
+		}
 	})
 }
 

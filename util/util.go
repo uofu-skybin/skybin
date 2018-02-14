@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"io/ioutil"
-	"strings"
-	"strconv"
-	"net"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 func Hash(data []byte) string {
@@ -116,7 +119,7 @@ func ParseByteAmount(str string) (int64, error) {
 	mul := int64(1)
 	if strings.HasSuffix(str, "tb") {
 		mul = 1e12
-		str = str[:len(str) -len("tb")]
+		str = str[:len(str)-len("tb")]
 	} else if strings.HasSuffix(str, "gb") {
 		mul = 1e9
 		str = str[:len(str)-len("gb")]
@@ -145,4 +148,19 @@ func ParseByteAmount(str string) (int64, error) {
 func ValidateNetAddr(addr string) error {
 	_, _, err := net.SplitHostPort(addr)
 	return err
+}
+
+func GetTokenClaimsFromRequest(r *http.Request) (jwt.MapClaims, error) {
+	// If the user is authenticated as the specified renter, return the entire object.
+	user := r.Context().Value("user")
+	token, ok := user.(*jwt.Token)
+	if !ok {
+		return nil, errors.New("could not get token from request")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("token claims in incorrect format")
+	}
+
+	return claims, nil
 }

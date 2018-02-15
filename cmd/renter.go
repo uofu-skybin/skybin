@@ -86,6 +86,20 @@ func runRenterInit(args ...string) {
 		log.Fatal("You must give an alias")
 	}
 
+	if len(*apiAddrFlag) > 0 {
+		err := util.ValidateNetAddr(*apiAddrFlag)
+		if err != nil {
+			log.Fatal("Invalid API address.")
+		}
+	}
+
+	if len(*metaAddrFlag) > 0 {
+		err := util.ValidateNetAddr(*metaAddrFlag)
+		if err != nil {
+			log.Fatal("Invalid metaserver address.")
+		}
+	}
+
 	homeDir := *homeDirFlag
 	if len(homeDir) == 0 {
 		defaultHome, err := defaultSkybinHome()
@@ -110,15 +124,18 @@ func runRenterInit(args ...string) {
 		var keybytes []byte
 		keybytes, err = ioutil.ReadFile(*keyFileFlag)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to read key file. Error: ", err)
 		}
 		rsaKey, err = util.UnmarshalPrivateKey(keybytes)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to decode private key. Are you sure ", *keyFileFlag, " is a valid key file?")
 		}
 	} else {
 		rsaKey, err = rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to generate user RSA key. Error: ", err)
 		}
 	}
@@ -127,15 +144,18 @@ func runRenterInit(args ...string) {
 	privateKeyPath := path.Join(homeDir, "renterid")
 	err = ioutil.WriteFile(privateKeyPath, util.MarshalPrivateKey(rsaKey), 0666)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save generated private key. Error: ", err)
 	}
 	publicKeyPath := privateKeyPath + ".pub"
 	publicKeyBytes, err := util.MarshalPublicKey(&rsaKey.PublicKey)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save public key. Error: ", err)
 	}
 	err = ioutil.WriteFile(publicKeyPath, publicKeyBytes, 0666)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save public key. Error: ", err)
 	}
 
@@ -148,17 +168,9 @@ func runRenterInit(args ...string) {
 		MetaAddr:       core.DefaultMetaAddr,
 	}
 	if len(*apiAddrFlag) > 0 {
-		err = util.ValidateNetAddr(*apiAddrFlag)
-		if err != nil {
-			log.Fatal("Invalid API address.")
-		}
 		config.ApiAddr = *apiAddrFlag
 	}
 	if len(*metaAddrFlag) > 0 {
-		err = util.ValidateNetAddr(*metaAddrFlag)
-		if err != nil {
-			log.Fatal("Invalid metaserver address.")
-		}
 		config.MetaAddr = *metaAddrFlag
 	}
 
@@ -176,6 +188,7 @@ func runRenterInit(args ...string) {
 		}
 		updatedInfo, err := metaService.RegisterRenter(&info)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to register with metaserver. Error: ", err)
 		}
 
@@ -186,6 +199,7 @@ func runRenterInit(args ...string) {
 
 	err = util.SaveJson(path.Join(homeDir, "config.json"), &config)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save renter configuration file. Error: ", err)
 	}
 }

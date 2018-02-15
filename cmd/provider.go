@@ -100,27 +100,32 @@ func runProviderInit(args ...string) {
 	}
 	err = os.MkdirAll(path.Join(homeDir, "blocks"), 0700)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to create blocks directory. Error: ", err)
 	}
 
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to generate provider RSA key. Error: ", err)
 	}
 
 	privateKeyPath := path.Join(homeDir, "providerid")
 	err = ioutil.WriteFile(privateKeyPath, util.MarshalPrivateKey(rsaKey), 0666)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save private key. Error: ", err)
 	}
 
 	publicKeyPath := privateKeyPath + ".pub"
 	publicKeyBytes, err := util.MarshalPublicKey(&rsaKey.PublicKey)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save public key. Error: ", err)
 	}
 	err = ioutil.WriteFile(publicKeyPath, publicKeyBytes, 0666)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save public key. Error: ", err)
 	}
 
@@ -135,6 +140,7 @@ func runProviderInit(args ...string) {
 	if len(*metaAddrFlag) > 0 {
 		err = util.ValidateNetAddr(*metaAddrFlag)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Invalid meta server address")
 		}
 		config.MetaAddr = *metaAddrFlag
@@ -142,6 +148,7 @@ func runProviderInit(args ...string) {
 	if len(*publicApiAddrFlag) > 0 {
 		err = util.ValidateNetAddr(*publicApiAddrFlag)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Invalid public API address")
 		}
 		config.PublicApiAddr = *publicApiAddrFlag
@@ -149,6 +156,7 @@ func runProviderInit(args ...string) {
 	if len(*localApiAddrFlag) > 0 {
 		err = util.ValidateNetAddr(*localApiAddrFlag)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Invalid local API address")
 		}
 		config.LocalApiAddr = *localApiAddrFlag
@@ -156,9 +164,11 @@ func runProviderInit(args ...string) {
 	if len(*storageSpaceFlag) > 0 {
 		amt, err := util.ParseByteAmount(*storageSpaceFlag)
 		if err != nil {
+			os.RemoveAll(homeDir)
 			log.Fatal("Invalid storage amount.")
 		}
 		if amt < provider.MinStorageSpace {
+			os.RemoveAll(homeDir)
 			log.Fatal("Storage space must be at least ", util.FormatByteAmount(provider.MinStorageSpace))
 		}
 		config.SpaceAvail = amt
@@ -173,6 +183,7 @@ func runProviderInit(args ...string) {
 	metaClient := metaserver.NewClient(config.MetaAddr, &http.Client{})
 	updatedInfo, err := metaClient.RegisterProvider(&info)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to register with metaserver. Error: ", err)
 	}
 
@@ -181,6 +192,7 @@ func runProviderInit(args ...string) {
 
 	err = util.SaveJson(path.Join(homeDir, "config.json"), &config)
 	if err != nil {
+		os.RemoveAll(homeDir)
 		log.Fatal("Unable to save provider configuration file. Error: ", err)
 	}
 }

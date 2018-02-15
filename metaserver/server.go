@@ -45,6 +45,7 @@ func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.deleteProviderHandler())).Methods("DELETE")
 
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
+	router.Handle("/renters", server.getRenterByAliasHandler()).Queries("alias", "{alias}").Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.putRenterHandler())).Methods("PUT")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.deleteRenterHandler())).Methods("DELETE")

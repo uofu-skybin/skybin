@@ -137,6 +137,39 @@ func TestRegisterRenter(t *testing.T) {
 	}
 }
 
+func TestGetRenterByAlias(t *testing.T) {
+	// Create a client for testing.
+	httpClient := http.Client{}
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+	otherClient := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter.
+	_, err := registerRenter(client, "getRenterByAliasTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	otherRenter, err := registerRenter(otherClient, "getRenterByAliasTest2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &core.RenterInfo{
+		PublicKey: otherRenter.PublicKey,
+		Alias:     otherRenter.Alias,
+		ID:        otherRenter.ID,
+	}
+
+	returned, err := client.GetRenterByAlias(otherRenter.Alias)
+	if err != nil {
+		t.Fatal("encountered error while attempting to retrieve renter by alias: ", err)
+	}
+
+	if diff := deep.Equal(expected, returned); diff != nil {
+		t.Fatal(diff)
+	}
+}
+
 // Update renter
 func TestUpdateRenter(t *testing.T) {
 	httpClient := http.Client{}

@@ -97,6 +97,22 @@ func (server *MetaServer) getRenterHandler() http.HandlerFunc {
 	})
 }
 
+func (server *MetaServer) getRenterByAliasHandler() http.HandlerFunc {
+	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		alias := r.FormValue("alias")
+
+		renter, err := server.db.FindRenterByAlias(alias)
+		if err != nil {
+			writeErr(err.Error(), http.StatusNotFound, w)
+			return
+		}
+
+		publicInfo := PublicRenterResp{ID: renter.ID, Alias: renter.Alias, PublicKey: renter.PublicKey}
+		json.NewEncoder(w).Encode(publicInfo)
+	})
+}
+
 func (server *MetaServer) putRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)

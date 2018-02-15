@@ -218,6 +218,34 @@ func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 	return &renter, nil
 }
 
+func (client *Client) GetRenterByAlias(alias string) (*core.RenterInfo, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters?alias=%s", client.addr, alias)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var renter core.RenterInfo
+	err = json.NewDecoder(resp.Body).Decode(&renter)
+	if err != nil {
+		return nil, err
+	}
+	return &renter, nil
+}
+
 func (client *Client) UpdateRenter(renter *core.RenterInfo) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")

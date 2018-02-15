@@ -141,6 +141,24 @@ func (db *mongoDB) FindRenterByID(renterID string) (*core.RenterInfo, error) {
 	return &result, nil
 }
 
+// Return the renter with the specified alias.
+func (db *mongoDB) FindRenterByAlias(alias string) (*core.RenterInfo, error) {
+	c, session, err := db.getMongoCollection("renters")
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	selector := bson.M{"alias": alias}
+	var result *core.RenterInfo
+	err = c.Find(selector).One(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // Insert the provided renter into the database.
 func (db *mongoDB) InsertRenter(renter *core.RenterInfo) error {
 	err := db.insertIntoCollection("renters", renter)

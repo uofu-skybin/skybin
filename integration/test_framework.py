@@ -169,6 +169,7 @@ class TestContext:
         self.metaserver = None
         self.providers = []
         self.renter = None
+        self.additional_renters = []
         self.test_file_dir = test_file_dir
         self.log_enabled = log_enabled
         self._test_files = []
@@ -216,6 +217,8 @@ class TestContext:
             p.teardown(rm_files)
         if self.renter:
             self.renter.teardown(rm_files)
+        for r in self.additional_renters:
+            r.teardown(rm_files)
 
 def create_metaserver():
     """Create and start a new metaserver instance"""
@@ -293,7 +296,8 @@ def setup_test(num_providers=1,
                log_enabled=LOG_ENABLED,
                remove_test_files=REMOVE_TEST_FILES,
                teardown_db=True,
-               renter_alias=None):
+               renter_alias=None,
+               num_additional_renters=0):
     """Create a test context.
 
     Args:
@@ -325,6 +329,14 @@ def setup_test(num_providers=1,
             ctxt.providers.append(pvdr)
         ctxt.renter = create_renter(ctxt.metaserver.address, repo_dir=repo_dir,
                                     alias=renter_alias)
+        for i in range(num_additional_renters):
+            ctxt.additional_renters.append(
+                create_renter(
+                    ctxt.metaserver.address, 
+                    repo_dir=repo_dir, 
+                    alias='test_renter' + ''.join(str(random.randint(1, 9)) for _ in range(4))
+                )
+            )
         time.sleep(1.0)
         for pvdr in ctxt.providers:
             check_service_startup(pvdr.process)

@@ -7,9 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -18,6 +18,8 @@ import (
 	"path"
 	"skybin/core"
 	"skybin/provider"
+
+	"github.com/klauspost/reedsolomon"
 )
 
 func (r *Renter) Download(fileId string, destPath string) error {
@@ -57,11 +59,12 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 		}
 		defer temp.Close()
 		defer os.Remove(temp.Name())
-		err = r.downloadBlock(&version.Blocks[i], temp)
+		err = r.downloadBlock(file.OwnerID, &version.Blocks[i], temp)
 		if err == nil {
 			successes++
 			blockFiles = append(blockFiles, temp)
 		} else {
+			return err
 			failures++
 			blockFiles = append(blockFiles, nil)
 		}
@@ -82,7 +85,7 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 		}
 
 		blockReaders := convertToReaderSlice(blockFiles)
-		for len(blockReaders) < version.NumDataBlocks+ version.NumParityBlocks {
+		for len(blockReaders) < version.NumDataBlocks+version.NumParityBlocks {
 			blockReaders = append(blockReaders, nil)
 		}
 
@@ -187,13 +190,12 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 	return nil
 }
 
-func (r *Renter) downloadBlock(block *core.Block, out *os.File) error {
+func (r *Renter) downloadBlock(renterId string, block *core.Block, out *os.File) error {
 	for _, location := range block.Locations {
 		client := provider.NewClient(location.Addr, &http.Client{})
 
-		blockReader, err := client.GetBlock(r.Config.RenterId, block.ID)
+		blockReader, err := client.GetBlock(renterId, block.ID)
 		if err != nil {
-
 			// TODO: Check that failure is due to a network error, not because
 			// provider didn't return the block.
 			continue
@@ -215,7 +217,7 @@ func (r *Renter) downloadBlock(block *core.Block, out *os.File) error {
 		if err != nil {
 			return fmt.Errorf("Error checking block hash. Error: %s", err)
 		}
-		blockHash := string(h.Sum(nil))
+		blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
 		if blockHash != block.Sha256Hash {
 			return errors.New("Block hash does not match expected.")
 		}
@@ -226,11 +228,41 @@ func (r *Renter) downloadBlock(block *core.Block, out *os.File) error {
 
 // Decrypts and returns f's AES key and AES IV.
 func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byte, err error) {
-	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, []byte(f.AesKey), nil)
+	var keyToDecrypt string
+	var ivToDecrypt string
+
+	// If we own the file, use the AES key directly. Otherwise, retrieve them from the relevent permission
+	if f.OwnerID == r.Config.RenterId {
+		keyToDecrypt = f.AesKey
+		ivToDecrypt = f.AesIV
+	} else {
+		for _, permission := range f.AccessList {
+			if permission.RenterId == r.Config.RenterId {
+				keyToDecrypt = permission.AesKey
+				ivToDecrypt = permission.AesIV
+			}
+		}
+	}
+
+	if keyToDecrypt == "" || ivToDecrypt == "" {
+		return nil, nil, errors.New("could not find permission in access list")
+	}
+
+	keyBytes, err := base64.URLEncoding.DecodeString(keyToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ivBytes, err := base64.URLEncoding.DecodeString(ivToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, keyBytes, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to decrypt aes key. Error: %v", err)
 	}
-	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, []byte(f.AesIV), nil)
+	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, ivBytes, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
 	}

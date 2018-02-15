@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -155,7 +156,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		if err != nil {
 			return nil, fmt.Errorf("Unable to calculate block hash. Error: %s", err)
 		}
-		blockHash := string(h.Sum(nil))
+		blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
 		block := core.Block{
 			ID:         blockId,
 			Num:        blockNum,
@@ -192,8 +193,8 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		Name:       destPath,
 		IsDir:      false,
 		AccessList: make([]core.Permission, 0),
-		AesKey:     string(aesKeyEncrypted),
-		AesIV:      string(aesIVEncrypted),
+		AesKey:     base64.URLEncoding.EncodeToString(aesKeyEncrypted),
+		AesIV:      base64.URLEncoding.EncodeToString(aesIVEncrypted),
 		Versions: []core.Version{
 			{
 				Num:             1,
@@ -252,6 +253,19 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 			goto unwind
 		}
 	}
+
+	// BUG(kincaid): We'll probably want to do this some other way
+	if !r.metaClient.IsAuthorized() {
+		err = r.Authorize()
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = r.metaClient.PostFile(r.Config.RenterId, file)
+	if err != nil {
+		return nil, err
+	}
+
 	err = r.saveFile(file)
 	if err != nil {
 		goto unwind

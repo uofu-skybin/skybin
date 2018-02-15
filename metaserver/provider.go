@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"skybin/core"
 
-	"github.com/gorilla/mux"
-	"skybin/util"
 	"crypto/rsa"
+	"skybin/util"
+
+	"github.com/gorilla/mux"
 )
 
 // Retrieves the given provider's public RSA key.
@@ -31,9 +32,7 @@ func (server *MetaServer) getProvidersHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providers, err := server.db.FindAllProviders()
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		resp := getProvidersResp{
@@ -54,34 +53,26 @@ func (server *MetaServer) postProviderHandler() http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&provider)
 
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "unable to parse payload"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("unable to parse payload", http.StatusBadRequest, w)
 			return
 		}
 
 		// Make sure the user supplied a public key for the provider.
 		if provider.PublicKey == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "must specify RSA public key"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must specify RSA public key", http.StatusBadRequest, w)
 			return
 		}
 
 		_, err = parsePublicKey(provider.PublicKey)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "invalid RSA public key"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("invalid RSA public key", http.StatusBadRequest, w)
 			return
 		}
 
 		provider.ID = fingerprintKey(provider.PublicKey)
 		err = server.db.InsertProvider(&provider)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: err.Error()}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
 
@@ -95,9 +86,7 @@ func (server *MetaServer) getProviderHandler() http.HandlerFunc {
 		params := mux.Vars(r)
 		provider, err := server.db.FindProviderByID(params["id"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := errorResp{Error: "could not find provider"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		json.NewEncoder(w).Encode(provider)
@@ -107,43 +96,44 @@ func (server *MetaServer) getProviderHandler() http.HandlerFunc {
 func (server *MetaServer) putProviderHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
+
+		// Make sure the person making the request is the provider.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if providerID, present := claims["providerID"]; !present || providerID.(string) != params["id"] {
+			writeErr("cannot modify other providers", http.StatusUnauthorized, w)
+			return
+		}
+
 		// Make sure provider exists.
 		provider, err := server.db.FindProviderByID(params["id"])
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := errorResp{Error: "could not find provider"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		// Attempt to decode the supplied provider.
 		var updatedProvider core.ProviderInfo
 		err = json.NewDecoder(r.Body).Decode(&updatedProvider)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			resp := postProviderResp{Error: "could not parse body"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("could not parse payload", http.StatusBadRequest, w)
 			return
 		}
 		// Make sure the user has not changed the provider's ID.
 		// BUG(kincaid): Think about other fields users shouldn't change.
 		if updatedProvider.ID != provider.ID {
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := postProviderResp{Error: "must not change provider ID"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must not change provider ID", http.StatusUnauthorized, w)
 			return
 		} else if updatedProvider.PublicKey != provider.PublicKey {
-			w.WriteHeader(http.StatusUnauthorized)
-			resp := postProviderResp{Error: "must not change provider public key"}
-			json.NewEncoder(w).Encode(resp)
+			writeErr("must not change provider public key", http.StatusBadRequest, w)
 			return
 		}
 		// Put the new provider into the database.
 		err = server.db.UpdateProvider(&updatedProvider)
 		if err != nil {
-			server.logger.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			resp := errorResp{Error: "internal server error"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -156,11 +146,21 @@ func (server *MetaServer) deleteProviderHandler() http.HandlerFunc {
 	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
-		err := server.db.DeleteProvider(params["id"])
+
+		// Make sure the person making the request is the provider.
+		claims, err := util.GetTokenClaimsFromRequest(r)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			resp := errorResp{Error: "provider not found"}
-			json.NewEncoder(w).Encode(resp)
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if providerID, present := claims["providerID"]; !present || providerID.(string) != params["id"] {
+			writeErr("cannot delete other providers", http.StatusUnauthorized, w)
+			return
+		}
+
+		err = server.db.DeleteProvider(params["id"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusNotFound, w)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

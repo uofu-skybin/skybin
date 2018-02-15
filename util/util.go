@@ -8,7 +8,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 func Hash(data []byte) string {
@@ -75,4 +82,85 @@ func UnmarshalPublicKey(data []byte) (*rsa.PublicKey, error) {
 		return nil, errors.New("Key is not an RSA public key.")
 	}
 	return key, nil
+}
+
+// Formats a byte amount as a string.
+func FormatByteAmount(bytes int64) string {
+	var amt float64
+	var units string
+	if bytes >= 1e12 {
+		amt = float64(bytes) / float64(1e12)
+		units = "TB"
+	} else if bytes >= 1e9 {
+		amt = float64(bytes) / float64(1e9)
+		units = "GB"
+	} else if bytes >= 1e6 {
+		amt = float64(bytes) / float64(1e6)
+		units = "MB"
+	} else if bytes >= 1e3 {
+		amt = float64(bytes) / float64(1e3)
+		units = "KB"
+	} else {
+		amt = float64(bytes)
+		units = "B"
+	}
+	return fmt.Sprintf("%.2f %s", amt, units)
+}
+
+// Parses a byte amount from a string.
+// The string may include a suffix.
+//    e.g. 10GB -> 10 * 1e9
+func ParseByteAmount(str string) (int64, error) {
+
+	// Normalize the string
+	str = strings.TrimSpace(str)
+	str = strings.ToLower(str)
+
+	mul := int64(1)
+	if strings.HasSuffix(str, "tb") {
+		mul = 1e12
+		str = str[:len(str)-len("tb")]
+	} else if strings.HasSuffix(str, "gb") {
+		mul = 1e9
+		str = str[:len(str)-len("gb")]
+	} else if strings.HasSuffix(str, "mb") {
+		mul = 1e6
+		str = str[:len(str)-len("gb")]
+	} else if strings.HasSuffix(str, "kb") {
+		mul = 1e3
+		str = str[:len(str)-len("kb")]
+	} else if strings.HasSuffix(str, "b") {
+		str = str[:len(str)-len("b")]
+	}
+
+	// Trim any whitespace that preceded the byte prefix
+	str = strings.TrimSpace(str)
+
+	n, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return n * mul, nil
+}
+
+// Validates a that a network address string is
+// in host:port form.
+func ValidateNetAddr(addr string) error {
+	_, _, err := net.SplitHostPort(addr)
+	return err
+}
+
+func GetTokenClaimsFromRequest(r *http.Request) (jwt.MapClaims, error) {
+	// If the user is authenticated as the specified renter, return the entire object.
+	user := r.Context().Value("user")
+	token, ok := user.(*jwt.Token)
+	if !ok {
+		return nil, errors.New("could not get token from request")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("token claims in incorrect format")
+	}
+
+	return claims, nil
 }

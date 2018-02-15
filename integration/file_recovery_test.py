@@ -45,7 +45,7 @@ def file_recovery_test(ctxt):
         location = block['locations'][0]
         addr = location['address']
         pvdr = next(p for p in ctxt.providers if p.address  == addr)
-        block_location = os.path.join(pvdr.homedir, 'provider', 'blocks', renter_id, block['id'])
+        block_location = os.path.join(pvdr.homedir, 'blocks', renter_id, block['id'])
         os.remove(block_location)
 
     # Attempt to download the file

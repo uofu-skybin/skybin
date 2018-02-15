@@ -643,6 +643,8 @@ func (client *Client) ShareFile(renterID string, fileID string, permission *core
 	return nil
 }
 
+// BUG(kincaid): Add methods for listing/getting/putting permissions
+
 func (client *Client) UnshareFile(renterID string, fileID string, userID string) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
@@ -727,6 +729,8 @@ func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
 
 	return nil
 }
+
+// BUG(kincaid): Add putContract function
 
 func (client *Client) PostContract(renterID string, contract *core.Contract) error {
 	if client.token == "" {

@@ -1,6 +1,7 @@
 package metaserver
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"skybin/authorization"
@@ -81,7 +82,7 @@ func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 
 type MetaServer struct {
 	dataDir    string
-	db         metaDB
+	db         *mongoDB
 	providers  []core.ProviderInfo
 	renters    []core.RenterInfo
 	logger     *log.Logger
@@ -92,6 +93,21 @@ type MetaServer struct {
 
 type errorResp struct {
 	Error string `json:"error"`
+}
+
+func writeErr(msg string, status int, w http.ResponseWriter) {
+	w.WriteHeader(status)
+	resp := errorResp{Error: msg}
+	json.NewEncoder(w).Encode(resp)
+	return
+}
+
+func writeAndLogInternalError(err interface{}, w http.ResponseWriter, l *log.Logger) {
+	w.WriteHeader(http.StatusInternalServerError)
+	l.Println(err)
+	resp := errorResp{Error: "internal server error"}
+	json.NewEncoder(w).Encode(resp)
+	return
 }
 
 // ServeHTTP begins serving requests from the server's router.

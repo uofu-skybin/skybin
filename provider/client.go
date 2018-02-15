@@ -77,14 +77,15 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 
 func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) error {
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	req, err := http.NewRequest(http.MethodPost, url, data)
 	if err != nil {
 		return err
 	}
 	token := fmt.Sprintf("Bearer %s", client.token)
 	req.Header.Add("Authorization", token)
+	req.Header.Set("Content-Type", "application/octet-stream")
 
-	resp, err := client.client.Post(url, "application/octet-stream", data)
+	resp, err := client.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -104,6 +105,7 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		return nil, decodeError(resp.Body)

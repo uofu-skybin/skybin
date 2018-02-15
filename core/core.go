@@ -7,7 +7,8 @@ import (
 const (
 	DefaultMetaAddr     = "127.0.0.1:8001"
 	DefaultRenterAddr   = "127.0.0.1:8002"
-	DefaultProviderAddr = ":8003"
+	DefaultPublicProviderAddr = ":8003"
+	DefaultLocalProviderAddr = "127.0.0.1:8004"
 )
 
 type ProviderInfo struct {

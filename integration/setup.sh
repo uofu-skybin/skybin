@@ -14,26 +14,25 @@ echo "building skybin"
 cd .. && go build
 cd -
 
-echo "setting up sample skybin repo"
-$SKYBIN_CMD init -home $REPO_DIR
-export SKYBIN_HOME=$PWD/$REPO_DIR
-
 echo "setting up database"
 mongo setup_db.js
-
-echo "creating directory for test files"
-mkdir $TEST_FILE_DIR
-
-echo "starting services"
 
 echo "starting metaserver"
 $SKYBIN_CMD metaserver &
 sleep 1
 
+echo "setting up sample skybin repo"
+$SKYBIN_CMD renter init --alias test_renter --homedir $REPO_DIR/renter
+$SKYBIN_CMD provider init --homedir $REPO_DIR/provider
+export SKYBIN_HOME=$PWD/$REPO_DIR
+
+echo "creating directory for test files"
+mkdir $TEST_FILE_DIR
+
 echo "starting provider"
-$SKYBIN_CMD provider &
+$SKYBIN_CMD provider daemon &
 
 echo "starting renter"
-$SKYBIN_CMD renter -alias test &
+$SKYBIN_CMD renter daemon &
 
 wait

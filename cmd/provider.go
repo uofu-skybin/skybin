@@ -56,7 +56,8 @@ func runProvider(args ...string) {
 var providerInitUsage = `provider init [options...]
 options:
     --homedir         Home directory to place files in (default ~/.skybin/provider)
-    --public-api-addr Public address for renter traffic in 'host:port' form
+    --public-api-addr Public network address for renter traffic in 'host:port' form
+    --local-api-addr  Local API network address in 'host:port' form
     --meta-addr       Address of the metaserver to register with
     --storage-space   Storage space to make available to renters (default 10GB)
 `

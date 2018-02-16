@@ -120,7 +120,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
-func (r *Renter) Authorize() error {
+func (r *Renter) authorize() error {
 	privKey, err := loadPrivateKey(r.Config.PrivateKeyFile)
 	if err != nil {
 		return err
@@ -226,7 +226,7 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 
 	// If we couldn't find the file locally, check if it is a shared file.
 	if !r.metaClient.IsAuthorized() {
-		r.Authorize()
+		r.authorize()
 	}
 
 	f, err := r.metaClient.GetFile(r.Config.RenterId, fileId)
@@ -271,7 +271,7 @@ func (r *Renter) ShareFile(fileId string, userId string) error {
 	}
 
 	if !r.metaClient.IsAuthorized() {
-		err = r.Authorize()
+		err = r.authorize()
 		if err != nil {
 			return err
 		}

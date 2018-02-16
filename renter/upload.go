@@ -256,7 +256,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 
 	// BUG(kincaid): We'll probably want to do this some other way
 	if !r.metaClient.IsAuthorized() {
-		err = r.Authorize()
+		err = r.authorize()
 		if err != nil {
 			return nil, err
 		}

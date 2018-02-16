@@ -179,12 +179,12 @@ func runRenterInit(args ...string) {
 		renterId := util.FingerprintKey(publicKeyBytes)
 		err := metaService.AuthorizeRenter(rsaKey, renterId)
 		if err != nil {
-			os.Remove(homeDir)
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to retrieve renter information. Are you sure this is the correct key?")
 		}
 		renterInfo, err := metaService.GetRenter(renterId)
 		if err != nil {
-			os.Remove(homeDir)
+			os.RemoveAll(homeDir)
 			log.Fatal("Unable to retrieve renter information. Error: ", err)
 		}
 

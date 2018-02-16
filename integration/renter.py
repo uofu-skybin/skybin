@@ -76,3 +76,9 @@ class RenterAPI:
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content)
+
+    def list_shared_files(self):
+        resp = requests.get(self.base_url + '/files/shared')
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content)

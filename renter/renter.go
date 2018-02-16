@@ -218,6 +218,25 @@ func (r *Renter) ListFiles() ([]*core.File, error) {
 	return r.files, nil
 }
 
+func (r *Renter) ListSharedFiles() ([]*core.File, error) {
+	if !r.metaClient.IsAuthorized() {
+		r.authorize()
+	}
+
+	files, err := r.metaClient.GetSharedFiles(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Do this to match ListFile's signature, for now.
+	returnList := make([]*core.File, len(files))
+	for i, f := range files {
+		returnList[i] = &f
+	}
+
+	return returnList, nil
+}
+
 func (r *Renter) Lookup(fileId string) (*core.File, error) {
 	_, f := r.findFile(fileId)
 	if f != nil {

@@ -149,6 +149,9 @@ class RenterService(Service):
     def list_files(self):
         return self._api.list_files()
 
+    def list_shared_files(self):
+        return self._api.list_shared_files()
+
 class TestContext:
     """Container for the services, test files, and helpers needed to run a test
 

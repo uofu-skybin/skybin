@@ -25,7 +25,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
 	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
-	router.HandleFunc("/files/shared", server.getFiles).Methods("GET")
+	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
 	router.HandleFunc("/files/upload", server.uploadFile).Methods("POST")
 	router.HandleFunc("/files/download", server.downloadFile).Methods("POST")
 	router.HandleFunc("/files/create-folder", server.createFolder).Methods("POST")
@@ -115,7 +115,13 @@ func (server *renterServer) getFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	files, err := server.renter.ListSharedFiles()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &getFilesResp{Files: files})
 }
 
 type uploadFileReq struct {

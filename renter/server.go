@@ -203,8 +203,8 @@ func (server *renterServer) createFolder(w http.ResponseWriter, r *http.Request)
 }
 
 type shareFileReq struct {
-	FileId   string `json:"fileId"`
-	RenterId string `json:"renterId"`
+	FileId      string `json:"fileId"`
+	RenterAlias string `json:"renterAlias"`
 }
 
 type shareFileResp struct {
@@ -222,12 +222,12 @@ func (server *renterServer) shareFile(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	if req.FileId == "" || req.RenterId == "" {
-		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: "must supply file ID and renter ID"})
+	if req.FileId == "" || req.RenterAlias == "" {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: "must supply file ID and renter alias"})
 		return
 	}
 
-	err = server.renter.ShareFile(req.FileId, req.RenterId)
+	err = server.renter.ShareFile(req.FileId, req.RenterAlias)
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: err.Error()})
 		return

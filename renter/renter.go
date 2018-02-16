@@ -256,14 +256,14 @@ func (r *Renter) Lookup(fileId string) (*core.File, error) {
 	return f, nil
 }
 
-func (r *Renter) ShareFile(fileId string, userId string) error {
+func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 	f, err := r.Lookup(fileId)
 	if err != nil {
 		return err
 	}
 
 	// Get the renter's information
-	renterInfo, err := r.metaClient.GetRenter(userId)
+	renterInfo, err := r.metaClient.GetRenterByAlias(renterAlias)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func (r *Renter) ShareFile(fileId string, userId string) error {
 	encryptedIV, err := rsa.EncryptOAEP(sha256.New(), rng, pubKey, decryptedIV, nil)
 
 	permission := core.Permission{
-		RenterId: userId,
+		RenterId: renterInfo.ID,
 		AesKey:   base64.URLEncoding.EncodeToString(encryptedKey),
 		AesIV:    base64.URLEncoding.EncodeToString(encryptedIV),
 	}

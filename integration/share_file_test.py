@@ -19,7 +19,7 @@ def share_test(ctxt, file_size=DEFAULT_FILE_SIZE):
     file_info = ctxt.renter.upload_file(source=input_path, dest=input_path)
 
     # Share the file with another renter
-    ctxt.renter.share_file(file_info['id'], ctxt.additional_renters[0].get_info()['id'])
+    ctxt.renter.share_file(file_info['id'], ctxt.additional_renters[0].get_info()['alias'])
 
     # Attempt to retrieve the file with the other renter
     output_path = ctxt.create_output_path()

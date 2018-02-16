@@ -56,10 +56,10 @@ class RenterAPI:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content)
 
-    def share_file(self, file_id, user_id):
+    def share_file(self, file_id, renter_alias):
         resp = requests.post(self.base_url + '/files/share', json={
             'fileId': file_id,
-            'renterId': user_id
+            'renterAlias': renter_alias
         })
         if resp.status_code != 200:
             raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))

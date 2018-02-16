@@ -64,7 +64,6 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 			successes++
 			blockFiles = append(blockFiles, temp)
 		} else {
-			return err
 			failures++
 			blockFiles = append(blockFiles, nil)
 		}

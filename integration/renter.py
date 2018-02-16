@@ -57,11 +57,12 @@ class RenterAPI:
         return json.loads(resp.content)
 
     def share_file(self, file_id, user_id):
-        resp = requests.post(self.base_url + '/files/{}/permissions'.format(file_id), json={
-            'userId': user_id
+        resp = requests.post(self.base_url + '/files/share', json={
+            'fileId': file_id,
+            'renterId': user_id
         })
-        if resp.status_code != 201:
-            raise ValueError(resp.content.decode('utf-8'))
+        if resp.status_code != 200:
+            raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))
         return json.loads(resp.content)
 
     def remove_file(self, file_id):

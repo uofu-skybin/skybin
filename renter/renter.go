@@ -1,7 +1,10 @@
 package renter
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +12,7 @@ import (
 	"os"
 	"path"
 	"skybin/core"
+	"skybin/metaserver"
 	"skybin/provider"
 	"skybin/util"
 	"strings"
@@ -29,11 +33,12 @@ type Config struct {
 }
 
 type Renter struct {
-	Config    *Config
-	Homedir   string
-	files     []*core.File
-	contracts []*core.Contract
-	privKey   *rsa.PrivateKey
+	Config     *Config
+	Homedir    string
+	files      []*core.File
+	contracts  []*core.Contract
+	privKey    *rsa.PrivateKey
+	metaClient *metaserver.Client
 
 	// All free storage blobs available for uploads.
 	// Each storage contract should have at most one associated
@@ -91,6 +96,9 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	}
 	renter.Config = config
 
+	metaHTTPClient := http.Client{}
+	renter.metaClient = metaserver.NewClient(config.MetaAddr, &metaHTTPClient)
+
 	snapshotPath := path.Join(homedir, "snapshot.json")
 	if _, err := os.Stat(snapshotPath); err == nil {
 		var s snapshot
@@ -110,6 +118,20 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	renter.privKey = privKey
 
 	return renter, err
+}
+
+func (r *Renter) authorize() error {
+	privKey, err := loadPrivateKey(r.Config.PrivateKeyFile)
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.AuthorizeRenter(privKey, r.Config.RenterId)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Info is information about a renter
@@ -198,17 +220,70 @@ func (r *Renter) ListFiles() ([]*core.File, error) {
 
 func (r *Renter) Lookup(fileId string) (*core.File, error) {
 	_, f := r.findFile(fileId)
-	if f == nil {
-		return nil, fmt.Errorf("Cannot find file with ID %s", fileId)
+	if f != nil {
+		return f, nil
 	}
+
+	// If we couldn't find the file locally, check if it is a shared file.
+	if !r.metaClient.IsAuthorized() {
+		r.authorize()
+	}
+
+	f, err := r.metaClient.GetFile(r.Config.RenterId, fileId)
+	if err != nil {
+		return nil, err
+	}
+
 	return f, nil
 }
 
-func (r *Renter) ShareFile(f *core.File, userId string) error {
-	f.AccessList = append(f.AccessList, core.Permission{
+func (r *Renter) ShareFile(fileId string, userId string) error {
+	f, err := r.Lookup(fileId)
+	if err != nil {
+		return err
+	}
+
+	// Get the renter's information
+	renterInfo, err := r.metaClient.GetRenter(userId)
+	if err != nil {
+		return err
+	}
+
+	// Encrypt the AES key and IV with the renter's public key
+	pubKey, err := util.UnmarshalPublicKey([]byte(renterInfo.PublicKey))
+	if err != nil {
+		return err
+	}
+
+	decryptedKey, decryptedIV, err := r.decryptEncryptionKeys(f)
+	if err != nil {
+		return err
+	}
+
+	rng := rand.Reader
+	encryptedKey, err := rsa.EncryptOAEP(sha256.New(), rng, pubKey, decryptedKey, nil)
+	encryptedIV, err := rsa.EncryptOAEP(sha256.New(), rng, pubKey, decryptedIV, nil)
+
+	permission := core.Permission{
 		RenterId: userId,
-	})
-	err := r.saveSnapshot()
+		AesKey:   base64.URLEncoding.EncodeToString(encryptedKey),
+		AesIV:    base64.URLEncoding.EncodeToString(encryptedIV),
+	}
+
+	if !r.metaClient.IsAuthorized() {
+		err = r.authorize()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = r.metaClient.ShareFile(r.Config.RenterId, f.ID, &permission)
+	if err != nil {
+		return err
+	}
+
+	f.AccessList = append(f.AccessList, permission)
+	err = r.saveSnapshot()
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error %s", err)
 	}

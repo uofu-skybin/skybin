@@ -34,6 +34,11 @@ func decodeError(r io.Reader) error {
 	return errors.New(respMsg.Error)
 }
 
+func (client *Client) IsAuthorized() bool {
+	// BUG(kincaid): Have this check if the token is expired.
+	return client.token != ""
+}
+
 func (client *Client) AuthorizeRenter(privateKey *rsa.PrivateKey, renterID string) error {
 	authClient := authorization.NewClient(client.addr, client.client)
 	token, err := authClient.GetAuthToken(privateKey, "renter", renterID)

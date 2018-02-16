@@ -3,10 +3,12 @@ package renter
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"skybin/core"
+	"skybin/metaserver"
+
+	"github.com/gorilla/mux"
 )
 
 func NewServer(renter *Renter, logger *log.Logger) http.Handler {
@@ -27,7 +29,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/upload", server.uploadFile).Methods("POST")
 	router.HandleFunc("/files/download", server.downloadFile).Methods("POST")
 	router.HandleFunc("/files/create-folder", server.createFolder).Methods("POST")
-	router.HandleFunc("/files/share", server.createFolder).Methods("POST")
+	router.HandleFunc("/files/share", server.shareFile).Methods("POST")
 	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
 	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
@@ -39,6 +41,7 @@ type renterServer struct {
 	renter *Renter
 	logger *log.Logger
 	router *mux.Router
+	client *metaserver.Client
 }
 
 func (server *renterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -193,13 +196,43 @@ func (server *renterServer) createFolder(w http.ResponseWriter, r *http.Request)
 	server.writeResp(w, http.StatusCreated, f)
 }
 
+type shareFileReq struct {
+	FileId   string `json:"fileId"`
+	RenterId string `json:"renterId"`
+}
+
+type shareFileResp struct {
+	Message string `json:"message"`
+}
+
 func (server *renterServer) shareFile(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement
+	var req shareFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+
+	}
+
+	if req.FileId == "" || req.RenterId == "" {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: "must supply file ID and renter ID"})
+		return
+	}
+
+	err = server.renter.ShareFile(req.FileId, req.RenterId)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &shareFileResp{Message: "file shared"})
 }
 
 type renameFileReq struct {
 	FileId string `json:"fileId"`
-	Name string `json:"name"`
+	Name   string `json:"name"`
 }
 
 func (server *renterServer) renameFile(w http.ResponseWriter, r *http.Request) {

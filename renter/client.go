@@ -121,7 +121,25 @@ func (client *Client) RenameFile(fileId string, name string) error {
 	url := fmt.Sprintf("http://%s/files/rename", client.addr)
 	req := renameFileReq{
 		FileId: fileId,
-		Name: name,
+		Name:   name,
+	}
+	data, _ := json.Marshal(&req)
+	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+	return nil
+}
+
+func (client *Client) ShareFile(fileId string, renterId string) error {
+	url := fmt.Sprintf("http://%s/files/share", client.addr)
+	req := shareFileReq{
+		FileId:   fileId,
+		RenterId: renterId,
 	}
 	data, _ := json.Marshal(&req)
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))

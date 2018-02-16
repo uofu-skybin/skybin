@@ -29,9 +29,9 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		authorizer: authorization.NewAuthorizer(logger),
 	}
 
-	authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
+	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.PrivateKey))
 
-	// var myHandler = http.HandlerFunc(server.postContract)
+	// var myHandler = http.HandlerFunc(server.getInfo)
 	// router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
 
 	// API for remote renters
@@ -44,12 +44,21 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
 	// router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
-	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
+
+	// postBlockHandler := http.HandlerFunc(server.postBlock)
+	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("GET")
+	router.Handle("/blocks", authMiddleware.Handler(server.postBlockHandler())).Methods("POST")
+
+	// router.HandleFunc("/blocks", server.postBlock).Methods("POST")
+
+	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
+	router.Handle("/blocks", authMiddleware.Handler(server.deleteBlockHandler())).Methods("DELETE")
+
+	// router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
-	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler(
+	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
+	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
 		"renterID",
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
@@ -124,12 +133,27 @@ func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
+//TODO: error handling in this method
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
-	// TODO: authenticate first
 	renterID, exists := mux.Vars(r)["renterID"]
-	if exists {
-		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Requested Renter ID does not exist on provider"})
+		return
 	}
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	// Check to confirm that the authentication token matches that of the querying renter
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden, errorResp{Error: "Authentication token does not match renterID"})
+		return
+	}
+
 	server.writeResp(w, http.StatusOK, getRenterResp{renter: server.provider.renters[renterID]})
 }
 

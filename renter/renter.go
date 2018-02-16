@@ -4,7 +4,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
+
+	"github.com/satori/go.uuid"
 )
 
 type Config struct {
@@ -255,6 +256,7 @@ func (r *Renter) removeVersion(version *core.Version) {
 func (r *Renter) removeBlock(block *core.Block) error {
 	for _, location := range block.Locations {
 		pvdr := provider.NewClient(location.Addr, &http.Client{})
+		pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
 		err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
 		if err != nil {
 			return err

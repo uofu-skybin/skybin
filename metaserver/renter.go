@@ -47,13 +47,13 @@ func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 			return
 		}
 
-		_, err = parsePublicKey(renter.PublicKey)
+		_, err = util.UnmarshalPublicKey([]byte(renter.PublicKey))
 		if err != nil {
 			writeErr("invalid RSA public key", http.StatusBadRequest, w)
 			return
 		}
 
-		renter.ID = fingerprintKey(renter.PublicKey)
+		renter.ID = util.FingerprintKey([]byte(renter.PublicKey))
 
 		err = server.db.InsertRenter(&renter)
 		if err != nil {

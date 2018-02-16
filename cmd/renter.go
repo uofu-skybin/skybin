@@ -82,7 +82,7 @@ func runRenterInit(args ...string) {
 	apiAddrFlag := fs.String("api-addr", "", "")
 	fs.Parse(args)
 
-	if len(*aliasFlag) == 0 {
+	if len(*aliasFlag) == 0 && len(*keyFileFlag) == 0 {
 		log.Fatal("You must give an alias")
 	}
 
@@ -161,7 +161,6 @@ func runRenterInit(args ...string) {
 
 	// Create renter config
 	config := renter.Config{
-		Alias:          *aliasFlag,
 		PrivateKeyFile: privateKeyPath,
 		PublicKeyFile:  publicKeyPath,
 		ApiAddr:        core.DefaultRenterAddr,
@@ -177,8 +176,21 @@ func runRenterInit(args ...string) {
 	// Fetch user information from or register with metaserver
 	metaService := metaserver.NewClient(config.MetaAddr, &http.Client{})
 	if len(*keyFileFlag) > 0 {
-		// TODO: implement key import
-		log.Fatal("key import not implemented")
+		renterId := util.FingerprintKey(publicKeyBytes)
+		err := metaService.AuthorizeRenter(rsaKey, renterId)
+		if err != nil {
+			os.Remove(homeDir)
+			log.Fatal("Unable to retrieve renter information. Are you sure this is the correct key?")
+		}
+		renterInfo, err := metaService.GetRenter(renterId)
+		if err != nil {
+			os.Remove(homeDir)
+			log.Fatal("Unable to retrieve renter information. Error: ", err)
+		}
+
+		// Pull out the user's renter alias
+		config.RenterId = renterId
+		config.Alias = renterInfo.Alias
 	} else {
 
 		// Register new user
@@ -194,6 +206,7 @@ func runRenterInit(args ...string) {
 
 		// Pull renter ID out of updated info
 		config.RenterId = updatedInfo.ID
+		config.Alias = *aliasFlag
 	}
 	config.IsRegistered = true
 

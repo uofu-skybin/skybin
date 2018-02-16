@@ -63,13 +63,13 @@ func (server *MetaServer) postProviderHandler() http.HandlerFunc {
 			return
 		}
 
-		_, err = parsePublicKey(provider.PublicKey)
+		_, err = util.UnmarshalPublicKey([]byte(provider.PublicKey))
 		if err != nil {
 			writeErr("invalid RSA public key", http.StatusBadRequest, w)
 			return
 		}
 
-		provider.ID = fingerprintKey(provider.PublicKey)
+		provider.ID = util.FingerprintKey([]byte(provider.PublicKey))
 		err = server.db.InsertProvider(&provider)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)

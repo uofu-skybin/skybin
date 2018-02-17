@@ -33,6 +33,13 @@ def rename_test(ctxt):
     ctxt.assert_true('folder2_new/subfolder/subfolder' in file_names)
     ctxt.assert_true('folder2_new/file' in file_names)
 
+    # Renaming a folder should not rename non-children with the same prefix
+    folder3 = ctxt.renter.create_folder('folder3')
+    folder4 = ctxt.renter.create_folder('folder34')
+    ctxt.renter.rename_file(folder3['id'], 'folder5')
+    file_names = [f['name'] for f in ctxt.renter.list_files()['files']]
+    ctxt.assert_true('folder34' in file_names)
+
     # Renaming an invalid file ID should fail
     try:
         ctxt.renter.rename_file('not a file ID', 'some name')

@@ -388,7 +388,10 @@ func (r *Renter) findFile(fileId string) (idx int, f *core.File) {
 func (r *Renter) findChildren(dir *core.File) []*core.File {
 	var children []*core.File
 	for _, f := range r.files {
-		if f != dir && strings.HasPrefix(f.Name, dir.Name) {
+		if f != dir && strings.HasPrefix(f.Name, dir.Name) &&
+			len(f.Name) > len(dir.Name) &&
+			f.Name[len(dir.Name)] == '/' {
+
 			children = append(children, f)
 		}
 	}

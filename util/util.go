@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"github.com/dgrijalva/jwt-go"
+	"crypto/sha256"
+	"encoding/hex"
 )
 
 func Hash(data []byte) string {
@@ -82,6 +84,12 @@ func UnmarshalPublicKey(data []byte) (*rsa.PublicKey, error) {
 		return nil, errors.New("Key is not an RSA public key.")
 	}
 	return key, nil
+}
+
+func FingerprintKey(key []byte) string {
+	shaSum := sha256.Sum256(key)
+	fingerprint := hex.EncodeToString(shaSum[:])
+	return fingerprint
 }
 
 // Formats a byte amount as a string.

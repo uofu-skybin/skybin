@@ -23,28 +23,28 @@ import (
 )
 
 func (r *Renter) Download(fileId string, destPath string) error {
-	f, err := r.Lookup(fileId)
+	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
 	}
-	if f.IsDir {
+	if file.IsDir {
 		return errors.New("Folder downloads not supported yet")
 	}
-	if len(f.Versions) == 0 {
+	if len(file.Versions) == 0 {
 		return errors.New("File has no versions")
 	}
 
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
-		destPath, err = defaultDownloadLocation(f)
+		destPath, err = defaultDownloadLocation(file)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Download the latest version by default
-	version := &f.Versions[len(f.Versions)-1]
-	return r.performDownload(f, version, destPath)
+	version := &file.Versions[len(file.Versions)-1]
+	return r.performDownload(file, version, destPath)
 }
 
 // Download a version of a file.
@@ -190,39 +190,36 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 }
 
 func (r *Renter) downloadBlock(renterId string, block *core.Block, out *os.File) error {
-	for _, location := range block.Locations {
-		client := provider.NewClient(location.Addr, &http.Client{})
-
-		blockReader, err := client.GetBlock(renterId, block.ID)
-		if err != nil {
-			// TODO: Check that failure is due to a network error, not because
-			// provider didn't return the block.
-			continue
-		}
-		defer blockReader.Close()
-		n, err := io.Copy(out, blockReader)
-		if err != nil {
-			return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
-		}
-		if n != block.Size {
-			return errors.New("Downloaded block has incorrect size.")
-		}
-		_, err = out.Seek(0, os.SEEK_SET)
-		if err != nil {
-			return fmt.Errorf("Error checking block hash. Error: %s", err)
-		}
-		h := sha256.New()
-		_, err = io.Copy(h, out)
-		if err != nil {
-			return fmt.Errorf("Error checking block hash. Error: %s", err)
-		}
-		blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
-		if blockHash != block.Sha256Hash {
-			return errors.New("Block hash does not match expected.")
-		}
-		return nil
+	client := provider.NewClient(block.Location.Addr, &http.Client{})
+	blockReader, err := client.GetBlock(renterId, block.ID)
+	if err != nil {
+		// TODO: Check that failure is due to a network error, not because
+		// provider didn't return the block.
+		return err
 	}
-	return fmt.Errorf("Unable to download file block %s. Cannot connect to providers.", block.ID)
+	defer blockReader.Close()
+	n, err := io.Copy(out, blockReader)
+	if err != nil {
+		return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
+	}
+	if n != block.Size {
+		return errors.New("Downloaded block has incorrect size.")
+	}
+	_, err = out.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return fmt.Errorf("Error checking block hash. Error: %s", err)
+	}
+	h := sha256.New()
+	_, err = io.Copy(h, out)
+	if err != nil {
+		return fmt.Errorf("Error checking block hash. Error: %s", err)
+	}
+	blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
+	if blockHash != block.Sha256Hash {
+		return errors.New("Block hash does not match expected.")
+	}
+	return nil
+
 }
 
 // Decrypts and returns f's AES key and AES IV.

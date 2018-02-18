@@ -225,11 +225,11 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 
 	// Update block locations
 	for i := 0; i < len(blocks); i++ {
-		blocks[i].Locations = append(blocks[i].Locations, core.BlockLocation{
+		blocks[i].Location = core.BlockLocation{
 			ProviderId: blobs[i].ProviderId,
 			Addr:       blobs[i].Addr,
 			ContractId: blobs[i].ContractId,
-		})
+		}
 	}
 
 	// Upload the blocks
@@ -246,24 +246,14 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		block := blocks[blockNum]
 		blob := blobs[blockNum]
 		client := provider.NewClient(blob.Addr, &http.Client{})
-		client.AuthorizeRenter(r.privKey, r.Config.RenterId)
-		err = client.PutBlock(r.Config.RenterId, block.ID, reader)
-
+		err = client.AuthorizeRenter(r.privKey, r.Config.RenterId)
 		if err != nil {
 			goto unwind
 		}
-	}
-
-	// BUG(kincaid): We'll probably want to do this some other way
-	if !r.metaClient.IsAuthorized() {
-		err = r.authorize()
+		err = client.PutBlock(r.Config.RenterId, block.ID, reader)
 		if err != nil {
-			return nil, err
+			goto unwind
 		}
-	}
-	err = r.metaClient.PostFile(r.Config.RenterId, file)
-	if err != nil {
-		return nil, err
 	}
 
 	err = r.saveFile(file)
@@ -274,17 +264,11 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 
 unwind:
 	for i := 0; i < blockNum; i++ {
-		err := r.removeBlock(&blocks[i])
-		if err != nil {
-			// TODO: add block to list of blocks to be removed later
-		}
-	}
-	for _, blob := range blobs {
-		r.addBlob(blob)
+		r.removeBlock(&blocks[i])
 	}
 	err2 := r.saveSnapshot()
 	if err2 != nil {
-		// TODO:
+		r.logger.Println("Upload: Error saving snapshot: ", err2)
 	}
 	return nil, err
 }

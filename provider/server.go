@@ -48,8 +48,8 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
-	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler(
+	router.HandleFunc("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
+	router.HandleFunc("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
 		"renterID",
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")

@@ -19,17 +19,6 @@ type ProviderInfo struct {
 	StorageRate int64  `json:"storageRate"`
 }
 
-// Alternative approach from metadata server
-// type StorageRate struct {
-// 	// The fee “Fee” in currency “Currency” for storing
-// 	// “StorageAmount” bytes for “PeriodSec” seconds
-// 	Currency       string `json:"currency"`
-// 	StorageAmount  int64  `json:"storageAmount"`
-// 	Fee            string `json:"fee"`
-// 	PeriodSec      string `json:"periodSec"`
-// 	PaymentAddress string `json:"paymentAddress"`
-// }
-
 type RenterInfo struct {
 	ID        string   `json:"id"`
 	Alias     string   `json:"alias"`
@@ -66,8 +55,8 @@ type Block struct {
 	// sha256 hash of the block
 	Sha256Hash string `json:"sha256hash"`
 
-	// Locations of providers where the block is stored
-	Locations []BlockLocation `json:"locations"`
+	// Location of the provider where the block is stored
+	Location BlockLocation `json:"location"`
 }
 
 // Permission provides access to a file to a non-owning user

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net/http"
 	"skybin/core"
-	"skybin/metaserver"
 	"skybin/provider"
 	"skybin/util"
 )
@@ -16,8 +15,7 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		return nil, fmt.Errorf("Must reserve at least %d bytes.", kMinContractSize)
 	}
 
-	metaService := metaserver.NewClient(r.Config.MetaAddr, &http.Client{})
-	providers, err := metaService.GetProviders()
+	providers, err := r.metaClient.GetProviders()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot fetch providers. Error: %v", err)
 	}
@@ -44,11 +42,25 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		reserved += n
 	}
 
+	// Save contracts locally
 	r.contracts = append(r.contracts, contracts...)
 	r.freelist = append(r.freelist, blobs...)
 	err = r.saveSnapshot()
 	if err != nil {
 		return nil, err
+	}
+
+	// Save contracts with metaserver.
+	// TODO: Use batch save endpoint.
+	err = r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	for _, contract := range contracts {
+		err = r.metaClient.PostContract(r.Config.RenterId, contract)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return contracts, nil

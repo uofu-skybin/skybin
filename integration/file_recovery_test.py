@@ -42,7 +42,7 @@ def file_recovery_test(ctxt):
     renter_id = ctxt.renter.get_info()['id']
     for block in blocks_to_remove:
         ctxt.log('removing block {}'.format(block['id']))
-        location = block['locations'][0]
+        location = block['location']
         addr = location['address']
         pvdr = next(p for p in ctxt.providers if p.address  == addr)
         block_location = os.path.join(pvdr.homedir, 'blocks', renter_id, block['id'])

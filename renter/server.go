@@ -282,7 +282,7 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.renter.Remove(req.FileId)
+	err = server.renter.RemoveFile(req.FileId)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,

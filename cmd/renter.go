@@ -208,7 +208,6 @@ func runRenterInit(args ...string) {
 		config.RenterId = updatedInfo.ID
 		config.Alias = *aliasFlag
 	}
-	config.IsRegistered = true
 
 	err = util.SaveJson(path.Join(homeDir, "config.json"), &config)
 	if err != nil {
@@ -252,6 +251,7 @@ func runRenterDaemon(args ...string) {
 	defer logfile.Close()
 	logger := log.New(logfile, "", log.LstdFlags)
 
+	r.SetLogger(logger)
 	server := renter.NewServer(r, logger)
 
 	log.Println("starting renter server at", addr)

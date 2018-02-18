@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"crypto/rand"
+
 	jwtmiddleware "github.com/auth0/go-jwt-middleware"
 	jwt "github.com/dgrijalva/jwt-go"
 )
@@ -86,6 +87,10 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()
+		// if the user already has a nonce associated with the id use that
+		if _, present := authorizer.handshakes[userID]; present {
+			nonce = authorizer.handshakes[userID].nonce
+		}
 		handshake := Handshake{userID: userID, nonce: nonce}
 		authorizer.handshakes[userID] = handshake
 		authorizer.mutex.Unlock()
@@ -170,7 +175,7 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		w.Write([]byte(tokenString))
 
 		authorizer.mutex.Lock()
-		delete(authorizer.handshakes, userID)
+		// delete(authorizer.handshakes, userID)
 		authorizer.mutex.Unlock()
 	}
 }

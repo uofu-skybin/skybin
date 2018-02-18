@@ -21,18 +21,18 @@ type Config struct {
 	LocalApiAddr   string `json:"localApiAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
-	SpaceAvail     int64 `json:"spaceAvail"`
-	StorageRate    int64 `json:"storageRate"`
+	SpaceAvail     int64  `json:"spaceAvail"`
+	StorageRate    int64  `json:"storageRate"`
 }
 
 type Provider struct {
 	Config     *Config
 	Homedir    string //move this maybe
 	PrivateKey *rsa.PrivateKey
-	contracts []*core.Contract
-	stats     Stats
-	activity  []Activity
-	renters   map[string]*RenterInfo
+	contracts  []*core.Contract
+	stats      Stats
+	activity   []Activity
+	renters    map[string]*RenterInfo
 }
 
 const (
@@ -133,7 +133,6 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		return nil, err
 	}
 	provider.PrivateKey = privKey
-
 	return provider, err
 }
 

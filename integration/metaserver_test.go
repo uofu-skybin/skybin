@@ -571,6 +571,33 @@ func TestRenameFolder(t *testing.T) {
 			t.Fatal("Did not find name", name, "in output")
 		}
 	}
+
+	// Attempt to rename the sub directory
+	subDir.OwnerID = renter.ID
+	subDir.Name = "notFoo/foo3"
+	err = client.UpdateFile(renter.ID, subDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedNames = []string{"notFoo/FolderRenameTest1", "notFoo/foo3/FolderRenameTest2", "notFoo/foo3"}
+	files, err = client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range expectedNames {
+		foundName := false
+		for _, item := range files {
+			if item.Name == name {
+				foundName = true
+				break
+			}
+		}
+		if !foundName {
+			t.Fatal("Did not find name", name, "in output")
+		}
+	}
 }
 
 // Update file

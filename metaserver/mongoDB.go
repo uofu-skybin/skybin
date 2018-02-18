@@ -1,6 +1,8 @@
 package metaserver
 
 import (
+	"fmt"
+	"regexp"
 	"skybin/core"
 
 	"github.com/globalsign/mgo"
@@ -437,6 +439,39 @@ func (db *mongoDB) UpdateFile(file *core.File) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (db *mongoDB) RenameFolder(fileID string, ownerID string, oldName string, newName string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	findRegex := fmt.Sprintf("^%s/", oldName)
+	selector := bson.M{"name": bson.M{"$regex": findRegex}, "ownerid": ownerID}
+
+	var result []core.File
+	err := files.Find(selector).All(&result)
+	if err != nil {
+		return err
+	}
+
+	r, err := regexp.Compile(findRegex)
+	if err != nil {
+		return err
+	}
+
+	newPrefix := fmt.Sprintf("%s/", newName)
+	for _, item := range result {
+		newString := r.ReplaceAllString(item.Name, newPrefix)
+		item.Name = newString
+		err = db.UpdateFile(&item)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

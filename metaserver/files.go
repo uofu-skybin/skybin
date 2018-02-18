@@ -207,6 +207,9 @@ func (server *MetaServer) putFileHandler() http.HandlerFunc {
 		} else if newFile.OwnerID != oldFile.OwnerID {
 			writeErr("must not change file owner", http.StatusUnauthorized, w)
 			return
+		} else if newFile.IsDir != oldFile.IsDir {
+			writeErr("must not change whether or not file is directory", http.StatusUnauthorized, w)
+			return
 		}
 
 		// Make sure the person making the request is the renter who owns the files.
@@ -218,6 +221,15 @@ func (server *MetaServer) putFileHandler() http.HandlerFunc {
 		if renterID, present := claims["renterID"]; !present || renterID.(string) != newFile.OwnerID {
 			writeErr("cannot modify other users' files", http.StatusUnauthorized, w)
 			return
+		}
+
+		// If the file is a directory and we're changing its name, make sure we update its children.
+		if oldFile.IsDir && newFile.Name != oldFile.Name {
+			err = server.db.RenameFolder(oldFile.ID, oldFile.OwnerID, oldFile.Name, newFile.Name)
+			if err != nil {
+				writeErr(err.Error(), http.StatusBadRequest, w)
+				return
+			}
 		}
 
 		err = server.db.UpdateFile(&newFile)

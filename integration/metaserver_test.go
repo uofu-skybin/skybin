@@ -502,6 +502,77 @@ func TestUploadFile(t *testing.T) {
 	}
 }
 
+func TestRenameFolder(t *testing.T) {
+	httpClient := http.Client{}
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "folderRenameTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a folder
+	dir := &core.File{
+		ID:    "folderRenameTest",
+		Name:  "foo",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put some stuff in the folder.
+	_, err = uploadFile(client, renter.ID, "folderRenameTest1", "foo/FolderRenameTest1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := &core.File{
+		ID:    "folderRenameTestSubDir",
+		Name:  "foo/foo2",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, subDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = uploadFile(client, renter.ID, "folderRenameTest2", "foo/foo2/FolderRenameTest2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to rename the folder.
+	dir.Name = "notFoo"
+	dir.OwnerID = renter.ID
+	err = client.UpdateFile(renter.ID, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that all of the files and folder inside the folder have been renamed.
+	expectedNames := []string{"notFoo/FolderRenameTest1", "notFoo/foo2/FolderRenameTest2", "notFoo/foo2"}
+	files, err := client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range expectedNames {
+		foundName := false
+		for _, item := range files {
+			if item.Name == name {
+				foundName = true
+				break
+			}
+		}
+		if !foundName {
+			t.Fatal("Did not find name", name, "in output")
+		}
+	}
+}
+
 // Update file
 func TestUpdateFile(t *testing.T) {
 	httpClient := http.Client{}

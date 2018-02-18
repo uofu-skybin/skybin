@@ -8,6 +8,7 @@ import (
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/provider"
+	"skybin/util"
 )
 
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
@@ -80,15 +81,21 @@ func (r *Renter) reserveN(n int64, providers []core.ProviderInfo) (*core.Contrac
 func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Contract, error) {
 	client := provider.NewClient(pinfo.Addr, &http.Client{})
 
-	// Get an updated version of their information and double-check
+	// Get an updated version of the provider's information and double-check
 	// that they have enough space.
-	//pinfo, err := client.GetInfo()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if pinfo.SpaceAvail < space {
-	//	return nil, errors.New("Provider doesn't have enough space")
-	//}
+	pinfo, err := client.GetInfo()
+	if err != nil {
+		return nil, err
+	}
+	if pinfo.SpaceAvail < space {
+		return nil, errors.New("Provider doesn't have enough space")
+	}
+
+	// Check that the provider's key is valid.
+	pvdrKey, err := util.UnmarshalPublicKey([]byte(pinfo.PublicKey))
+	if err != nil {
+		return nil, errors.New("Unable to unmarshal provider's key")
+	}
 
 	// Create proposal
 	cid, err := genId()
@@ -107,14 +114,21 @@ func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Cont
 	}
 	proposal.RenterSignature = signature
 
-	// Send to renter
+	// Send to provider
 	signedContract, err := client.ReserveStorage(&proposal)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(signedContract.ProviderSignature) == 0 {
 		return nil, errors.New("Provider did not agree to contract")
 	}
+
+	err = core.VerifyContractSignature(signedContract, signedContract.ProviderSignature, *pvdrKey)
+	if err != nil {
+		return nil, errors.New("Provider's signature does not match contract")
+	}
+
 	proposal.ProviderSignature = signedContract.ProviderSignature
 	if !core.CompareContracts(proposal, *signedContract) {
 		return nil, errors.New("Provider's terms don't match original contract")

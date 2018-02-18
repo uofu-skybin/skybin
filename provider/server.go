@@ -107,12 +107,19 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 // Converted getStats to return the information for the provider dash
 // This will instead just return the core.ProviderInfo object
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
+	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
+	if err != nil {
+		server.logger.Println("Unable to marshal public key. Error: ", err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{"Unable to marshal public key"})
+		return
+	}
 
 	info := core.ProviderInfo{
 		ID:          server.provider.Config.ProviderID,
-		PublicKey:   "string",
+		PublicKey:   string(pubKeyBytes),
 		Addr:        server.provider.Config.PublicApiAddr,
-		SpaceAvail:  9999999999 - server.provider.stats.StorageReserved,
+		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.stats.StorageReserved,
 		StorageRate: 1,
 	}
 

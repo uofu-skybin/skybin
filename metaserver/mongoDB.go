@@ -475,6 +475,29 @@ func (db *mongoDB) RenameFolder(fileID string, ownerID string, oldName string, n
 	return nil
 }
 
+func (db *mongoDB) RemoveFolderChildren(folder *core.File) ([]core.File, error) {
+	session := db.session.Copy()
+	defer session.Close()
+
+	files := session.DB(dbName).C("files")
+
+	findRegex := fmt.Sprintf("^%s/", folder.Name)
+	selector := bson.M{"name": bson.M{"$regex": findRegex}, "ownerid": folder.OwnerID}
+
+	var removed []core.File
+	err := files.Find(selector).All(&removed)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = files.RemoveAll(selector)
+	if err != nil {
+		return nil, err
+	}
+
+	return removed, nil
+}
+
 func (db *mongoDB) UpdateFileVersion(fileID string, version *core.Version) error {
 	session := db.session.Copy()
 	defer session.Close()

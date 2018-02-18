@@ -162,23 +162,35 @@ func (server *MetaServer) deleteFileHandler() http.HandlerFunc {
 			return
 		}
 
-		// BUG(kincaid): Make sure the renter owns the file they are deleting.
-		// Delete the file from the database.
+		// If the file is a folder, make sure to remove children as well.
+		var removed []core.File
+		if file.IsDir {
+			removed, err = server.db.RemoveFolderChildren(file)
+			if err != nil {
+				writeErr(err.Error(), http.StatusBadRequest, w)
+				return
+			}
+		}
+
 		err = server.db.DeleteFile(params["fileID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
-		// Remove the file from the renter's directory.
+		removed = append(removed, *file)
+
+		// Remove the files from the renter's directory.
 		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
-		err = server.db.RemoveFileFromRenterDirectory(renter.ID, params["fileID"])
-		if err != nil {
-			writeAndLogInternalError(err, w, server.logger)
-			return
+		for _, f := range removed {
+			err = server.db.RemoveFileFromRenterDirectory(renter.ID, f.ID)
+			if err != nil {
+				writeAndLogInternalError(err, w, server.logger)
+				return
+			}
 		}
 		w.WriteHeader(http.StatusOK)
 	})

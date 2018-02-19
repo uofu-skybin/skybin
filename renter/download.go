@@ -18,6 +18,7 @@ import (
 	"path"
 	"skybin/core"
 	"skybin/provider"
+	"strings"
 
 	"github.com/klauspost/reedsolomon"
 )
@@ -27,12 +28,6 @@ func (r *Renter) Download(fileId string, destPath string) error {
 	if err != nil {
 		return err
 	}
-	if file.IsDir {
-		return errors.New("Folder downloads not supported yet")
-	}
-	if len(file.Versions) == 0 {
-		return errors.New("File has no versions")
-	}
 
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
@@ -41,10 +36,47 @@ func (r *Renter) Download(fileId string, destPath string) error {
 			return err
 		}
 	}
+	if file.IsDir {
+		return r.downloadDir(file, destPath)
+	}
+	if len(file.Versions) == 0 {
+		return errors.New("File has no versions")
+	}
 
 	// Download the latest version by default
 	version := &file.Versions[len(file.Versions)-1]
 	return r.performDownload(file, version, destPath)
+}
+
+// Downloads a folder tree, including all subfolders and files.
+// This may partially succeed, in that some children of the folder may
+// be downloaded while others may fail.
+func (r *Renter) downloadDir(dir *core.File, destPath string) error {
+	err := os.MkdirAll(destPath, 0777)
+	if err != nil {
+		return err
+	}
+	children := r.findChildren(dir)
+	for _, child := range children {
+		relPath := strings.TrimPrefix(child.Name, dir.Name+"/")
+		fullPath := path.Join(destPath, relPath)
+		if child.IsDir {
+			err = os.MkdirAll(fullPath, 0777)
+			if err != nil {
+				return fmt.Errorf("Unable to create folder %s. Error: %s", fullPath, err)
+			}
+			continue
+		}
+		if len(child.Versions) == 0 {
+			return fmt.Errorf("File %s has no versions to download.", child.Name)
+		}
+		version := &child.Versions[len(child.Versions)-1]
+		err = r.performDownload(child, version, fullPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Download a version of a file.

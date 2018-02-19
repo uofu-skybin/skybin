@@ -38,8 +38,6 @@ def main():
     ctxt = setup_test(
         num_providers=args.num_providers,
         num_additional_renters=1,
-        remove_test_files=False,
-        teardown_db=False
     )
     try:
         share_test(ctxt, file_size=args.file_size)

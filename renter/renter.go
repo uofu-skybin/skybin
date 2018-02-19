@@ -282,8 +282,8 @@ func (r *Renter) pullFiles() error {
 
 	// Ugly conversion of []File to []*File
 	r.files = []*core.File{}
-	for _, file := range files {
-		r.files = append(r.files, &file)
+	for i := 0; i < len(files); i++ {
+		r.files = append(r.files, &files[i])
 	}
 
 	r.lastFilesUpdate = time.Now()
@@ -396,7 +396,7 @@ func (r *Renter) RemoveFile(fileId string) error {
 		return errors.New("Cannot remove non-empty folder")
 	}
 	for _, version := range file.Versions {
-		r.removeVersion(&version)
+		r.removeVersionBlocks(&version)
 	}
 	err = r.metaClient.DeleteFile(r.Config.RenterId, fileId)
 	if err != nil {
@@ -422,7 +422,9 @@ func (r *Renter) RemoveFile(fileId string) error {
 	return nil
 }
 
-func (r *Renter) removeVersion(version *core.Version) {
+// Deletes the blocks for a file version from the providers
+// where they are stored, reclaiming the freed storage space.
+func (r *Renter) removeVersionBlocks(version *core.Version) {
 	for _, block := range version.Blocks {
 		r.removeBlock(&block)
 	}
@@ -490,6 +492,23 @@ func (r *Renter) findChildren(dir *core.File) []*core.File {
 		}
 	}
 	return children
+}
+
+func (r *Renter) getFileByName(name string) *core.File {
+	for _, file := range r.files {
+		if file.Name == name {
+			return file
+		}
+	}
+	return nil
+}
+
+func (r *Renter) storageAvailable() int64 {
+	var total int64 = 0
+	for _, blob := range r.freelist {
+		total += blob.Amount
+	}
+	return total
 }
 
 // Authorize with the metaclient, if necessary

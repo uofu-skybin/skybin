@@ -10,28 +10,184 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"skybin/core"
 	"skybin/provider"
-
-	"github.com/klauspost/reedsolomon"
+	"skybin/util"
+	"strings"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
+	destPath = util.CleanPath(destPath)
 	finfo, err := os.Stat(srcPath)
 	if err != nil {
 		return nil, err
 	}
+	existingFile := r.getFileByName(destPath)
+	if existingFile != nil && finfo.IsDir() {
+		return nil, errors.New("A file with that name already exists.")
+	}
 	if finfo.IsDir() {
-		return nil, errors.New("Folder uploads not supported yet")
+		return r.uploadDir(srcPath, destPath)
 	}
 	if r.storageAvailable() <= finfo.Size() {
 		return nil, errors.New("Not enough storage")
 	}
+	if existingFile != nil {
+		aesKey, aesIV, err := r.decryptEncryptionKeys(existingFile)
+		if err != nil {
+			return nil, err
+		}
+
+		// Authorize with metaserver before performing upload of new version
+		// to catch authorization error early.
+		err = r.authorizeMeta()
+		if err != nil {
+			return nil, err
+		}
+		newVersion, err := r.performUpload(srcPath, finfo, aesKey, aesIV)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO(Kincaid): These interactions with the metaserver are error prone.
+		// Consider a single convenience endpoint to overwrite the latest version
+		// of a file which returns an updated copy of the file object.
+		err = r.metaClient.PostFileVersion(r.Config.RenterId, existingFile.ID, newVersion)
+		if err != nil {
+			r.removeVersionBlocks(newVersion)
+			return nil, fmt.Errorf("Unable to update version metadata. Error: %s", err)
+		}
+
+		if shouldOverwrite {
+			prevVersion := &existingFile.Versions[len(existingFile.Versions)-1]
+			err = r.metaClient.DeleteFileVersion(r.Config.RenterId, existingFile.ID, prevVersion.Num)
+			if err != nil {
+				r.logger.Println("Unable to overwrite previous file version. Error:", err)
+			} else {
+				r.removeVersionBlocks(prevVersion)
+				existingFile.Versions = existingFile.Versions[:len(existingFile.Versions)-1]
+			}
+		}
+
+		// Pull down the file again to refresh the version information.
+		updatedFile, err := r.metaClient.GetFile(r.Config.RenterId, existingFile.ID)
+		if err != nil {
+			r.logger.Println("Unable to pull updated version of file. Error: %s", err)
+			existingFile.Versions = append(existingFile.Versions, *newVersion)
+			return existingFile, nil
+		}
+		*existingFile = *updatedFile
+		err = r.saveSnapshot()
+		if err != nil {
+			r.logger.Println("Error saving snapshot:", err)
+		}
+		return updatedFile, nil
+	}
+	return r.uploadFile(srcPath, finfo, destPath)
+}
+
+// Uploads a new file from srcPath to destPath. File size and destPath validation
+// should already have been performed. finfo should be the file info for the source file.
+func (r *Renter) uploadFile(srcPath string, finfo os.FileInfo, destPath string) (*core.File, error) {
+	fileId, err := genId()
+	if err != nil {
+		return nil, err
+	}
+	aesKey := make([]byte, 32)
+	_, err = rand.Reader.Read(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create encryption key. Error: %s", err)
+	}
+	aesIV := make([]byte, aes.BlockSize)
+	_, err = rand.Reader.Read(aesIV)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read initialization vector. Error: %s", err)
+	}
+	aesKeyEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt aes key. Error: %s", err)
+	}
+	aesIVEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesIV, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to encrypt aes IV. Error: %s", err)
+	}
+	version, err := r.performUpload(srcPath, finfo, aesKey, aesIV)
+	if err != nil {
+		return nil, err
+	}
+	file := &core.File{
+		ID:         fileId,
+		OwnerID:    r.Config.RenterId,
+		Name:       destPath,
+		IsDir:      false,
+		AccessList: []core.Permission{},
+		AesKey:     base64.URLEncoding.EncodeToString(aesKeyEncrypted),
+		AesIV:      base64.URLEncoding.EncodeToString(aesIVEncrypted),
+		Versions:   []core.Version{},
+	}
+	// TODO: Kincaid. Do I have to set this?
+	version.Num = 1
+	file.Versions = append(file.Versions, *version)
+	err = r.saveFile(file)
+	if err != nil {
+		r.removeVersionBlocks(version)
+		err2 := r.saveSnapshot()
+		if err2 != nil {
+			r.logger.Println("Error saving snapshot:", err2)
+		}
+	}
+	return file, err
+}
+
+// Uploads a directory from srcPath to destPath. Returns the root folder of the new directory.
+func (r *Renter) uploadDir(srcPath string, destPath string) (*core.File, error) {
+	var size int64
+	err := filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if r.storageAvailable() <= size {
+		return nil, errors.New("Not enough storage")
+	}
+	var rootFolder *core.File
+	err = filepath.Walk(srcPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		fullPath := destPath
+		if path != srcPath {
+			relPath := strings.TrimPrefix(path, srcPath)
+			fullPath += relPath
+		}
+		if info.IsDir() {
+			f, err := r.CreateFolder(fullPath)
+			if err != nil {
+				return err
+			}
+			if path == srcPath {
+				rootFolder = f
+			}
+			return nil
+		}
+		_, err = r.uploadFile(path, info, fullPath)
+		return err
+	})
+	return rootFolder, nil
+}
+
+func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte, aesIV []byte) (*core.Version, error) {
 
 	// Compress
 	srcFile, err := os.Open(srcPath)
@@ -53,16 +209,6 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 	cw.Close()
 
 	// Encrypt
-	aesKey := make([]byte, 32)
-	_, err = rand.Reader.Read(aesKey)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create encryption key. Error: %s", err)
-	}
-	aesIV := make([]byte, aes.BlockSize)
-	_, err = rand.Reader.Read(aesIV)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to read initialization vector. Error: %s", err)
-	}
 	aesCipher, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create encryption cipher. Error: %s", err)
@@ -166,19 +312,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		blocks = append(blocks, block)
 	}
 
-	// Prepare file metadata. This is done before uploading blocks to ease error handling.
-	fileId, err := genId()
-	if err != nil {
-		return nil, err
-	}
-	aesKeyEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesKey, nil)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to encrypt aes key. Error: %s", err)
-	}
-	aesIVEncrypted, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &r.privKey.PublicKey, aesIV, nil)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to encrypt aes IV. Error: %s", err)
-	}
+	// Prepare metadata before actually uploading blocks.
 	uploadSize := blockSize * int64(nDataBlocks)
 	for _, f := range parityFiles {
 		st, err := f.Stat()
@@ -187,26 +321,14 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		}
 		uploadSize += st.Size()
 	}
-	file := &core.File{
-		ID:         fileId,
-		OwnerID:    r.Config.RenterId,
-		Name:       destPath,
-		IsDir:      false,
-		AccessList: make([]core.Permission, 0),
-		AesKey:     base64.URLEncoding.EncodeToString(aesKeyEncrypted),
-		AesIV:      base64.URLEncoding.EncodeToString(aesIVEncrypted),
-		Versions: []core.Version{
-			{
-				Num:             1,
-				Size:            finfo.Size(),
-				UploadSize:      uploadSize,
-				PaddingBytes:    paddingBytes,
-				ModTime:         finfo.ModTime(),
-				NumDataBlocks:   nDataBlocks,
-				NumParityBlocks: nParityBlocks,
-				Blocks:          blocks,
-			},
-		},
+	version := &core.Version{
+		Size:            finfo.Size(),
+		UploadSize:      uploadSize,
+		PaddingBytes:    paddingBytes,
+		ModTime:         finfo.ModTime(),
+		NumDataBlocks:   nDataBlocks,
+		NumParityBlocks: nParityBlocks,
+		Blocks:          blocks,
 	}
 
 	// Seek back to beginning of parity files
@@ -256,11 +378,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 		}
 	}
 
-	err = r.saveFile(file)
-	if err != nil {
-		goto unwind
-	}
-	return file, nil
+	return version, nil
 
 unwind:
 	for i := 0; i < blockNum; i++ {
@@ -325,12 +443,4 @@ func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, erro
 	}
 
 	return blobs, nil
-}
-
-func (r *Renter) storageAvailable() int64 {
-	var total int64 = 0
-	for _, blob := range r.freelist {
-		total += blob.Amount
-	}
-	return total
 }

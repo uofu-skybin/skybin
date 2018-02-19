@@ -6,6 +6,7 @@ Framework and helpers for running integration tests.
 from renter import RenterAPI
 import json
 import os
+import os.path
 import sys
 import random
 import shutil
@@ -15,10 +16,10 @@ import time
 import sys
 
 # Default location for skybin repos
-DEFAULT_REPOS_DIR = './repos'
+DEFAULT_REPOS_DIR = os.path.abspath('./repos')
 
 # Default location for test files
-DEFAULT_TEST_FILE_DIR = './files'
+DEFAULT_TEST_FILE_DIR = os.path.abspath('./files')
 
 # Whether test logging is enabled by default
 LOG_ENABLED = True
@@ -48,19 +49,17 @@ def create_file_name():
     filename = ''.join([random.choice(prefixes), unique_chars, random.choice(suffixes)])
     return filename
 
-def create_test_file(file_dir, size):
+def create_test_file(location, size):
     """Create a test file
 
     Args:
-      file_dir: directory to place file
+      location: name for the file
       size: size of the file, in bytes
 
     Returns:
       the full name of the created test file
     """
-    filename = create_file_name()
-    filepath = '{}/{}'.format(file_dir, filename)
-    with open(filepath, 'wb+') as f:
+    with open(location, 'wb+') as f:
         stride_len = 128 * 1024
         strides = size // stride_len
         for _ in range(strides):
@@ -70,7 +69,7 @@ def create_test_file(file_dir, size):
         if rem != 0:
             buf = os.urandom(rem)
             f.write(buf)
-    return filepath
+    return location
 
 def check_service_startup(process):
     """Check that a service process started without error."""
@@ -185,8 +184,10 @@ class TestContext:
 
     def create_test_file(self, size):
         """Create a test file. Returns the file's name."""
-        file_name = create_test_file(self.test_file_dir, size)
-        self._test_files.append(file_name)
+        file_name = create_file_name()
+        file_path = '{}/{}'.format(self.test_file_dir, file_name)
+        create_test_file(file_path, size)
+        self._test_files.append(file_path)
         return file_name
 
     def create_output_path(self):

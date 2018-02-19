@@ -172,3 +172,11 @@ func GetTokenClaimsFromRequest(r *http.Request) (jwt.MapClaims, error) {
 
 	return claims, nil
 }
+
+// Removes a single leading and trailing slash from a file name.
+func CleanPath(path string) string {
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+	return path
+}
+

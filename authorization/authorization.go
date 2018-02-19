@@ -87,7 +87,9 @@ func (authorizer *Authorizer) GetAuthChallengeHandler(userIDString string) http.
 
 		// Record the outstanding handshake
 		authorizer.mutex.Lock()
-		// if the user already has a nonce associated with the id use that
+		// This is a fix for the concurrency issue, approach should be re-evaluated
+		// if the user already has a nonce associated with the id return that instead
+		// of a new nonce
 		if _, present := authorizer.handshakes[userID]; present {
 			nonce = authorizer.handshakes[userID].nonce
 		}
@@ -174,9 +176,10 @@ func (authorizer *Authorizer) GetRespondAuthChallengeHandler(userIDString string
 		}
 		w.Write([]byte(tokenString))
 
-		authorizer.mutex.Lock()
+		// This is a fix for the concurrency issue, approach should be re-evaluated
+		// authorizer.mutex.Lock()
 		// delete(authorizer.handshakes, userID)
-		authorizer.mutex.Unlock()
+		// authorizer.mutex.Unlock()
 	}
 }
 

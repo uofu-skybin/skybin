@@ -31,30 +31,12 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.PrivateKey))
 
-	// var myHandler = http.HandlerFunc(server.getInfo)
-	// router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
-
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
-	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
-
-	// TODO: fix middleware
-	// postBlockHandler := http.HandlerFunc(server.postBlock)
-	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
-	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
-	// router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-
-	// postBlockHandler := http.HandlerFunc(server.postBlock)
-	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("GET")
 	router.Handle("/blocks", authMiddleware.Handler(server.postBlockHandler())).Methods("POST")
-
-	// router.HandleFunc("/blocks", server.postBlock).Methods("POST")
-
-	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
 	router.Handle("/blocks", authMiddleware.Handler(server.deleteBlockHandler())).Methods("DELETE")
 
-	// router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
@@ -68,15 +50,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	getRenterHandler := http.HandlerFunc(server.getRenter)
 	router.Handle("/renter-info", authMiddleware.Handler(getRenterHandler)).Methods("GET")
 	// Renters could use this to confirm the provider info from metadata
-	// TODO: change provider dashboard ui to hit /stats instead of /info
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
-
-	// Local API
-	// TODO: Move these to the local provider server later
-	// local.HandleFunc("/info", server.postInfo).Methods("POST")
-	// local.HandleFunc("/stats", server.getStats).Methods("GET")
-	// local.HandleFunc("/activity", server.getActivity).Methods("GET")
-	// local.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
 }
@@ -185,7 +159,6 @@ type postContractParams struct {
 type postContractResp struct {
 	Contract *core.Contract `json:"contract"`
 }
-
 type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }

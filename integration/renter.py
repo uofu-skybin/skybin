@@ -19,21 +19,27 @@ class RenterAPI:
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
 
-    def upload_file(self, source, dest):
-        resp = requests.post(self.base_url + '/files/upload', json={
+    def upload_file(self, source, dest, should_overwrite=None):
+        args = {
             'sourcePath': source,
-            'destPath': dest
-        })
+            'destPath': dest,
+        }
+        if should_overwrite != None:
+            args['shouldOverwrite'] = should_overwrite
+        resp = requests.post(self.base_url + '/files/upload', json=args)
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content)
 
-    def download_file(self, file_id, destination):
+    def download_file(self, file_id, destination, version_num=None):
         url = self.base_url + '/files/download'
-        resp = requests.post(url, json={
+        args = {
             'fileId': file_id,
             'destPath': destination,
-        })
+        }
+        if version_num != None:
+            args['versionNum'] = version_num
+        resp = requests.post(url, json=args)
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
 
@@ -65,9 +71,12 @@ class RenterAPI:
             raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))
         return json.loads(resp.content)
 
-    def remove_file(self, file_id):
+    def remove_file(self, file_id, version_num=None):
         url = '{}/files/remove'.format(self.base_url)
-        resp = requests.post(url, json={'fileID': file_id})
+        args = {'fileID': file_id}
+        if version_num != None:
+            args['versionNum'] = version_num
+        resp = requests.post(url, json=args)
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
 

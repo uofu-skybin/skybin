@@ -23,10 +23,13 @@ import (
 	"github.com/klauspost/reedsolomon"
 )
 
-func (r *Renter) Download(fileId string, destPath string) error {
+func (r *Renter) Download(fileId string, destPath string, versionNum *int) error {
 	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
+	}
+	if file.IsDir && versionNum != nil {
+		return errors.New("Cannot give version option with folder download")
 	}
 
 	// Download to home directory if no destination given
@@ -45,6 +48,12 @@ func (r *Renter) Download(fileId string, destPath string) error {
 
 	// Download the latest version by default
 	version := &file.Versions[len(file.Versions)-1]
+	if versionNum != nil {
+		version = findVersion(file, *versionNum)
+		if version == nil {
+			return fmt.Errorf("Cannot find version %d", *versionNum)
+		}
+	}
 	return r.performDownload(file, version, destPath)
 }
 
@@ -339,4 +348,14 @@ func convertToReaderSlice(files []*os.File) []io.Reader {
 		}
 	}
 	return res
+}
+
+
+func findVersion(file *core.File, versionNum int) *core.Version {
+	for i := 0; i < len(file.Versions); i++ {
+		if file.Versions[i].Num == versionNum {
+			return &file.Versions[i]
+		}
+	}
+	return nil
 }

@@ -83,7 +83,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 			existingFile.Versions = append(existingFile.Versions, *newVersion)
 			return existingFile, nil
 		}
-		*existingFile = *updatedFile
+ 		*existingFile = *updatedFile
 		err = r.saveSnapshot()
 		if err != nil {
 			r.logger.Println("Error saving snapshot:", err)
@@ -132,8 +132,7 @@ func (r *Renter) uploadFile(srcPath string, finfo os.FileInfo, destPath string) 
 		AesIV:      base64.URLEncoding.EncodeToString(aesIVEncrypted),
 		Versions:   []core.Version{},
 	}
-	// TODO: Kincaid. Do I have to set this?
-	version.Num = 1
+	version.Num = 0
 	file.Versions = append(file.Versions, *version)
 	err = r.saveFile(file)
 	if err != nil {

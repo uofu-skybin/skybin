@@ -127,11 +127,11 @@ class RenterService(Service):
     def reserve_space(self, amount):
         return self._api.reserve_space(amount)
 
-    def upload_file(self, source, dest):
-        return self._api.upload_file(source, dest)
+    def upload_file(self, source, dest, should_overwrite=None):
+        return self._api.upload_file(source, dest, should_overwrite=should_overwrite)
 
-    def download_file(self, file_id, destination):
-        return self._api.download_file(file_id, destination)
+    def download_file(self, file_id, destination, version_num=None):
+        return self._api.download_file(file_id, destination, version_num=version_num)
 
     def rename_file(self, file_id, name):
         return self._api.rename_file(file_id, name)
@@ -142,8 +142,8 @@ class RenterService(Service):
     def share_file(self, file_id, user_id):
         return self._api.share_file(file_id, user_id)
 
-    def remove_file(self, file_id):
-        return self._api.remove_file(file_id)
+    def remove_file(self, file_id, version_num=None):
+        return self._api.remove_file(file_id, version_num=version_num)
 
     def list_files(self):
         return self._api.list_files()
@@ -188,7 +188,7 @@ class TestContext:
         file_path = '{}/{}'.format(self.test_file_dir, file_name)
         create_test_file(file_path, size)
         self._test_files.append(file_path)
-        return file_name
+        return file_path
 
     def create_output_path(self):
         """Get an output path that a file can be downloaded to."""

@@ -152,8 +152,9 @@ func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 type downloadFileReq struct {
-	FileId   string `json:"fileId"`
-	DestPath string `json:"destPath"`
+	FileId     string `json:"fileId"`
+	DestPath   string `json:"destPath"`
+	VersionNum *int   `json:"versionNum"`
 }
 
 func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +167,7 @@ func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = server.renter.Download(req.FileId, req.DestPath)
+	err = server.renter.Download(req.FileId, req.DestPath, req.VersionNum)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
@@ -269,7 +270,8 @@ func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {
 }
 
 type removeFileReq struct {
-	FileID string `json:"fileID"`
+	FileID     string `json:"fileID"`
+	VersionNum *int   `json:"versionNum"`
 }
 
 func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +284,7 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.renter.RemoveFile(req.FileId)
+	err = server.renter.RemoveFile(req.FileId, req.VersionNum)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,

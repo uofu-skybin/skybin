@@ -387,26 +387,43 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 	return nil
 }
 
-func (r *Renter) RemoveFile(fileId string) error {
+func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
 	}
+	if file.IsDir && versionNum != nil {
+		return errors.New("Cannot give versionNum when removing a folder")
+	}
+	if versionNum != nil && len(file.Versions) == 1 {
+		return errors.New("Cannot remove only version of file")
+	}
 	if file.IsDir && len(r.findChildren(file)) > 0 {
 		return errors.New("Cannot remove non-empty folder")
+	}
+	err = r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+	if versionNum != nil {
+		return r.removeFileVersion(file, *versionNum)
+	}
+	return r.removeFile(file)
+}
+
+func (r *Renter) removeFile(file *core.File) error {
+	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
+	if err != nil {
+		return err
 	}
 	for _, version := range file.Versions {
 		r.removeVersionBlocks(&version)
 	}
-	err = r.metaClient.DeleteFile(r.Config.RenterId, fileId)
-	if err != nil {
-		return err
-	}
 
 	// Delete locally
 	fileIdx := -1
-	for idx, file := range r.files {
-		if file.ID == fileId {
+	for idx, file2 := range r.files {
+		if file2.ID == file.ID {
 			fileIdx = idx
 			break
 		}
@@ -415,10 +432,35 @@ func (r *Renter) RemoveFile(fileId string) error {
 		r.files = append(r.files[:fileIdx], r.files[fileIdx+1:]...)
 		err = r.saveSnapshot()
 		if err != nil {
-			return err
+			r.logger.Println("Error saving snapshot:", err)
 		}
 	}
 
+	return nil
+}
+
+func (r *Renter) removeFileVersion(file *core.File, versionNum int) error {
+	var version *core.Version
+	var versionIdx int
+	for ; versionIdx < len(file.Versions); versionIdx++ {
+		if file.Versions[versionIdx].Num == versionNum {
+			version = &file.Versions[versionIdx]
+			break
+		}
+	}
+	if version == nil {
+		return fmt.Errorf("Cannot find version %d", versionNum)
+	}
+	err := r.metaClient.DeleteFileVersion(r.Config.RenterId, file.ID, versionNum)
+	if err != nil {
+		return fmt.Errorf("Unable to delete version metadata. Error: %s", err)
+	}
+	r.removeVersionBlocks(version)
+	file.Versions = append(file.Versions[:versionIdx], file.Versions[versionIdx+1:]...)
+	err = r.saveSnapshot()
+	if err != nil {
+		r.logger.Println("Error saving snapshot:", err)
+	}
 	return nil
 }
 

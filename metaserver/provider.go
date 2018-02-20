@@ -76,9 +76,6 @@ func (server *MetaServer) postProviderHandler() http.HandlerFunc {
 			return
 		}
 
-		// Set the provider's remote address to the one that made the request.
-		provider.Addr = r.RemoteAddr
-
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(provider)
 	})

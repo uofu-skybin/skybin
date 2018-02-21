@@ -404,9 +404,12 @@ func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, erro
 		}
 	}
 
+	// Randomize the order of candidate inspection
+	perm := mathrand.Perm(len(candidates))
+
 	var blobs []*storageBlob
-	for len(blobs) < nblocks && len(candidates) > 0 {
-		idx := mathrand.Intn(len(candidates))
+	for i := 0; len(blobs) < nblocks && len(candidates) > 0; {
+		idx := perm[i]
 		candidate := candidates[idx]
 
 		// Check if the provider is online
@@ -428,18 +431,19 @@ func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, erro
 		candidate.Amount -= blob.Amount
 		if candidate.Amount < blockSize {
 			candidates = append(candidates[:idx], candidates[idx+1:]...)
+			perm = append(perm[:i], perm[i+1:]...)
 		}
 		if candidate.Amount < kMinBlobSize {
 			r.freelist = append(r.freelist[:candidate.idx], r.freelist[candidate.idx+1:]...)
 		}
-	}
 
+		i = (i + 1) % len(perm)
+	}
 	if len(blobs) < nblocks {
 		for _, blob := range blobs {
 			r.addBlob(blob)
 		}
 		return nil, errors.New("Cannot find enough storage.")
 	}
-
 	return blobs, nil
 }

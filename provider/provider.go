@@ -21,18 +21,18 @@ type Config struct {
 	LocalApiAddr   string `json:"localApiAddress"`
 	PrivateKeyFile string `json:"privateKeyFile"`
 	PublicKeyFile  string `json:"publicKeyFile"`
-	SpaceAvail     int64 `json:"spaceAvail"`
-	StorageRate    int64 `json:"storageRate"`
+	SpaceAvail     int64  `json:"spaceAvail"`
+	StorageRate    int64  `json:"storageRate"`
 }
 
 type Provider struct {
 	Config     *Config
 	Homedir    string //move this maybe
 	PrivateKey *rsa.PrivateKey
-	contracts []*core.Contract
-	stats     Stats
-	activity  []Activity
-	renters   map[string]*RenterInfo
+	contracts  []*core.Contract
+	stats      Stats
+	activity   []Activity
+	renters    map[string]*RenterInfo
 }
 
 const (
@@ -133,7 +133,6 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		return nil, err
 	}
 	provider.PrivateKey = privKey
-
 	return provider, err
 }
 
@@ -157,12 +156,13 @@ func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Cont
 		return nil, fmt.Errorf("Invalid Renter signature: %s", err)
 	}
 
-	// TODO determine if contract is amiable for provider here
+	// Determine if provider has sufficient space available for the contract
 	avail := provider.Config.SpaceAvail - provider.stats.StorageReserved
-
 	if contract.StorageSpace > avail {
 		return nil, fmt.Errorf("Provider does not have sufficient storage available")
 	}
+
+	// TODO: determine if payment and expiration date is amiable here
 
 	// Sign contract
 	provSig, err := core.SignContract(contract, provider.PrivateKey)
@@ -227,7 +227,7 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 	return key, nil
 }
 
-// THis method will clean up expired files and confirm that they were
+// This method should clean up expired files and confirm that they were
 // paid for any storage they used
 func (provider *Provider) maintenance() {
 	// check payments

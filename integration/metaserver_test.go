@@ -502,6 +502,201 @@ func TestUploadFile(t *testing.T) {
 	}
 }
 
+func TestRenameFolder(t *testing.T) {
+	httpClient := http.Client{}
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "folderRenameTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a folder
+	dir := &core.File{
+		ID:    "folderRenameTest",
+		Name:  "foo",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put some stuff in the folder.
+	_, err = uploadFile(client, renter.ID, "folderRenameTest1", "foo/FolderRenameTest1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := &core.File{
+		ID:    "folderRenameTestSubDir",
+		Name:  "foo/foo2",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, subDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = uploadFile(client, renter.ID, "folderRenameTest2", "foo/foo2/FolderRenameTest2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to rename the folder.
+	dir.Name = "notFoo"
+	dir.OwnerID = renter.ID
+	err = client.UpdateFile(renter.ID, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that all of the files and folder inside the folder have been renamed.
+	expectedNames := []string{"notFoo", "notFoo/FolderRenameTest1", "notFoo/foo2/FolderRenameTest2", "notFoo/foo2"}
+	files, err := client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range expectedNames {
+		foundName := false
+		for _, item := range files {
+			if item.Name == name {
+				foundName = true
+				break
+			}
+		}
+		if !foundName {
+			t.Fatal("Did not find name", name, "in output")
+		}
+	}
+
+	// Attempt to rename the sub directory
+	subDir.OwnerID = renter.ID
+	subDir.Name = "notFoo/foo3"
+	err = client.UpdateFile(renter.ID, subDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedNames = []string{"notFoo", "notFoo/FolderRenameTest1", "notFoo/foo3/FolderRenameTest2", "notFoo/foo3"}
+	files, err = client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range expectedNames {
+		foundName := false
+		for _, item := range files {
+			if item.Name == name {
+				foundName = true
+				break
+			}
+		}
+		if !foundName {
+			t.Fatal("Did not find name", name, "in output")
+		}
+	}
+}
+
+func TestRemoveFolder(t *testing.T) {
+	httpClient := http.Client{}
+	client := metaserver.NewClient(core.DefaultMetaAddr, &httpClient)
+
+	// Register a renter
+	renter, err := registerRenter(client, "folderRemoveTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a folder
+	dir := &core.File{
+		ID:    "folderRemoveTest",
+		Name:  "folderRemoveTest",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Put some stuff in the folder.
+	_, err = uploadFile(client, renter.ID, "folderRemoveTest1", "folderRemoveTest/FolderRemoveTest1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := &core.File{
+		ID:    "folderRemoveTestSubDir",
+		Name:  "folderRemoveTest/foo2",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, subDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	otherSubDir := &core.File{
+		ID:    "folderRemoveTestSubDir2",
+		Name:  "folderRemoveTest/foo3",
+		IsDir: true,
+	}
+	err = client.PostFile(renter.ID, otherSubDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = uploadFile(client, renter.ID, "folderRemoveTest2", "folderRemoveTest/foo2/FolderRemoveTest2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = uploadFile(client, renter.ID, "folderRemoveTest3", "folderRemoveTest/foo3/FolderRemoveTest3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attempt to remove a subdir in the folder.
+	err = client.DeleteFile(renter.ID, otherSubDir.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure the sub directory and its file are not in the output
+	removedNames := []string{"folderRemoveTest/foo3/FolderRemoveTest3", "folderRemoveTest/foo3"}
+	files, err := client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range removedNames {
+		for _, item := range files {
+			if item.Name == name {
+				t.Fatal("file", name, "not removed")
+			}
+		}
+	}
+
+	// Remove the entire folder
+	err = client.DeleteFile(renter.ID, dir.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	removedNames = []string{"folderRemoveTest", "folderRemoveTest/FolderRemoveTest1", "folderRemoveTest/foo2", "folderRemoveTest/foo2/FolderRemoveTest2"}
+	files, err = client.GetFiles(renter.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range removedNames {
+		for _, item := range files {
+			if item.Name == name {
+				t.Fatal("file", name, "not removed")
+			}
+		}
+	}
+}
+
 // Update file
 func TestUpdateFile(t *testing.T) {
 	httpClient := http.Client{}

@@ -236,9 +236,12 @@ func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte,
 	if err != nil {
 		return nil, fmt.Errorf("Unable to stat temp file. Error: %s", err)
 	}
-	blockSize := (tempStat.Size() + kDefaultDataBlocks - 1) / kDefaultDataBlocks
-	if blockSize > kMaxBlockSize {
-		blockSize = kMaxBlockSize
+	blockSize := (tempStat.Size() + int64(r.Config.DefaultDataBlocks) - 1) / int64(r.Config.DefaultDataBlocks)
+	if blockSize > r.Config.MaxBlockSize {
+		blockSize = r.Config.MaxBlockSize
+	}
+	if blockSize > r.Config.MaxContractSize {
+		blockSize = r.Config.MaxContractSize
 	}
 	// Pad file up to next nearest block size multiple if necessary.
 	// Its size must be a block size multiple.
@@ -250,8 +253,8 @@ func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte,
 		}
 	}
 	nDataBlocks := int((tempStat.Size() + blockSize - 1) / blockSize)
-	nParityBlocks := kDefaultParityBlocks
-	if nDataBlocks > kDefaultDataBlocks {
+	nParityBlocks := r.Config.DefaultParityBlocks
+	if nDataBlocks > r.Config.DefaultDataBlocks {
 		nParityBlocks = (nDataBlocks + 1) / 2
 	}
 	encoder, err := reedsolomon.NewStream(nDataBlocks, nParityBlocks)

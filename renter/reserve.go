@@ -25,8 +25,8 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	var blobs []*storageBlob
 	for reserved < amount {
 		n := amount - reserved
-		if n > kMaxContractSize {
-			n = kMaxContractSize
+		if n > r.Config.MaxContractSize {
+			n = r.Config.MaxContractSize
 		}
 		contract, pinfo, err := r.reserveN(n, providers)
 		if err != nil {

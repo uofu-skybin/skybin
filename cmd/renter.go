@@ -160,12 +160,11 @@ func runRenterInit(args ...string) {
 	}
 
 	// Create renter config
-	config := renter.Config{
-		PrivateKeyFile: privateKeyPath,
-		PublicKeyFile:  publicKeyPath,
-		ApiAddr:        core.DefaultRenterAddr,
-		MetaAddr:       core.DefaultMetaAddr,
-	}
+	config := renter.DefaultConfig()
+	config.PrivateKeyFile = privateKeyPath
+	config.PublicKeyFile = publicKeyPath
+	config.ApiAddr = core.DefaultRenterAddr
+	config.MetaAddr = core.DefaultMetaAddr
 	if len(*apiAddrFlag) > 0 {
 		config.ApiAddr = *apiAddrFlag
 	}

@@ -22,15 +22,6 @@ import (
 	"time"
 )
 
-type Config struct {
-	RenterId       string `json:"renterId"`
-	Alias          string `json:"alias"`
-	ApiAddr        string `json:"apiAddress"`
-	MetaAddr       string `json:"metaServerAddress"`
-	PrivateKeyFile string `json:"privateKeyFile"`
-	PublicKeyFile  string `json:"publicKeyFile"`
-}
-
 type Renter struct {
 	Config  *Config
 	Homedir string
@@ -76,26 +67,6 @@ type storageBlob struct {
 	Amount     int64  // The free storage in bytes
 	ContractId string // The contract the blob is associated with
 }
-
-const (
-
-	// The minimum size of a storage blob
-	kMinBlobSize = 1
-
-	// Minimum contract storage amount
-	// A user cannot reserve less storage than this
-	kMinContractSize = 1024 * 1024
-
-	// Maximum storage amount of any contract
-	kMaxContractSize = 1024 * 1024 * 1024
-
-	// Maximum size of an uploaded block
-	kMaxBlockSize = kMaxContractSize
-
-	// Erasure encoding defaults
-	kDefaultDataBlocks   = 8
-	kDefaultParityBlocks = 4
-)
 
 func LoadFromDisk(homedir string) (*Renter, error) {
 	renter := &Renter{

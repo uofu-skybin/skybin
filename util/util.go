@@ -2,9 +2,9 @@ package util
 
 import (
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -16,15 +16,7 @@ import (
 	"strings"
 
 	"github.com/dgrijalva/jwt-go"
-	"crypto/sha256"
-	"encoding/hex"
 )
-
-func Hash(data []byte) string {
-	h := sha1.New()
-	h.Write(data)
-	return base32.StdEncoding.EncodeToString(h.Sum(nil))
-}
 
 func SaveJson(filename string, v interface{}) error {
 	bytes, err := json.MarshalIndent(v, "", "    ")
@@ -179,4 +171,3 @@ func CleanPath(path string) string {
 	path = strings.TrimSuffix(path, "/")
 	return path
 }
-

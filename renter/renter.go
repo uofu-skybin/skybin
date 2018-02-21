@@ -99,11 +99,12 @@ const (
 
 func LoadFromDisk(homedir string) (*Renter, error) {
 	renter := &Renter{
-		Homedir:   homedir,
-		files:     make([]*core.File, 0),
-		contracts: make([]*core.Contract, 0),
-		freelist:  make([]*storageBlob, 0),
-		logger:    log.New(ioutil.Discard, "", log.LstdFlags),
+		Homedir:        homedir,
+		files:          make([]*core.File, 0),
+		contracts:      make([]*core.Contract, 0),
+		freelist:       make([]*storageBlob, 0),
+		blocksToDelete: make([]*core.Block, 0),
+		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
 	config := &Config{}

@@ -29,27 +29,18 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		authorizer: authorization.NewAuthorizer(logger),
 	}
 
-	authMiddleware := authorization.GetAuthMiddleware([]byte("provider"))
-
-	// var myHandler = http.HandlerFunc(server.postContract)
-	// router.Handle("/test", authMiddleware.Handler(myHandler)).Methods("GET")
+	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.PrivateKey))
 
 	// API for remote renters
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
-	// router.HandleFunc("/contracts/renew", server.renewContract).Methods("POST")
-
-	// TODO: fix middleware
-	// postBlockHandler := http.HandlerFunc(server.postBlock)
-	// router.Handle("/blocks", authMiddleware.Handler(postBlockHandler)).Methods("POST")
-	// deleteBlockHandler := http.HandlerFunc(server.deleteBlock)
-	// router.Handle("/blocks", authMiddleware.Handler(deleteBlockHandler)).Methods("DELETE")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-	router.HandleFunc("/blocks", server.postBlock).Methods("POST")
-	router.HandleFunc("/blocks", server.deleteBlock).Methods("DELETE")
+	router.Handle("/blocks", authMiddleware.Handler(server.postBlockHandler())).Methods("POST")
+	router.Handle("/blocks", authMiddleware.Handler(server.deleteBlockHandler())).Methods("DELETE")
+
 	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
 
-	router.HandleFunc("/auth", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
-	router.HandleFunc("/auth", server.authorizer.GetRespondAuthChallengeHandler(
+	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
+	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
 		"renterID",
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
@@ -59,15 +50,7 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	getRenterHandler := http.HandlerFunc(server.getRenter)
 	router.Handle("/renter-info", authMiddleware.Handler(getRenterHandler)).Methods("GET")
 	// Renters could use this to confirm the provider info from metadata
-	// TODO: change provider dashboard ui to hit /stats instead of /info
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
-
-	// Local API
-	// TODO: Move these to the local provider server later
-	// local.HandleFunc("/info", server.postInfo).Methods("POST")
-	// local.HandleFunc("/stats", server.getStats).Methods("GET")
-	// local.HandleFunc("/activity", server.getActivity).Methods("GET")
-	// local.HandleFunc("/contracts", server.getContracts).Methods("GET")
 
 	return &server
 }
@@ -132,12 +115,33 @@ func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
-	// TODO: authenticate first
 	renterID, exists := mux.Vars(r)["renterID"]
-	if exists {
-		server.writeResp(w, http.StatusAccepted, server.provider.renters[renterID])
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Requested Renter ID does not exist on provider"})
+		return
 	}
-	server.writeResp(w, http.StatusOK, getRenterResp{renter: server.provider.renters[renterID]})
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	// Check to confirm that the authentication token matches that of the querying renter
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden, errorResp{Error: "Authentication token does not match renterID"})
+		return
+	}
+
+	renter, exists := server.provider.renters[renterID]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{Error: "Provider has no record for this renter"})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, getRenterResp{renter: renter})
 }
 
 func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
@@ -168,7 +172,6 @@ type postContractParams struct {
 type postContractResp struct {
 	Contract *core.Contract `json:"contract"`
 }
-
 type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }

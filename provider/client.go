@@ -76,6 +76,10 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 }
 
 func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) error {
+	if client.token == "" {
+		return errors.New("Must authorize before calling put block")
+	}
+
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	req, err := http.NewRequest(http.MethodPost, url, data)
 	if err != nil {
@@ -87,6 +91,7 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) 
 
 	resp, err := client.client.Do(req)
 	if err != nil {
+		resp.Body.Close()
 		return err
 	}
 	defer resp.Body.Close()
@@ -128,6 +133,9 @@ func (client *Client) AuditBlock(renterID string, blockID string) (io.ReadCloser
 }
 
 func (client *Client) RemoveBlock(renterID string, blockID string) error {
+	if client.token == "" {
+		return errors.New("Must authorize before calling remove block")
+	}
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {

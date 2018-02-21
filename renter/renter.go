@@ -314,6 +314,10 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 		return err
 	}
 
+	if file.IsDir {
+		return errors.New("Folder sharing not supported")
+	}
+
 	// Get the renter's information
 	renterInfo, err := r.metaClient.GetRenterByAlias(renterAlias)
 	if err != nil {

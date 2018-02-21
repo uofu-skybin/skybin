@@ -107,7 +107,6 @@ func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
-//TODO: error handling in this method
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
 	renterID, exists := mux.Vars(r)["renterID"]
 	if !exists {
@@ -128,7 +127,14 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	server.writeResp(w, http.StatusOK, getRenterResp{renter: server.provider.renters[renterID]})
+	renter, exists := server.provider.renters[renterID]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{Error: "Provider has no record for this renter"})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, getRenterResp{renter: renter})
 }
 
 func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

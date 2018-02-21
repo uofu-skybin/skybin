@@ -14,7 +14,7 @@ def rm_file_test(ctxt):
     ctxt.log('reserving space')
     file_size = random.randint(1, 10*1024*1024)
     input_file = ctxt.create_test_file(file_size)
-    ctxt.renter.reserve_space(min(file_size*3, 5*1024*1024))
+    ctxt.renter.reserve_space(max(file_size*2, 5*1024*1024))
 
     # Upload until we run out of storage
     ctxt.log('uploading files')

@@ -83,7 +83,7 @@ func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (
 			existingFile.Versions = append(existingFile.Versions, *newVersion)
 			return existingFile, nil
 		}
- 		*existingFile = *updatedFile
+		*existingFile = *updatedFile
 		err = r.saveSnapshot()
 		if err != nil {
 			r.logger.Println("Error saving snapshot:", err)
@@ -361,27 +361,50 @@ func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte,
 	for i := 0; i < nParityBlocks; i++ {
 		blockReaders = append(blockReaders, parityFiles[i])
 	}
-	var blockNum int
-	var reader io.Reader
-	for blockNum, reader = range blockReaders {
-		block := blocks[blockNum]
-		blob := blobs[blockNum]
-		client := provider.NewClient(blob.Addr, &http.Client{})
-		err = client.AuthorizeRenter(r.privKey, r.Config.RenterId)
-		if err != nil {
-			goto unwind
-		}
-		err = client.PutBlock(r.Config.RenterId, block.ID, reader)
-		if err != nil {
-			goto unwind
+
+	// All blocks going to the same provider should be uploaded
+	// with the same provider client.
+	type blockUpload struct {
+		block *core.Block
+		blob  *storageBlob
+		data  io.Reader
+		done  bool
+	}
+	uploadsByAddr := map[string][]*blockUpload{}
+	for i := 0; i < len(blocks); i++ {
+		addr := blobs[i].Addr
+		uploadsByAddr[addr] = append(uploadsByAddr[addr], &blockUpload{
+			block: &blocks[i],
+			blob:  blobs[i],
+			data:  blockReaders[i],
+			done:  false,
+		})
+	}
+	for _, uploads := range uploadsByAddr {
+		for _, upload := range uploads {
+			client := provider.NewClient(upload.blob.Addr, &http.Client{})
+			err = client.AuthorizeRenter(r.privKey, r.Config.RenterId)
+			if err != nil {
+				goto unwind
+			}
+			err = client.PutBlock(r.Config.RenterId, upload.block.ID, upload.data)
+			if err != nil {
+				goto unwind
+			}
+			upload.done = true
 		}
 	}
 
 	return version, nil
 
 unwind:
-	for i := 0; i < blockNum; i++ {
-		r.removeBlock(&blocks[i])
+
+	for _, uploads := range uploadsByAddr {
+		for _, upload := range uploads {
+			if upload.done {
+				r.removeBlock(upload.block)
+			}
+		}
 	}
 	err2 := r.saveSnapshot()
 	if err2 != nil {

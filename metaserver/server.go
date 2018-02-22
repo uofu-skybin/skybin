@@ -11,7 +11,7 @@ import (
 )
 
 // InitServer prepares a handler for the server.
-func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
+func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaServer {
 	router := mux.NewRouter()
 
 	db, err := newMongoDB()
@@ -78,6 +78,10 @@ func InitServer(dataDirectory string, logger *log.Logger) *MetaServer {
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
+	if showDash {
+		router.Handle("/dashboard", server.getDashboardHandler()).Methods("GET")
+	}
+
 	return server
 }
 
@@ -119,4 +123,45 @@ func (server *MetaServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (server *MetaServer) Close() {
 	server.db.CloseDB()
+}
+
+type dashboardResp struct {
+	Providers []core.ProviderInfo `json:"providers"`
+	Renters   []core.RenterInfo   `json:"renters"`
+	Contracts []core.Contract     `json:"contracts"`
+	Files     []core.File         `json:"files"`
+}
+
+func (server *MetaServer) getDashboardHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		providers, err := server.db.FindAllProviders()
+		if err != nil {
+			writeAndLogInternalError(err.Error(), w, server.logger)
+			return
+		}
+		renters, err := server.db.FindAllRenters()
+		if err != nil {
+			writeAndLogInternalError(err.Error(), w, server.logger)
+			return
+		}
+		contracts, err := server.db.FindAllContracts()
+		if err != nil {
+			writeAndLogInternalError(err.Error(), w, server.logger)
+			return
+		}
+		files, err := server.db.FindAllFiles()
+		if err != nil {
+			writeAndLogInternalError(err.Error(), w, server.logger)
+			return
+		}
+
+		resp := dashboardResp{
+			Providers: providers,
+			Renters:   renters,
+			Contracts: contracts,
+			Files:     files,
+		}
+
+		json.NewEncoder(w).Encode(resp)
+	})
 }

@@ -13,13 +13,15 @@ import (
 var metaServerCmd = Cmd{
 	Name:        "metaserver",
 	Description: "Start a metadata server",
-	Usage:       "metaserver [-addr]",
+	Usage:       "metaserver [-addr] [-dash]",
 	Run:         runMetaServer,
 }
 
 func runMetaServer(args ...string) {
 	fs := flag.NewFlagSet("metaserver", flag.ExitOnError)
 	addrFlag := fs.String("addr", "", "address to run on (host:port)")
+	var showDash bool
+	fs.BoolVar(&showDash, "dash", false, "whether or not to activate the dashboard endpoint")
 	fs.Parse(args)
 
 	addr := core.DefaultMetaAddr
@@ -35,7 +37,7 @@ func runMetaServer(args ...string) {
 	defer logfile.Close()
 	logger := log.New(logfile, "", log.LstdFlags)
 
-	server := metaserver.InitServer(".", logger)
+	server := metaserver.InitServer(".", showDash, logger)
 
 	log.Println("starting metaserver server at", addr)
 	defer server.Close()

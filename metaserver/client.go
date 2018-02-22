@@ -69,6 +69,7 @@ func (client *Client) RegisterProvider(info *core.ProviderInfo) (*core.ProviderI
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		return nil, decodeError(resp.Body)
 	}
@@ -88,6 +89,7 @@ func (client *Client) GetProviders() ([]core.ProviderInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
@@ -109,6 +111,7 @@ func (client *Client) GetProvider(providerID string) (*core.ProviderInfo, error)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
@@ -144,6 +147,7 @@ func (client *Client) UpdateProvider(provider *core.ProviderInfo) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -167,6 +171,7 @@ func (client *Client) DeleteProvider(providerID string) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -184,6 +189,7 @@ func (client *Client) RegisterRenter(info *core.RenterInfo) (*core.RenterInfo, e
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		return nil, decodeError(resp.Body)
 	}
@@ -211,6 +217,7 @@ func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -239,6 +246,7 @@ func (client *Client) GetRenterByAlias(alias string) (*core.RenterInfo, error) {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -272,6 +280,7 @@ func (client *Client) UpdateRenter(renter *core.RenterInfo) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -295,6 +304,7 @@ func (client *Client) DeleteRenter(renterID string) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -326,6 +336,7 @@ func (client *Client) PostFile(renterID string, file *core.File) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		return decodeError(resp.Body)
@@ -355,6 +366,7 @@ func (client *Client) UpdateFile(renterID string, file *core.File) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if err != nil {
 		return err
 	}
@@ -385,6 +397,7 @@ func (client *Client) GetFile(renterID string, fileID string) (*core.File, error
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -417,6 +430,7 @@ func (client *Client) GetFiles(renterID string) ([]core.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -449,6 +463,7 @@ func (client *Client) DeleteFile(renterID string, fileID string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -477,6 +492,7 @@ func (client *Client) PostFileVersion(renterID string, fileID string, version *c
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
 	if err != nil {
 		return err
 	}
@@ -512,6 +528,7 @@ func (client *Client) PutFileVersion(renterID string, fileID string, version *co
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
@@ -539,6 +556,7 @@ func (client *Client) GetFileVersion(renterID string, fileID string, fileVersion
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -571,6 +589,7 @@ func (client *Client) GetFileVersions(renterID string, fileID string) ([]core.Ve
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
@@ -604,6 +623,7 @@ func (client *Client) DeleteFileVersion(renterID string, fileID string, fileVers
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
@@ -631,6 +651,7 @@ func (client *Client) GetSharedFile(renterID string, fileID string) (*core.File,
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -668,6 +689,7 @@ func (client *Client) ShareFile(renterID string, fileID string, permission *core
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		return decodeError(resp.Body)
@@ -697,6 +719,7 @@ func (client *Client) UnshareFile(renterID string, fileID string, userID string)
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
@@ -724,6 +747,7 @@ func (client *Client) GetSharedFiles(renterID string) ([]core.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -756,6 +780,7 @@ func (client *Client) RemoveSharedFile(renterID string, fileID string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}
@@ -789,6 +814,7 @@ func (client *Client) PostContract(renterID string, contract *core.Contract) err
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		return decodeError(resp.Body)
@@ -816,6 +842,7 @@ func (client *Client) GetContract(renterID string, contractID string) (*core.Con
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -848,6 +875,7 @@ func (client *Client) GetRenterContracts(renterID string) ([]core.Contract, erro
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
@@ -880,6 +908,7 @@ func (client *Client) DeleteContract(renterID string, contractID string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)
 	}

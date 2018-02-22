@@ -30,26 +30,18 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 	}
 
 	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.PrivateKey))
-
-	// API for remote renters
-	router.HandleFunc("/contracts", server.postContract).Methods("POST")
-	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-	router.Handle("/blocks", authMiddleware.Handler(server.postBlockHandler())).Methods("POST")
-	router.Handle("/blocks", authMiddleware.Handler(server.deleteBlockHandler())).Methods("DELETE")
-
-	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
-
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
 	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
 		"renterID",
 		util.MarshalPrivateKey(server.provider.PrivateKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
 
+	router.HandleFunc("/contracts", server.postContract).Methods("POST")
 	router.HandleFunc("/blocks", server.getBlock).Methods("GET")
-
-	getRenterHandler := http.HandlerFunc(server.getRenter)
-	router.Handle("/renter-info", authMiddleware.Handler(getRenterHandler)).Methods("GET")
-	// Renters could use this to confirm the provider info from metadata
+	router.Handle("/blocks", authMiddleware.Handler(http.HandlerFunc(server.postBlock))).Methods("POST")
+	router.Handle("/blocks", authMiddleware.Handler(http.HandlerFunc(server.deleteBlock))).Methods("DELETE")
+	router.HandleFunc("/blocks/audit", server.postAudit).Methods("POST")
+	router.Handle("/renter-info", authMiddleware.Handler(http.HandlerFunc(server.getRenter))).Methods("GET")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 
 	return &server
@@ -58,6 +50,14 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 func (server *providerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	server.logger.Println(r.Method, r.URL)
 	server.router.ServeHTTP(w, r)
+}
+
+type postContractParams struct {
+	Contract *core.Contract `json:"contract"`
+}
+
+type postContractResp struct {
+	Contract *core.Contract `json:"contract"`
 }
 
 func (server *providerServer) postContract(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	signedContract, err := server.provider.negotiateContract(proposal)
+	signedContract, err := server.provider.NegotiateContract(proposal)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest,
@@ -87,8 +87,6 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 
 }
 
-// Converted getStats to return the information for the provider dash
-// This will instead just return the core.ProviderInfo object
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
 	if err != nil {
@@ -112,6 +110,10 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 // TODO: Fill out stub
 func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) {
 	return
+}
+
+type getRenterResp struct {
+	renter *RenterInfo `json:"renter-info"`
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
@@ -162,19 +164,6 @@ func (server *providerServer) writeResp(w http.ResponseWriter, status int, body 
 	}
 }
 
-// Responses
 type errorResp struct {
 	Error string `json:"error,omitempty"`
-}
-type postContractParams struct {
-	Contract *core.Contract `json:"contract"`
-}
-type postContractResp struct {
-	Contract *core.Contract `json:"contract"`
-}
-type getContractsResp struct {
-	Contracts []*core.Contract `json:"contracts"`
-}
-type getRenterResp struct {
-	renter *RenterInfo `json:"renter-info"`
 }

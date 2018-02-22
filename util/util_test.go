@@ -182,3 +182,12 @@ func TestValidateNetAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCleanPath(t *testing.T) {
+	if CleanPath("/dir/f1") != "dir/f1" {
+		t.Fatal("Incorrect output path")
+	}
+	if CleanPath("dir/f1/") != "dir/f1" {
+		t.Fatal("Incorrect output path")
+	}
+}

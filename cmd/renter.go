@@ -160,12 +160,11 @@ func runRenterInit(args ...string) {
 	}
 
 	// Create renter config
-	config := renter.Config{
-		PrivateKeyFile: privateKeyPath,
-		PublicKeyFile:  publicKeyPath,
-		ApiAddr:        core.DefaultRenterAddr,
-		MetaAddr:       core.DefaultMetaAddr,
-	}
+	config := renter.DefaultConfig()
+	config.PrivateKeyFile = privateKeyPath
+	config.PublicKeyFile = publicKeyPath
+	config.ApiAddr = core.DefaultRenterAddr
+	config.MetaAddr = core.DefaultMetaAddr
 	if len(*apiAddrFlag) > 0 {
 		config.ApiAddr = *apiAddrFlag
 	}
@@ -208,7 +207,6 @@ func runRenterInit(args ...string) {
 		config.RenterId = updatedInfo.ID
 		config.Alias = *aliasFlag
 	}
-	config.IsRegistered = true
 
 	err = util.SaveJson(path.Join(homeDir, "config.json"), &config)
 	if err != nil {
@@ -252,6 +250,7 @@ func runRenterDaemon(args ...string) {
 	defer logfile.Close()
 	logger := log.New(logfile, "", log.LstdFlags)
 
+	r.SetLogger(logger)
 	server := renter.NewServer(r, logger)
 
 	log.Println("starting renter server at", addr)

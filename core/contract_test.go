@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"testing"
+	"time"
+	"encoding/json"
 )
 
 func TestSignVerify(t *testing.T) {
@@ -11,45 +13,61 @@ func TestSignVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := Contract{
+	c1 := Contract{
 		ID:           "cid",
+		StartDate:    time.Now(),
+		EndDate:      time.Now().Add(10 * time.Second),
 		RenterId:     "abcdefg",
 		ProviderId:   "hijklmnop",
 		StorageSpace: 1024 * 1024,
 	}
-	sig, err := SignContract(&c, key)
+	sig, err := SignContract(&c1, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = VerifyContractSignature(&c, sig, key.PublicKey)
+	err = VerifyContractSignature(&c1, sig, key.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Mutate contract copies to check signature failure
-	c2 := c
+	c2 := c1
 	c2.ID = "1"
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
 		t.Fatal("verify should fail - contract does not match original")
 	}
 
-	c2 = c
+	c2 = c1
 	c2.RenterId = "1"
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
 		t.Fatal("verify should fail - contract does not match original")
 	}
 
-	c2 = c
+	c2 = c1
 	c2.ProviderId = "1"
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
 		t.Fatal("verify should fail - contract does not match original")
 	}
 
-	c2 = c
+	c2 = c1
 	c2.StorageSpace = 39834
+	err = VerifyContractSignature(&c2, sig, key.PublicKey)
+	if err == nil {
+		t.Fatal("verify should fail - contract does not match original")
+	}
+
+	c2 = c1
+	c2.StartDate = time.Now().Add(1 * time.Minute)
+	err = VerifyContractSignature(&c2, sig, key.PublicKey)
+	if err == nil {
+		t.Fatal("verify should fail - contract does not match original")
+	}
+
+	c2 = c1
+	c2.EndDate = time.Now().Add(1 * time.Minute)
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
 		t.Fatal("verify should fail - contract does not match original")
@@ -60,6 +78,8 @@ func TestCompare(t *testing.T) {
 	c1 := Contract{
 		ID:                "cid",
 		RenterId:          "rid",
+		StartDate:         time.Now(),
+		EndDate:           time.Now().Add(10 * time.Second),
 		ProviderId:        "pid",
 		StorageSpace:      1 << 30,
 		RenterSignature:   "rsig",
@@ -98,6 +118,16 @@ func TestCompare(t *testing.T) {
 	if CompareContracts(c1, c2) {
 		t.Fatal("contracts should be different")
 	}
+	c2 = c1
+	c2.StartDate = time.Now().AddDate(2, 0, 0)
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c2.EndDate = time.Now().AddDate(2, 0, 0)
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
 }
 
 func TestCompareTerms(t *testing.T) {
@@ -105,6 +135,8 @@ func TestCompareTerms(t *testing.T) {
 		ID:                "cid",
 		RenterId:          "dxzcvew",
 		ProviderId:        "oiupbjn",
+		StartDate:         time.Now(),
+		EndDate:           time.Now().AddDate(0, 1, 0),
 		StorageSpace:      3734,
 		RenterSignature:   "askdjou",
 		ProviderSignature: "doueqnf",
@@ -146,5 +178,51 @@ func TestCompareTerms(t *testing.T) {
 	doMatch = CompareContractTerms(&c1, &c2)
 	if doMatch {
 		t.Fatal("contracts should not match")
+	}
+
+	// Change date fields
+	c2 = c1
+	c2.StartDate = time.Now().AddDate(1, 1, 1)
+	doMatch = CompareContractTerms(&c1, &c2)
+	if doMatch {
+		t.Fatal("contracts should not match")
+	}
+
+	c2 = c1
+	c2.EndDate = time.Now().AddDate(2, 2, 2)
+	doMatch = CompareContractTerms(&c1, &c2)
+	if doMatch {
+		t.Fatal("contracts should not match")
+	}
+}
+
+func TestSerializeDeserialize(t *testing.T) {
+	c1 := Contract{
+		ID: "cid",
+		RenterId: "renter",
+		ProviderId: "provider",
+		StorageSpace: int64(123456789),
+		StartDate: time.Now().UTC().Round(0),
+		EndDate: time.Now().AddDate(0, 0, 30 * 6),
+		RenterSignature: "dkjadsf",
+		ProviderSignature: "dlsjojifea",
+	}
+
+	data, err := json.Marshal(&c1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var c2 Contract
+	err = json.Unmarshal(data, &c2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !CompareContractTerms(&c1, &c2) {
+		t.Fatal("terms should match")
+	}
+	if !CompareContracts(c1, c2) {
+		t.Fatal("contracts should match")
 	}
 }

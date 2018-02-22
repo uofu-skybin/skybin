@@ -18,39 +18,46 @@ import (
 	"strings"
 
 	"github.com/satori/go.uuid"
+	"log"
+	"time"
 )
 
-type Config struct {
-	RenterId       string `json:"renterId"`
-	Alias          string `json:"alias"`
-	ApiAddr        string `json:"apiAddress"`
-	MetaAddr       string `json:"metaServerAddress"`
-	PrivateKeyFile string `json:"privateKeyFile"`
-	PublicKeyFile  string `json:"publicKeyFile"`
-
-	// Is this renter node registered with the metaservice?
-	IsRegistered bool `json:"isRegistered"`
-}
-
 type Renter struct {
-	Config     *Config
-	Homedir    string
-	files      []*core.File
-	contracts  []*core.Contract
-	privKey    *rsa.PrivateKey
-	metaClient *metaserver.Client
+	Config  *Config
+	Homedir string
+	privKey *rsa.PrivateKey
 
-	// All free storage blobs available for uploads.
+	// An in-memory cache of the renter's file and contract metadata.
+	files     []*core.File
+	contracts []*core.Contract
+
+	// All free storage blobs available for file uploads.
 	// Each storage contract should have at most one associated
 	// blob in this list.
 	freelist []*storageBlob
+
+	// Metaserver client. The metaserver should always have an up-to-date
+	// view of every file and contract we store locally. However, the
+	// opposite is not necessarily true; we may not have an up-to-date
+	// view of everything the metaserver stores on our behalf.
+	metaClient *metaserver.Client
+
+	// The last time we pulled down a list of our files from the metaserver.
+	lastFilesUpdate time.Time
+
+	// Blocks which need to be removed but could not be immediately
+	// deleted because the provider storing them was offline.
+	blocksToDelete []*core.Block
+
+	logger *log.Logger
 }
 
 // snapshot stores a renter's serialized state
 type snapshot struct {
-	Files       []*core.File     `json:"files"`
-	Contracts   []*core.Contract `json:"contracts"`
-	FreeStorage []*storageBlob   `json:"freeStorage"`
+	Files          []*core.File     `json:"files"`
+	Contracts      []*core.Contract `json:"contracts"`
+	FreeStorage    []*storageBlob   `json:"freeStorage"`
+	BlocksToDelete []*core.Block    `json:"blocksToDelete"`
 }
 
 // storageBlob is a chunk of free storage we've already rented
@@ -61,32 +68,14 @@ type storageBlob struct {
 	ContractId string // The contract the blob is associated with
 }
 
-const (
-
-	// The minimum size of a storage blob
-	kMinBlobSize = 1
-
-	// Minimum contract storage amount
-	// A user cannot reserve less storage than this
-	kMinContractSize = 1024 * 1024
-
-	// Maximum storage amount of any contract
-	kMaxContractSize = 1024 * 1024 * 1024
-
-	// Maximum size of an uploaded block
-	kMaxBlockSize = kMaxContractSize
-
-	// Erasure encoding defaults
-	kDefaultDataBlocks   = 8
-	kDefaultParityBlocks = 4
-)
-
 func LoadFromDisk(homedir string) (*Renter, error) {
 	renter := &Renter{
-		Homedir:   homedir,
-		files:     make([]*core.File, 0),
-		contracts: make([]*core.Contract, 0),
-		freelist:  make([]*storageBlob, 0),
+		Homedir:        homedir,
+		files:          make([]*core.File, 0),
+		contracts:      make([]*core.Contract, 0),
+		freelist:       make([]*storageBlob, 0),
+		blocksToDelete: make([]*core.Block, 0),
+		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
 	config := &Config{}
@@ -96,8 +85,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	}
 	renter.Config = config
 
-	metaHTTPClient := http.Client{}
-	renter.metaClient = metaserver.NewClient(config.MetaAddr, &metaHTTPClient)
+	renter.metaClient = metaserver.NewClient(config.MetaAddr, &http.Client{})
 
 	snapshotPath := path.Join(homedir, "snapshot.json")
 	if _, err := os.Stat(snapshotPath); err == nil {
@@ -109,6 +97,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		renter.files = s.Files
 		renter.contracts = s.Contracts
 		renter.freelist = s.FreeStorage
+		renter.blocksToDelete = s.BlocksToDelete
 	}
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "renterid"))
@@ -120,18 +109,18 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
-func (r *Renter) authorize() error {
-	privKey, err := loadPrivateKey(r.Config.PrivateKeyFile)
-	if err != nil {
-		return err
-	}
+func (r *Renter) SetLogger(logger *log.Logger) {
+	r.logger = logger
+}
 
-	err = r.metaClient.AuthorizeRenter(privKey, r.Config.RenterId)
-	if err != nil {
-		return err
+func (r *Renter) saveSnapshot() error {
+	s := snapshot{
+		Files:          r.files,
+		Contracts:      r.contracts,
+		FreeStorage:    r.freelist,
+		BlocksToDelete: r.blocksToDelete,
 	}
-
-	return nil
+	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
 }
 
 // Info is information about a renter
@@ -190,23 +179,50 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 }
 
 func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
-	file, err := r.Lookup(fileId)
+	file, err := r.GetFile(fileId)
 	if err != nil {
 		return nil, err
 	}
-	for _, file2 := range r.files {
+	files, err := r.ListFiles()
+	if err != nil {
+		return nil, err
+	}
+	for _, file2 := range files {
 		if file2.Name == name {
 			return nil, errors.New("Cannot rename file. Name already taken")
 		}
 	}
+
+	err = r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+
+	// If it's a folder, rename it's children.
 	if file.IsDir {
 		children := r.findChildren(file)
 		for _, child := range children {
 			suffix := strings.TrimPrefix(child.Name, file.Name)
 			child.Name = name + suffix
 		}
+
+		// TODO(kincaid): We need to make these renames atomic.
+		// Perhaps move the rename logic to the metaserver to ensure consistency.
+		for _, child := range children {
+			err := r.metaClient.UpdateFile(r.Config.RenterId, child)
+			if err != nil {
+				return nil, err
+				r.logger.Println("RenameFile: Error updating child's name with metaserver:", err)
+			}
+		}
 	}
+
 	file.Name = name
+	err = r.metaClient.UpdateFile(r.Config.RenterId, file)
+	if err != nil {
+		return nil, err
+	}
+
 	err = r.saveSnapshot()
 	if err != nil {
 		return nil, err
@@ -215,12 +231,42 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 }
 
 func (r *Renter) ListFiles() ([]*core.File, error) {
+	if time.Now().After(r.lastFilesUpdate.Add(5 * time.Minute)) {
+		err := r.pullFiles()
+		if err != nil {
+			r.logger.Println("Unable to refresh file metadata cache. Error: ", err)
+		}
+	}
 	return r.files, nil
 }
 
+// Refreshes the local list of files from the metaserver
+func (r *Renter) pullFiles() error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	files, err := r.metaClient.GetFiles(r.Config.RenterId)
+	if err != nil {
+		return err
+	}
+
+	// Ugly conversion of []File to []*File
+	r.files = []*core.File{}
+	for i := 0; i < len(files); i++ {
+		r.files = append(r.files, &files[i])
+	}
+
+	r.lastFilesUpdate = time.Now()
+
+	return r.saveSnapshot()
+}
+
 func (r *Renter) ListSharedFiles() ([]*core.File, error) {
-	if !r.metaClient.IsAuthorized() {
-		r.authorize()
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
 	}
 
 	files, err := r.metaClient.GetSharedFiles(r.Config.RenterId)
@@ -237,29 +283,39 @@ func (r *Renter) ListSharedFiles() ([]*core.File, error) {
 	return returnList, nil
 }
 
-func (r *Renter) Lookup(fileId string) (*core.File, error) {
-	_, f := r.findFile(fileId)
-	if f != nil {
-		return f, nil
+func (r *Renter) GetFile(fileId string) (*core.File, error) {
+
+	// Check if it exists locally
+	for _, file := range r.files {
+		if file.ID == fileId {
+			return file, nil
+		}
 	}
 
-	// If we couldn't find the file locally, check if it is a shared file.
-	if !r.metaClient.IsAuthorized() {
-		r.authorize()
+	// It might not exist because the local cache is out of date.
+	// Check with the metaserver.
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
 	}
-
-	f, err := r.metaClient.GetFile(r.Config.RenterId, fileId)
+	file, err := r.metaClient.GetFile(r.Config.RenterId, fileId)
 	if err != nil {
 		return nil, err
 	}
 
-	return f, nil
+	r.files = append(r.files, file)
+
+	return file, nil
 }
 
 func (r *Renter) ShareFile(fileId string, renterAlias string) error {
-	f, err := r.Lookup(fileId)
+	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
+	}
+
+	if file.IsDir {
+		return errors.New("Folder sharing not supported")
 	}
 
 	// Get the renter's information
@@ -274,7 +330,7 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 		return err
 	}
 
-	decryptedKey, decryptedIV, err := r.decryptEncryptionKeys(f)
+	decryptedKey, decryptedIV, err := r.decryptEncryptionKeys(file)
 	if err != nil {
 		return err
 	}
@@ -289,19 +345,17 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 		AesIV:    base64.URLEncoding.EncodeToString(encryptedIV),
 	}
 
-	if !r.metaClient.IsAuthorized() {
-		err = r.authorize()
-		if err != nil {
-			return err
-		}
-	}
-
-	err = r.metaClient.ShareFile(r.Config.RenterId, f.ID, &permission)
+	err = r.authorizeMeta()
 	if err != nil {
 		return err
 	}
 
-	f.AccessList = append(f.AccessList, permission)
+	err = r.metaClient.ShareFile(r.Config.RenterId, file.ID, &permission)
+	if err != nil {
+		return err
+	}
+
+	file.AccessList = append(file.AccessList, permission)
 	err = r.saveSnapshot()
 	if err != nil {
 		return fmt.Errorf("Unable to save snapshot. Error %s", err)
@@ -309,54 +363,114 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 	return nil
 }
 
-func (r *Renter) Remove(fileId string) error {
-	idx, f := r.findFile(fileId)
-	if f == nil {
-		return fmt.Errorf("Cannot find file with ID %s", fileId)
+func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
+	file, err := r.GetFile(fileId)
+	if err != nil {
+		return err
 	}
-	if f.IsDir && len(r.findChildren(f)) > 0 {
+	if file.IsDir && versionNum != nil {
+		return errors.New("Cannot give versionNum when removing a folder")
+	}
+	if versionNum != nil && len(file.Versions) == 1 {
+		return errors.New("Cannot remove only version of file")
+	}
+	if file.IsDir && len(r.findChildren(file)) > 0 {
 		return errors.New("Cannot remove non-empty folder")
 	}
-	for _, version := range f.Versions {
-		r.removeVersion(&version)
-	}
-	r.files = append(r.files[:idx], r.files[idx+1:]...)
-	err := r.saveSnapshot()
+	err = r.authorizeMeta()
 	if err != nil {
-		return fmt.Errorf("Unable to save snapshot. Error: %s", err)
+		return err
+	}
+	if versionNum != nil {
+		return r.removeFileVersion(file, *versionNum)
+	}
+	return r.removeFile(file)
+}
+
+func (r *Renter) removeFile(file *core.File) error {
+	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
+	if err != nil {
+		return err
+	}
+	for _, version := range file.Versions {
+		r.removeVersionBlocks(&version)
+	}
+
+	// Delete locally
+	fileIdx := -1
+	for idx, file2 := range r.files {
+		if file2.ID == file.ID {
+			fileIdx = idx
+			break
+		}
+	}
+	if fileIdx != -1 {
+		r.files = append(r.files[:fileIdx], r.files[fileIdx+1:]...)
+		err = r.saveSnapshot()
+		if err != nil {
+			r.logger.Println("Error saving snapshot:", err)
+		}
+	}
+
+	return nil
+}
+
+func (r *Renter) removeFileVersion(file *core.File, versionNum int) error {
+	var version *core.Version
+	var versionIdx int
+	for ; versionIdx < len(file.Versions); versionIdx++ {
+		if file.Versions[versionIdx].Num == versionNum {
+			version = &file.Versions[versionIdx]
+			break
+		}
+	}
+	if version == nil {
+		return fmt.Errorf("Cannot find version %d", versionNum)
+	}
+	err := r.metaClient.DeleteFileVersion(r.Config.RenterId, file.ID, versionNum)
+	if err != nil {
+		return fmt.Errorf("Unable to delete version metadata. Error: %s", err)
+	}
+	r.removeVersionBlocks(version)
+	file.Versions = append(file.Versions[:versionIdx], file.Versions[versionIdx+1:]...)
+	err = r.saveSnapshot()
+	if err != nil {
+		r.logger.Println("Error saving snapshot:", err)
 	}
 	return nil
 }
 
-func (r *Renter) removeVersion(version *core.Version) {
+// Deletes the blocks for a file version from the providers
+// where they are stored, reclaiming the freed storage space.
+func (r *Renter) removeVersionBlocks(version *core.Version) {
 	for _, block := range version.Blocks {
-		err := r.removeBlock(&block)
-		if err != nil {
-			// TODO: add to list to remove later
-			continue
-		}
-		for _, location := range block.Locations {
-			blob := &storageBlob{
-				ProviderId: location.ProviderId,
-				Addr:       location.Addr,
-				Amount:     block.Size,
-				ContractId: location.ContractId,
-			}
-			r.addBlob(blob)
-		}
+		r.removeBlock(&block)
 	}
 }
 
-func (r *Renter) removeBlock(block *core.Block) error {
-	for _, location := range block.Locations {
-		pvdr := provider.NewClient(location.Addr, &http.Client{})
-		pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
-		err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
-		if err != nil {
-			return err
-		}
+// Removes a block from the provider where it is stored, reclaiming
+// the block's storage for the freelist.
+func (r *Renter) removeBlock(block *core.Block) {
+	pvdr := provider.NewClient(block.Location.Addr, &http.Client{})
+	err := pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
+	if err == nil {
+		err = pvdr.RemoveBlock(r.Config.RenterId, block.ID)
 	}
-	return nil
+	if err != nil {
+		r.logger.Println("Unable to remove block %s from provider %s\n",
+			block.ID, block.Location.ProviderId)
+		r.logger.Printf("Error: %s\n", err)
+		r.blocksToDelete = append(r.blocksToDelete, block)
+	}
+
+	// Reclaim the storage used by the block.
+	blob := &storageBlob{
+		ProviderId: block.Location.ProviderId,
+		Addr:       block.Location.Addr,
+		Amount:     block.Size,
+		ContractId: block.Location.ContractId,
+	}
+	r.addBlob(blob)
 }
 
 // Add a storage blob back to the free list.
@@ -364,7 +478,7 @@ func (r *Renter) addBlob(blob *storageBlob) {
 	for _, blob2 := range r.freelist {
 		if blob.ContractId == blob2.ContractId {
 
-			// Merge
+			// Merge blobs
 			blob2.Amount += blob.Amount
 			return
 		}
@@ -373,17 +487,16 @@ func (r *Renter) addBlob(blob *storageBlob) {
 }
 
 func (r *Renter) saveFile(f *core.File) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+	err = r.metaClient.PostFile(r.Config.RenterId, f)
+	if err != nil {
+		return err
+	}
 	r.files = append(r.files, f)
 	return r.saveSnapshot()
-}
-
-func (r *Renter) findFile(fileId string) (idx int, f *core.File) {
-	for idx, f = range r.files {
-		if f.ID == fileId {
-			return
-		}
-	}
-	return -1, nil
 }
 
 func (r *Renter) findChildren(dir *core.File) []*core.File {
@@ -399,13 +512,32 @@ func (r *Renter) findChildren(dir *core.File) []*core.File {
 	return children
 }
 
-func (r *Renter) saveSnapshot() error {
-	s := snapshot{
-		Files:       r.files,
-		Contracts:   r.contracts,
-		FreeStorage: r.freelist,
+func (r *Renter) getFileByName(name string) *core.File {
+	for _, file := range r.files {
+		if file.Name == name {
+			return file
+		}
 	}
-	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
+	return nil
+}
+
+func (r *Renter) storageAvailable() int64 {
+	var total int64 = 0
+	for _, blob := range r.freelist {
+		total += blob.Amount
+	}
+	return total
+}
+
+// Authorize with the metaclient, if necessary
+func (r *Renter) authorizeMeta() error {
+	if !r.metaClient.IsAuthorized() {
+		err := r.metaClient.AuthorizeRenter(r.privKey, r.Config.RenterId)
+		if err != nil {
+			return fmt.Errorf("Unable to authorize with metaserver. Error: %s", err)
+		}
+	}
+	return nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {

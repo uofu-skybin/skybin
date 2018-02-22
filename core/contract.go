@@ -7,23 +7,28 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"time"
 )
 
 // A contract without the signature fields,
 // with other fields sorted by name.
 type contractTerms struct {
-	ID           string `json:"id"`
-	ProviderId   string `json:"providerId"`
-	RenterId     string `json:"renterId"`
-	StorageSpace int64  `json:"storageSpace"`
+	EndDate      time.Time `json:"endDate"`
+	ID           string    `json:"id"`
+	ProviderId   string    `json:"providerId"`
+	RenterId     string    `json:"renterId"`
+	StartDate    time.Time `json:"startDate"`
+	StorageSpace int64     `json:"storageSpace"`
 }
 
 func makeTerms(c *Contract) contractTerms {
 	return contractTerms{
+		EndDate:      c.EndDate,
 		ID:           c.ID,
 		ProviderId:   c.ProviderId,
 		RenterId:     c.RenterId,
 		StorageSpace: c.StorageSpace,
+		StartDate:    c.StartDate,
 	}
 }
 

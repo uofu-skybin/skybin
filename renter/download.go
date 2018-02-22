@@ -18,33 +18,74 @@ import (
 	"path"
 	"skybin/core"
 	"skybin/provider"
+	"strings"
 
 	"github.com/klauspost/reedsolomon"
 )
 
-func (r *Renter) Download(fileId string, destPath string) error {
-	f, err := r.Lookup(fileId)
+func (r *Renter) Download(fileId string, destPath string, versionNum *int) error {
+	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
 	}
-	if f.IsDir {
-		return errors.New("Folder downloads not supported yet")
-	}
-	if len(f.Versions) == 0 {
-		return errors.New("File has no versions")
+	if file.IsDir && versionNum != nil {
+		return errors.New("Cannot give version option with folder download")
 	}
 
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
-		destPath, err = defaultDownloadLocation(f)
+		destPath, err = defaultDownloadLocation(file)
 		if err != nil {
 			return err
 		}
 	}
+	if file.IsDir {
+		return r.downloadDir(file, destPath)
+	}
+	if len(file.Versions) == 0 {
+		return errors.New("File has no versions")
+	}
 
 	// Download the latest version by default
-	version := &f.Versions[len(f.Versions)-1]
-	return r.performDownload(f, version, destPath)
+	version := &file.Versions[len(file.Versions)-1]
+	if versionNum != nil {
+		version = findVersion(file, *versionNum)
+		if version == nil {
+			return fmt.Errorf("Cannot find version %d", *versionNum)
+		}
+	}
+	return r.performDownload(file, version, destPath)
+}
+
+// Downloads a folder tree, including all subfolders and files.
+// This may partially succeed, in that some children of the folder may
+// be downloaded while others may fail.
+func (r *Renter) downloadDir(dir *core.File, destPath string) error {
+	err := os.MkdirAll(destPath, 0777)
+	if err != nil {
+		return err
+	}
+	children := r.findChildren(dir)
+	for _, child := range children {
+		relPath := strings.TrimPrefix(child.Name, dir.Name+"/")
+		fullPath := path.Join(destPath, relPath)
+		if child.IsDir {
+			err = os.MkdirAll(fullPath, 0777)
+			if err != nil {
+				return fmt.Errorf("Unable to create folder %s. Error: %s", fullPath, err)
+			}
+			continue
+		}
+		if len(child.Versions) == 0 {
+			return fmt.Errorf("File %s has no versions to download.", child.Name)
+		}
+		version := &child.Versions[len(child.Versions)-1]
+		err = r.performDownload(child, version, fullPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Download a version of a file.
@@ -190,39 +231,36 @@ func (r *Renter) performDownload(file *core.File, version *core.Version, destPat
 }
 
 func (r *Renter) downloadBlock(renterId string, block *core.Block, out *os.File) error {
-	for _, location := range block.Locations {
-		client := provider.NewClient(location.Addr, &http.Client{})
-
-		blockReader, err := client.GetBlock(renterId, block.ID)
-		if err != nil {
-			// TODO: Check that failure is due to a network error, not because
-			// provider didn't return the block.
-			continue
-		}
-		defer blockReader.Close()
-		n, err := io.Copy(out, blockReader)
-		if err != nil {
-			return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
-		}
-		if n != block.Size {
-			return errors.New("Downloaded block has incorrect size.")
-		}
-		_, err = out.Seek(0, os.SEEK_SET)
-		if err != nil {
-			return fmt.Errorf("Error checking block hash. Error: %s", err)
-		}
-		h := sha256.New()
-		_, err = io.Copy(h, out)
-		if err != nil {
-			return fmt.Errorf("Error checking block hash. Error: %s", err)
-		}
-		blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
-		if blockHash != block.Sha256Hash {
-			return errors.New("Block hash does not match expected.")
-		}
-		return nil
+	client := provider.NewClient(block.Location.Addr, &http.Client{})
+	blockReader, err := client.GetBlock(renterId, block.ID)
+	if err != nil {
+		// TODO: Check that failure is due to a network error, not because
+		// provider didn't return the block.
+		return err
 	}
-	return fmt.Errorf("Unable to download file block %s. Cannot connect to providers.", block.ID)
+	defer blockReader.Close()
+	n, err := io.Copy(out, blockReader)
+	if err != nil {
+		return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
+	}
+	if n != block.Size {
+		return errors.New("Downloaded block has incorrect size.")
+	}
+	_, err = out.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return fmt.Errorf("Error checking block hash. Error: %s", err)
+	}
+	h := sha256.New()
+	_, err = io.Copy(h, out)
+	if err != nil {
+		return fmt.Errorf("Error checking block hash. Error: %s", err)
+	}
+	blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
+	if blockHash != block.Sha256Hash {
+		return errors.New("Block hash does not match expected.")
+	}
+	return nil
+
 }
 
 // Decrypts and returns f's AES key and AES IV.
@@ -310,4 +348,14 @@ func convertToReaderSlice(files []*os.File) []io.Reader {
 		}
 	}
 	return res
+}
+
+
+func findVersion(file *core.File, versionNum int) *core.Version {
+	for i := 0; i < len(file.Versions); i++ {
+		if file.Versions[i].Num == versionNum {
+			return &file.Versions[i]
+		}
+	}
+	return nil
 }

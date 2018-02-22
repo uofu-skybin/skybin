@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	DefaultMetaAddr     = "127.0.0.1:8001"
-	DefaultRenterAddr   = "127.0.0.1:8002"
+	DefaultMetaAddr           = "127.0.0.1:8001"
+	DefaultRenterAddr         = "127.0.0.1:8002"
 	DefaultPublicProviderAddr = ":8003"
-	DefaultLocalProviderAddr = "127.0.0.1:8004"
+	DefaultLocalProviderAddr  = "127.0.0.1:8004"
 )
 
 type ProviderInfo struct {
@@ -19,17 +19,6 @@ type ProviderInfo struct {
 	StorageRate int64  `json:"storageRate"`
 }
 
-// Alternative approach from metadata server
-// type StorageRate struct {
-// 	// The fee “Fee” in currency “Currency” for storing
-// 	// “StorageAmount” bytes for “PeriodSec” seconds
-// 	Currency       string `json:"currency"`
-// 	StorageAmount  int64  `json:"storageAmount"`
-// 	Fee            string `json:"fee"`
-// 	PeriodSec      string `json:"periodSec"`
-// 	PaymentAddress string `json:"paymentAddress"`
-// }
-
 type RenterInfo struct {
 	ID        string   `json:"id"`
 	Alias     string   `json:"alias"`
@@ -39,12 +28,14 @@ type RenterInfo struct {
 }
 
 type Contract struct {
-	ID                string `json:"contractId"`
-	RenterId          string `json:"renterId"`
-	ProviderId        string `json:"providerId"`
-	StorageSpace      int64  `json:"storageSpace"`
-	RenterSignature   string `json:"renterSignature"`
-	ProviderSignature string `json:"providerSignature"`
+	ID                string    `json:"contractId"`
+	RenterId          string    `json:"renterId"`
+	ProviderId        string    `json:"providerId"`
+	StorageSpace      int64     `json:"storageSpace"`
+	StartDate         time.Time `json:"startDate"`
+	EndDate           time.Time `json:"endDate"`
+	RenterSignature   string    `json:"renterSignature"`
+	ProviderSignature string    `json:"providerSignature"`
 }
 
 type BlockLocation struct {
@@ -66,8 +57,8 @@ type Block struct {
 	// sha256 hash of the block
 	Sha256Hash string `json:"sha256hash"`
 
-	// Locations of providers where the block is stored
-	Locations []BlockLocation `json:"locations"`
+	// Location of the provider where the block is stored
+	Location BlockLocation `json:"location"`
 }
 
 // Permission provides access to a file to a non-owning user
@@ -96,6 +87,7 @@ type Version struct {
 	Num             int       `json:"num"`
 	Size            int64     `json:"size"`
 	ModTime         time.Time `json:"modTime"`
+	UploadTime      time.Time `json:"uploadTime"`
 	UploadSize      int64     `json:"uploadSize"`
 	PaddingBytes    int64     `json:"paddingBytes"`
 	NumDataBlocks   int       `json:"numDataBlocks"`

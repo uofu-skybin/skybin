@@ -11,6 +11,7 @@ import (
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/util"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type Provider struct {
 	stats      Stats
 	activity   []Activity
 	renters    map[string]*RenterInfo
+	mu         sync.Mutex
 }
 
 const (
@@ -144,64 +146,26 @@ func (provider *Provider) addActivity(activity Activity) {
 	}
 }
 
-func (provider *Provider) negotiateContract(contract *core.Contract) (*core.Contract, error) {
-	renterKey, err := provider.getRenterPublicKey(contract.RenterId)
-	if err != nil {
-		return nil, fmt.Errorf("Metadata server does not have an associated renter ID")
+type Info struct {
+	ProviderId       string `json:"providerId"`
+	StorageAllocated int64  `json:"storageAllocated"`
+	StorageReserved  int64  `json:"storageReserved"`
+	StorageUsed      int64  `json:"storageUsed"`
+	StorageFree      int64  `json:"storageFree"`
+	TotalContracts   int    `json:"totalContracts"`
+}
+
+func (provider *Provider) GetInfo() *Info {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	return &Info{
+		ProviderId:       provider.Config.ProviderID,
+		StorageAllocated: provider.Config.SpaceAvail,
+		StorageReserved:  provider.stats.StorageReserved,
+		StorageUsed:      provider.stats.StorageUsed,
+		StorageFree:      provider.Config.SpaceAvail - provider.stats.StorageUsed,
+		TotalContracts:   len(provider.contracts),
 	}
-
-	// Verify renters signature
-	err = core.VerifyContractSignature(contract, contract.RenterSignature, *renterKey)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid Renter signature: %s", err)
-	}
-
-	// Determine if provider has sufficient space available for the contract
-	avail := provider.Config.SpaceAvail - provider.stats.StorageReserved
-	if contract.StorageSpace > avail {
-		return nil, fmt.Errorf("Provider does not have sufficient storage available")
-	}
-
-	// TODO: determine if payment and expiration date is amiable here
-
-	// Sign contract
-	provSig, err := core.SignContract(contract, provider.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("Error signing contract")
-	}
-	contract.ProviderSignature = provSig
-
-	// Add storage space to the renter
-	renter, exists := provider.renters[contract.RenterId]
-	if !exists {
-		renter = &RenterInfo{
-			Contracts: []*core.Contract{},
-			Blocks:    []*BlockInfo{},
-		}
-		provider.renters[contract.RenterId] = renter
-	}
-	renter.StorageReserved += contract.StorageSpace
-	renter.Contracts = append(renter.Contracts, contract)
-
-	provider.stats.StorageReserved += contract.StorageSpace
-	provider.contracts = append(provider.contracts, contract)
-
-	activity := Activity{
-		RequestType: negotiateType,
-		Contract:    contract,
-		TimeStamp:   time.Now(),
-		RenterId:    contract.RenterId,
-	}
-	provider.addActivity(activity)
-
-	err = provider.saveSnapshot()
-	if err != nil {
-
-		// TODO: Remove contract. I don't do this here
-		// since we need to move to an improved storage scheme anyways.
-		return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
-	}
-	return contract, nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -215,7 +179,10 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 // TODO: this needs an open public key endpoint
 func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return nil, err
+	}
 	rent, err := client.GetRenter(renterId)
 	if err != nil {
 		return nil, err
@@ -225,15 +192,6 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 		return nil, err
 	}
 	return key, nil
-}
-
-// This method should clean up expired files and confirm that they were
-// paid for any storage they used
-func (provider *Provider) maintenance() {
-	// check payments
-	// clean up old contracts
-	// delete unpaid files
-
 }
 
 // Currently called after forming every contract could also be moved into maintenance

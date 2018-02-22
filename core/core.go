@@ -85,6 +85,7 @@ type Version struct {
 	Num             int       `json:"num"`
 	Size            int64     `json:"size"`
 	ModTime         time.Time `json:"modTime"`
+	UploadTime      time.Time `json:"uploadTime"`
 	UploadSize      int64     `json:"uploadSize"`
 	PaddingBytes    int64     `json:"paddingBytes"`
 	NumDataBlocks   int       `json:"numDataBlocks"`

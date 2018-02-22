@@ -21,6 +21,7 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
+	"time"
 )
 
 func (r *Renter) Upload(srcPath string, destPath string, shouldOverwrite bool) (*core.File, error) {
@@ -324,10 +325,11 @@ func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte,
 		uploadSize += st.Size()
 	}
 	version := &core.Version{
+		ModTime:         finfo.ModTime(),
 		Size:            finfo.Size(),
+		UploadTime:      time.Now(),
 		UploadSize:      uploadSize,
 		PaddingBytes:    paddingBytes,
-		ModTime:         finfo.ModTime(),
 		NumDataBlocks:   nDataBlocks,
 		NumParityBlocks: nParityBlocks,
 		Blocks:          blocks,
@@ -431,18 +433,20 @@ func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, erro
 	}
 
 	// Randomize the order of candidate inspection
-	perm := mathrand.Perm(len(candidates))
+	for i := len(candidates) - 1; i >= 0; i-- {
+		j := mathrand.Intn(i+1)
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	}
 
 	var blobs []*storageBlob
 	for i := 0; len(blobs) < nblocks && len(candidates) > 0; {
-		idx := perm[i]
-		candidate := candidates[idx]
+		candidate := candidates[i]
 
 		// Check if the provider is online
 		client := provider.NewClient(candidate.Addr, &http.Client{})
 		_, err := client.GetInfo()
 		if err != nil {
-			candidates = append(candidates[:idx], candidates[idx+1:]...)
+			candidates = append(candidates[:i], candidates[i+1:]...)
 			continue
 		}
 
@@ -456,14 +460,13 @@ func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, erro
 
 		candidate.Amount -= blob.Amount
 		if candidate.Amount < blockSize {
-			candidates = append(candidates[:idx], candidates[idx+1:]...)
-			perm = append(perm[:i], perm[i+1:]...)
+			candidates = append(candidates[:i], candidates[i+1:]...)
 		}
 		if candidate.Amount < kMinBlobSize {
 			r.freelist = append(r.freelist[:candidate.idx], r.freelist[candidate.idx+1:]...)
 		}
 
-		i = (i + 1) % len(perm)
+		i = (i + 1) % len(candidates)
 	}
 	if len(blobs) < nblocks {
 		for _, blob := range blobs {

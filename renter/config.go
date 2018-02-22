@@ -1,16 +1,17 @@
 package renter
 
 type Config struct {
-	RenterId            string `json:"renterId"`
-	Alias               string `json:"alias"`
-	ApiAddr             string `json:"apiAddress"`
-	MetaAddr            string `json:"metaServerAddress"`
-	PrivateKeyFile      string `json:"privateKeyFile"`
-	PublicKeyFile       string `json:"publicKeyFile"`
-	MaxContractSize     int64  `json:"maxContractSize"`
-	MaxBlockSize        int64  `json:"maxBlockSize"`
-	DefaultDataBlocks   int    `json:"defaultDataBlocks"`
-	DefaultParityBlocks int    `json:"defaultParityBlocks"`
+	RenterId                    string `json:"renterId"`
+	Alias                       string `json:"alias"`
+	ApiAddr                     string `json:"apiAddress"`
+	MetaAddr                    string `json:"metaServerAddress"`
+	PrivateKeyFile              string `json:"privateKeyFile"`
+	PublicKeyFile               string `json:"publicKeyFile"`
+	MaxContractSize             int64  `json:"maxContractSize"`
+	MaxBlockSize                int64  `json:"maxBlockSize"`
+	DefaultDataBlocks           int    `json:"defaultDataBlocks"`
+	DefaultParityBlocks         int    `json:"defaultParityBlocks"`
+	DefaultContractDurationDays int    `json:"defaultContractDurationDays"`
 }
 
 const (
@@ -31,13 +32,17 @@ const (
 	// Erasure encoding defaults
 	kDefaultDataBlocks   = 8
 	kDefaultParityBlocks = 4
+
+	// Default contract duration - 6 months
+	kDefaultContractDurationDays = 30 * 6
 )
 
 func DefaultConfig() *Config {
 	return &Config{
-		MaxContractSize:     kDefaultMaxContractSize,
-		MaxBlockSize:        kDefaultMaxBlockSize,
-		DefaultDataBlocks:   kDefaultDataBlocks,
-		DefaultParityBlocks: kDefaultParityBlocks,
+		MaxContractSize:             kDefaultMaxContractSize,
+		MaxBlockSize:                kDefaultMaxBlockSize,
+		DefaultDataBlocks:           kDefaultDataBlocks,
+		DefaultParityBlocks:         kDefaultParityBlocks,
+		DefaultContractDurationDays: kDefaultContractDurationDays,
 	}
 }

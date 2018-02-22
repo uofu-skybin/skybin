@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	DefaultMetaAddr     = "127.0.0.1:8001"
-	DefaultRenterAddr   = "127.0.0.1:8002"
+	DefaultMetaAddr           = "127.0.0.1:8001"
+	DefaultRenterAddr         = "127.0.0.1:8002"
 	DefaultPublicProviderAddr = ":8003"
-	DefaultLocalProviderAddr = "127.0.0.1:8004"
+	DefaultLocalProviderAddr  = "127.0.0.1:8004"
 )
 
 type ProviderInfo struct {
@@ -28,12 +28,14 @@ type RenterInfo struct {
 }
 
 type Contract struct {
-	ID                string `json:"contractId"`
-	RenterId          string `json:"renterId"`
-	ProviderId        string `json:"providerId"`
-	StorageSpace      int64  `json:"storageSpace"`
-	RenterSignature   string `json:"renterSignature"`
-	ProviderSignature string `json:"providerSignature"`
+	ID                string    `json:"contractId"`
+	RenterId          string    `json:"renterId"`
+	ProviderId        string    `json:"providerId"`
+	StorageSpace      int64     `json:"storageSpace"`
+	StartDate         time.Time `json:"startDate"`
+	EndDate           time.Time `json:"endDate"`
+	RenterSignature   string    `json:"renterSignature"`
+	ProviderSignature string    `json:"providerSignature"`
 }
 
 type BlockLocation struct {

@@ -8,6 +8,7 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"skybin/util"
+	"time"
 )
 
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
@@ -116,6 +117,8 @@ func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Cont
 	}
 	proposal := core.Contract{
 		ID:           cid,
+		StartDate:    time.Now().UTC().Round(0),
+		EndDate:      time.Now().AddDate(0, 0, r.Config.DefaultContractDurationDays),
 		RenterId:     r.Config.RenterId,
 		ProviderId:   pinfo.ID,
 		StorageSpace: space,

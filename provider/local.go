@@ -2,10 +2,12 @@ package provider
 
 import (
 	"encoding/json"
-	"fmt"
+
 	"log"
 	"net/http"
+	"path"
 	"skybin/core"
+	"skybin/util"
 
 	"github.com/gorilla/mux"
 )
@@ -25,7 +27,7 @@ func NewLocalServer(provider *Provider, logger *log.Logger) http.Handler {
 		logger:   logger,
 		router:   router,
 	}
-
+	router.HandleFunc("/config", server.getConfig).Methods("GET")
 	router.HandleFunc("/config", server.postConfig).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
@@ -42,6 +44,10 @@ func (server *localServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (server *localServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	info := server.provider.GetInfo()
 	server.writeResp(w, http.StatusOK, info)
+}
+
+func (server *localServer) getConfig(w http.ResponseWriter, r *http.Request) {
+	server.writeResp(w, http.StatusOK, server.provider.Config)
 }
 
 type getContractsResp struct {
@@ -68,10 +74,14 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	server.provider.Config.StorageRate = params.StorageRate
 	server.provider.Config.PublicApiAddr = params.PublicApiAddr
 
-	err = server.provider.UpdateMeta()
+	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
 	if err != nil {
-		msg := fmt.Sprintf("Error updating metadata server: %s", err)
-		server.writeResp(w, http.StatusBadRequest, &errorResp{msg})
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving config file"})
+	}
+
+	err = server.provider.saveSnapshot()
+	if err != nil {
+		server.logger.Println("Unable to save snapshot. Error:", err)
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})

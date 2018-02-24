@@ -159,6 +159,9 @@ func (r *Renter) Info() (*Info, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
+	if r.getFileByName(name) != nil {
+		return nil, fmt.Errorf("%s already exists.", name)
+	}
 	id, err := genId()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
@@ -183,14 +186,8 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	files, err := r.ListFiles()
-	if err != nil {
-		return nil, err
-	}
-	for _, file2 := range files {
-		if file2.Name == name {
-			return nil, errors.New("Cannot rename file. Name already taken")
-		}
+	if r.getFileByName(name) != nil {
+		return nil, fmt.Errorf("%s already exists.", name)
 	}
 
 	err = r.authorizeMeta()

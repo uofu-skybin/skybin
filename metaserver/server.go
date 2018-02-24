@@ -2,6 +2,7 @@ package metaserver
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"path"
@@ -11,6 +12,14 @@ import (
 
 	"github.com/gorilla/mux"
 )
+
+func getStaticPath() (string, error) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", errors.New("could not locate static files dir")
+	}
+	return path.Join(path.Dir(filename), "static"), nil
+}
 
 // InitServer prepares a handler for the server.
 func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaServer {
@@ -81,8 +90,13 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
 	if showDash {
-		router.Handle("/dashboard", server.getDashboardHandler()).Methods("GET")
 		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")
+
+		staticPath, err := getStaticPath()
+		if err != nil {
+			server.logger.Fatal(err)
+		}
+		router.Handle("/{someFile}", http.FileServer(http.Dir(staticPath)))
 	}
 
 	return server
@@ -177,6 +191,6 @@ func (server *MetaServer) getDashboardHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		http.ServeFile(w, r, path.Join(path.Dir(filename), "public/dashboard.html"))
+		http.ServeFile(w, r, path.Join(path.Dir(filename), "public"))
 	})
 }

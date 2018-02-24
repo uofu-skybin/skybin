@@ -46,10 +46,28 @@ const (
 )
 
 // Provider node statistics
+// TODO: revisit the naming scheme
 type Stats struct {
 	StorageReserved int64 `json:"storageReserved"`
 	StorageUsed     int64 `json:"storageUsed"`
+
+	// This structure is somewhat messy as it is designed to be plug and play
+	// with the chart.js data model
+	TimeStamps     []time.Time `json:"time"`
+	UploadBytes    []int64     `json:"uploadBytes"`
+	UploadBlocks   []int64     `json:"uploadBlocks"`
+	DownloadBytes  []int64     `json:"downloadBytes"`
+	DownloadBlocks []int64     `json:"downloadBlocks"`
+	DeleteBytes    []int64     `json:"deleteBytes"`
+	DeleteBlocks   []int64     `json:"deleteBlocks"`
+	ContractCount  []int64     `json:"contractCount"`
+	ContractSize   []int64     `json:"contractSize"`
 }
+
+// type TimeSeries struct {
+// 	Time time.Time `json:"time"`
+// 	Data int64     `json:"data"`
+// }
 
 type BlockInfo struct {
 	BlockId string `json:"blockId"`
@@ -143,6 +161,80 @@ func (provider *Provider) addActivity(activity Activity) {
 	if len(provider.activity) > maxActivity {
 		// Drop the oldest activity.
 		provider.activity = provider.activity[1:]
+	}
+}
+
+// Add statistics in Time Series format for charting
+func (provider *Provider) addStat(op string, bytes int64) {
+	// Time increment to distinguish stats (intentionally short for dev purposes)
+	d := 5 * time.Minute
+
+	// Round current time to nearest time increment
+	t := time.Now()
+	t = t.Truncate(d)
+
+	// This could potentially be moved to loadFromDisk
+	numStats := len(provider.stats.TimeStamps)
+	if numStats == 0 {
+		provider.stats.TimeStamps = append(provider.stats.TimeStamps, t)
+		provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
+		provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
+		provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
+		provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
+		provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
+		provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
+		provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
+		provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
+		numStats++
+	}
+
+	currTime := provider.stats.TimeStamps[numStats-1]
+	if currTime != t {
+		// Populate empty timeframes if last timestamp is not current
+		for currTime != t {
+			currTime = currTime.Add(d)
+			provider.stats.TimeStamps = append(provider.stats.TimeStamps, currTime)
+			provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
+			provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
+			provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
+			provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
+			provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
+			provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
+			provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
+			provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
+			numStats++
+		}
+	}
+	if op == "upload" {
+		provider.stats.UploadBlocks[numStats-1]++
+		provider.stats.UploadBytes[numStats-1] += bytes
+	}
+	if op == "download" {
+		provider.stats.DownloadBlocks[numStats-1]++
+		provider.stats.DownloadBytes[numStats-1] += bytes
+	}
+	if op == "delete" {
+		provider.stats.DeleteBlocks[numStats-1]++
+		provider.stats.DeleteBytes[numStats-1] += bytes
+	}
+	if op == "contract" {
+		provider.stats.ContractCount[numStats-1]++
+		provider.stats.ContractSize[numStats-1] += bytes
+	}
+
+	// Drop any activity older than a day
+	statCount := int(time.Hour * 24 / d)
+	if len(provider.stats.TimeStamps) > statCount {
+		idx := len(provider.stats.TimeStamps) - statCount
+		provider.stats.TimeStamps = provider.stats.TimeStamps[idx:]
+		provider.stats.UploadBlocks = provider.stats.UploadBlocks[idx:]
+		provider.stats.UploadBytes = provider.stats.UploadBytes[idx:]
+		provider.stats.DownloadBlocks = provider.stats.DownloadBlocks[idx:]
+		provider.stats.DownloadBytes = provider.stats.DownloadBytes[idx:]
+		provider.stats.DeleteBlocks = provider.stats.DeleteBlocks[idx:]
+		provider.stats.DeleteBytes = provider.stats.DeleteBytes[idx:]
+		provider.stats.ContractCount = provider.stats.ContractCount[idx:]
+		provider.stats.ContractSize = provider.stats.ContractSize[idx:]
 	}
 }
 

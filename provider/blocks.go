@@ -107,6 +107,9 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		RenterId:    renterID,
 		TimeStamp:   time.Now(),
 	}
+
+	server.provider.addStat("upload", n)
+
 	server.provider.addActivity(activity)
 	err = server.provider.saveSnapshot()
 	if err != nil {
@@ -146,6 +149,8 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	fi, err := f.Stat()
+	server.provider.addStat("download", fi.Size())
 
 	activity := Activity{
 		RequestType: getBlockType,
@@ -220,7 +225,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 			renter.StorageUsed -= fi.Size()
 		}
 	}
-
+	server.provider.addStat("delete", fi.Size())
 	activity := Activity{
 		RequestType: deleteBlockType,
 		BlockId:     blockID,

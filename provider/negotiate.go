@@ -1,10 +1,10 @@
 package provider
 
 import (
-	"fmt"
-	"time"
-	"skybin/core"
 	"errors"
+	"fmt"
+	"skybin/core"
+	"time"
 )
 
 func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Contract, error) {
@@ -46,6 +46,7 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	provider.stats.StorageReserved += contract.StorageSpace
 	provider.contracts = append(provider.contracts, contract)
 
+	provider.addStat("contract", contract.StorageSpace)
 	activity := Activity{
 		RequestType: negotiateType,
 		Contract:    contract,

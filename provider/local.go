@@ -32,6 +32,7 @@ func NewLocalServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/activity", server.getActivity).Methods("GET")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+	router.HandleFunc("/stats", server.getStats).Methods("GET")
 
 	return &server
 }
@@ -63,11 +64,17 @@ func (server *localServer) getActivity(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &getActivityResp{Activity: server.provider.activity})
 }
 
+// This could potentially replace getActivity (which is not currently used)
+func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
+	server.writeResp(w, http.StatusOK, server.provider.stats)
+}
+
 func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	var params Config
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, &errorResp{"Bad json"})
+		return
 	}
 
 	server.provider.Config.SpaceAvail = params.SpaceAvail
@@ -77,11 +84,13 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving config file"})
+		return
 	}
 
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
+		return
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})

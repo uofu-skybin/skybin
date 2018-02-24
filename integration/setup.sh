@@ -18,7 +18,7 @@ echo "setting up database"
 mongo setup_db.js
 
 echo "starting metaserver"
-$SKYBIN_CMD metaserver &
+$SKYBIN_CMD metaserver -dash &
 sleep 1
 
 echo "setting up sample skybin repo"

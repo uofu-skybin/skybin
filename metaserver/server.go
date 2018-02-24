@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"path"
+	"runtime"
 	"skybin/authorization"
 	"skybin/core"
 
@@ -80,6 +82,7 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 
 	if showDash {
 		router.Handle("/dashboard", server.getDashboardHandler()).Methods("GET")
+		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")
 	}
 
 	return server
@@ -132,7 +135,7 @@ type dashboardResp struct {
 	Files     []core.File         `json:"files"`
 }
 
-func (server *MetaServer) getDashboardHandler() http.HandlerFunc {
+func (server *MetaServer) getDashboardDataHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providers, err := server.db.FindAllProviders()
 		if err != nil {
@@ -163,5 +166,17 @@ func (server *MetaServer) getDashboardHandler() http.HandlerFunc {
 		}
 
 		json.NewEncoder(w).Encode(resp)
+	})
+}
+
+func (server *MetaServer) getDashboardHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			server.logger.Println("could not get package directory")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.ServeFile(w, r, path.Join(path.Dir(filename), "public/dashboard.html"))
 	})
 }

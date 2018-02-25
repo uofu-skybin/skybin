@@ -1,27 +1,39 @@
+var response = null;
+
+var xhttp = new XMLHttpRequest();
+xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+        response = JSON.parse(this.responseText);
+        console.log(response);
+
+        // Create nodes for each of the renters and providers.
+        let nodes = [];
+        for (let renter of response.renters) {
+            nodes.push({id: renter.id, group: 0})
+        }
+        for (let provider of response.providers) {
+            nodes.push({id: provider.id, group: 1})
+        }
+
+        // Create edges for each of the contracts between the renters and providers.
+        let edges = [];
+        for (let contract of response.contracts) {
+            edges.push({from: contract.renterId, to: contract.providerId})
+        }
+
+        let nodeDataSet = new vis.DataSet(nodes);
+        let edgeDataSet = new vis.DataSet(edges);
+
+        let container = document.getElementById('mynetwork');
+        let data = {
+            nodes: nodeDataSet,
+            edges: edgeDataSet,
+        }
+        let options = {};
+        let network = new vis.Network(container, data, options);
+    }
+}
+
 // Get data from metaserver.
-        
-// create an array with nodes
-var nodes = new vis.DataSet([
-    {id: 1, label: 'Node 1'},
-    {id: 2, label: 'Node 2'},
-    {id: 3, label: 'Node 3'},
-    {id: 4, label: 'Node 4'},
-    {id: 5, label: 'Node 5'}
-]);
-
-// create an array with edges
-var edges = new vis.DataSet([
-    {from: 1, to: 3},
-    {from: 1, to: 2},
-    {from: 2, to: 4},
-    {from: 2, to: 5},
-]);
-
-// create a network
-var container = document.getElementById('mynetwork');
-var data = {
-    nodes: nodes,
-    edges: edges
-};
-var options = {};
-var network = new vis.Network(container, data, options);
+xhttp.open("GET", "dashboard.json", true)
+xhttp.send()

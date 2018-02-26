@@ -12,7 +12,7 @@ class RenterAPI:
         resp = requests.get(self.base_url + '/info')
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def reserve_space(self, amount):
         resp = requests.post(self.base_url + '/reserve-storage', json={'amount': amount})
@@ -29,7 +29,7 @@ class RenterAPI:
         resp = requests.post(self.base_url + '/files/upload', json=args)
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def download_file(self, file_id, destination, version_num=None):
         url = self.base_url + '/files/download'
@@ -51,7 +51,7 @@ class RenterAPI:
         })
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def create_folder(self, name):
         url = self.base_url + '/files/create-folder'
@@ -60,7 +60,7 @@ class RenterAPI:
         })
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def share_file(self, file_id, renter_alias):
         resp = requests.post(self.base_url + '/files/share', json={
@@ -69,7 +69,7 @@ class RenterAPI:
         })
         if resp.status_code != 200:
             raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def remove_file(self, file_id, version_num=None):
         url = '{}/files/remove'.format(self.base_url)
@@ -84,10 +84,10 @@ class RenterAPI:
         resp = requests.get(self.base_url + '/files')
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))
 
     def list_shared_files(self):
         resp = requests.get(self.base_url + '/files/shared')
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content)
+        return json.loads(resp.content.decode('utf-8'))

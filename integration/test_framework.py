@@ -32,6 +32,9 @@ SKYBIN_CMD = '../skybin'
 def rand_port():
     return random.randint(32 * 1024, 64 * 1024)
 
+def create_renter_alias():
+    return 'renter_' + ''.join(str(random.randint(1, 9)) for _ in range(6))
+
 def update_config_file(path, **kwargs):
     """Update a json config file"""
     with open(path, 'r') as config_file:
@@ -43,8 +46,8 @@ def update_config_file(path, **kwargs):
 
 def create_file_name():
     """Create a randomized name for a test file."""
-    prefixes = ['homework', 'notes', 'photo', ]
-    unique_chars = ''.join(random.choice(string.ascii_lowercase) for _ in range(4))
+    prefixes = ['homework', 'notes', 'photo', 'doc']
+    unique_chars = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
     suffixes = ['.txt', '.jpg', '.doc']
     filename = ''.join([random.choice(prefixes), unique_chars, random.choice(suffixes)])
     return filename
@@ -224,14 +227,12 @@ class TestContext:
         for r in self.additional_renters:
             r.teardown(rm_files)
 
-def create_metaserver():
+def create_metaserver(api_addr=None):
     """Create and start a new metaserver instance"""
-
-    port = rand_port()
-    address = '127.0.0.1:{}'.format(port)
-    args = [SKYBIN_CMD, 'metaserver', '-addr', address]
+    api_addr = api_addr or '127.0.0.1:{}'.format(rand_port())
+    args = [SKYBIN_CMD, 'metaserver', '-addr', api_addr]
     process = subprocess.Popen(args, stderr=subprocess.PIPE)
-    return Service(process=process, address=address)
+    return Service(process=process, address=api_addr)
 
 def init_renter(homedir, alias, metaserver_addr, api_addr):
     """Set up a skybin renter directory"""
@@ -244,11 +245,15 @@ def init_renter(homedir, alias, metaserver_addr, api_addr):
         _, stderr = process.communicate()
         raise ValueError('renter init failed. stderr={}'.format(stderr))
 
-def init_provider(homedir, metaserver_addr, public_api_addr):
+def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=None):
     """Set up a skybin provider directory"""
-    args = [SKYBIN_CMD, 'provider', 'init', '-homedir', homedir,
+    args = [SKYBIN_CMD, 'provider', 'init',
+            '-homedir', homedir,
             '-meta-addr', metaserver_addr,
             '-public-api-addr', public_api_addr]
+    if storage_space != None:
+        args.append('-storage-space')
+        args.append(str(storage_space))
     process = subprocess.Popen(args, stderr=subprocess.PIPE)
     if process.wait() != 0:
         _, stderr = process.communicate()
@@ -275,19 +280,21 @@ def create_renter(metaserver_addr, repo_dir, alias):
 
     return RenterService(process=process, address=api_addr, homedir=homedir)
 
-def create_provider(metaserver_addr, repo_dir):
+def create_provider(metaserver_addr, repo_dir,
+                    api_addr=None,
+                    storage_space=None):
     """Create and start a new provider instance."""
 
     homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
-    # retry if provider directory already exists
-    while os.path.exists(homedir) == True:
+    while os.path.exists(homedir):
         homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
 
-    api_addr = '127.0.0.1:{}'.format(rand_port())
+    api_addr = api_addr or '127.0.0.1:{}'.format(rand_port())
     init_provider(
         homedir,
         metaserver_addr=metaserver_addr,
         public_api_addr=api_addr,
+        storage_space=storage_space,
     )
 
     # Start the provider daemon with no local API
@@ -322,7 +329,7 @@ def setup_test(num_providers=1,
     if not os.path.exists(repo_dir):
         os.makedirs(repo_dir)
     if not renter_alias:
-        renter_alias = 'test_renter' + ''.join(str(random.randint(1, 9)) for _ in range(4))
+        renter_alias = create_renter_alias()
     ctxt = TestContext(test_file_dir=test_file_dir,
                        log_enabled=log_enabled,
                        remove_test_files=remove_test_files,
@@ -342,7 +349,7 @@ def setup_test(num_providers=1,
                 create_renter(
                     ctxt.metaserver.address, 
                     repo_dir=repo_dir, 
-                    alias='test_renter' + ''.join(str(random.randint(1, 9)) for _ in range(4))
+                    alias=create_renter_alias(),
                 )
             )
         time.sleep(1.0)

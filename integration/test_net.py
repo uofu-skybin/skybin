@@ -145,11 +145,17 @@ class TestNet:
         #   - Have 1 or more files
         #   - Have enough free space to upload any test file
         r = random.random()
-        if r < 0.5:
+        if r < 0.4 or len(files) < 10:
             self.log_op(renter_info, 'uploading file')
             input_file = self._pick_test_file()
             dest_path = create_dest_path(files)
             renter.upload_file(input_file, dest_path)
+            return
+
+        if r < 0.6:
+            self.log_op(renter_info, 'removing file')
+            f = random.choice(files)
+            renter.remove_file(f['id'])
             return
 
         if r < 0.9:

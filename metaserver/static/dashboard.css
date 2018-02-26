@@ -13,7 +13,6 @@ body, html {
 }
 
 #network-container {
-    padding: 0;
     height: 100%;
 }
 
@@ -25,4 +24,16 @@ body, html {
 #my-network {
     width: 100%;
     height: 100%;
+}
+
+#bottom-content-container {
+    height: 40%;
+}
+
+#chart-container {
+    height: 100%;
+}
+
+.row-container {
+    padding: 10px 0 10px 0;
 }

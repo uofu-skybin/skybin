@@ -176,16 +176,22 @@ func (provider *Provider) addStat(op string, bytes int64) {
 	// This could potentially be moved to loadFromDisk
 	numStats := len(provider.stats.TimeStamps)
 	if numStats == 0 {
-		provider.stats.TimeStamps = append(provider.stats.TimeStamps, t)
-		provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
-		provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
-		provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
-		provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
-		provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
-		provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
-		provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
-		provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
-		numStats++
+		curr := t
+		i := 0
+		for i < 24 {
+			i++
+			curr = curr.Add(-d)
+			provider.stats.TimeStamps = append(provider.stats.TimeStamps, curr)
+			provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
+			provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
+			provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
+			provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
+			provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
+			provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
+			provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
+			provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
+			numStats++
+		}
 	}
 
 	currTime := provider.stats.TimeStamps[numStats-1]
@@ -223,7 +229,7 @@ func (provider *Provider) addStat(op string, bytes int64) {
 	}
 
 	// Drop any activity older than a day
-	statCount := int(time.Hour * 24 / d)
+	statCount := 24 // int(time.Hour * 24 / d)
 	if len(provider.stats.TimeStamps) > statCount {
 		idx := len(provider.stats.TimeStamps) - statCount
 		provider.stats.TimeStamps = provider.stats.TimeStamps[idx:]
@@ -255,7 +261,7 @@ func (provider *Provider) GetInfo() *Info {
 		StorageAllocated: provider.Config.SpaceAvail,
 		StorageReserved:  provider.stats.StorageReserved,
 		StorageUsed:      provider.stats.StorageUsed,
-		StorageFree:      provider.Config.SpaceAvail - provider.stats.StorageUsed,
+		StorageFree:      provider.Config.SpaceAvail - provider.stats.StorageReserved - provider.stats.StorageUsed,
 		TotalContracts:   len(provider.contracts),
 	}
 }

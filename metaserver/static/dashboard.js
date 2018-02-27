@@ -72,7 +72,7 @@ xhttp.onreadystatechange = function() {
         
         let labels = [];
         for (let i = 0; i < 7; i++) {
-            labels[i] = weekdays[(currentWeekday + i) % 7];
+            labels[i] = weekdays[((currentWeekday + 6) - i) % 7];
         }
 
         // Get number of contracts formed over last 7 weekdays.
@@ -159,7 +159,7 @@ xhttp.onreadystatechange = function() {
                 },
                 title: {
                     display: true,
-                    text: "Number of Contracts Established in Last 7 Days"
+                    text: "Uploads Over Time"
                 }
             }
         });
@@ -194,7 +194,7 @@ xhttp.onreadystatechange = function() {
                 },
                 title: {
                     display: true,
-                    text: "Number of Contracts Established in Last 7 Days"
+                    text: "File Size Distribution"
                 }
             }
         });

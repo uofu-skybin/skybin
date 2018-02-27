@@ -279,6 +279,10 @@ def create_provider(metaserver_addr, repo_dir):
     """Create and start a new provider instance."""
 
     homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
+    # retry if provider directory already exists
+    while os.path.exists(homedir) == True:
+        homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
+
     api_addr = '127.0.0.1:{}'.format(rand_port())
     init_provider(
         homedir,

@@ -39,15 +39,15 @@
             </div>
         </div>
 
-        <div id="bottom-content-container" class="row-container row">
-                <div class="col-12">
-                    <div id="charts-container" class="card">
-                        <div class="chart-container">
-                            <canvas id="contracts-over-time" class="chart"></canvas>
-                        </div>
-                    </div>
+        <div id="bottom-content-container" class="row-container">
+            <div id="charts-container" class="card">
+                <div class="chart-container row">
+                    <canvas id="contracts-over-time" class="chart col-4"></canvas>
+                    <canvas id="uploads-over-time" class="chart col-4"></canvas>
+                    <canvas id="file-size-distribution" class="chart col-4"></canvas>
                 </div>
             </div>
+        </div>
     </div>
     <script type="text/javascript" src="dashboard.js"></script>
 </body>

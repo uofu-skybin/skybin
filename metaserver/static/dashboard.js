@@ -114,9 +114,87 @@ xhttp.onreadystatechange = function() {
                 scales: {
                     yAxes: [{
                         ticks: {
-                            beginAtZero:true
-                        }
+                            beginAtZero:true,
+                            stepSize:1,
+                        },
                     }]
+                },
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: "Number of Contracts Established in Last 7 Days"
+                }
+            }
+        });
+
+        let uot = document.getElementById("uploads-over-time").getContext('2d');
+        let uploadsOverTime = new Chart(uot, {
+            type: 'line',
+            data: {
+                // labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+                labels: labels.reverse(),
+                datasets: [{
+                    label: '# of Contracts',
+                    // data: [12, 19, 3, 5, 2, 3],
+                    data: numContracts,
+                    backgroundColor: chartColors.blue,
+                    borderColor: chartColors.blue,
+                    fill: false,
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero:true,
+                            stepSize:1,
+                        },
+                    }]
+                },
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: "Number of Contracts Established in Last 7 Days"
+                }
+            }
+        });
+
+        let fsd = document.getElementById("file-size-distribution").getContext('2d');
+        let fileSizeDistribution = new Chart(fsd, {
+            type: 'line',
+            data: {
+                // labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+                labels: labels.reverse(),
+                datasets: [{
+                    label: '# of Contracts',
+                    // data: [12, 19, 3, 5, 2, 3],
+                    data: numContracts,
+                    backgroundColor: chartColors.blue,
+                    borderColor: chartColors.blue,
+                    fill: false,
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero:true,
+                            stepSize:1,
+                        },
+                    }]
+                },
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: "Number of Contracts Established in Last 7 Days"
                 }
             }
         });

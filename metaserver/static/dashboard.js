@@ -1,5 +1,15 @@
 var response = null;
 
+let chartColors = {
+	red: 'rgb(255, 99, 132)',
+	orange: 'rgb(255, 159, 64)',
+	yellow: 'rgb(255, 205, 86)',
+	green: 'rgb(75, 192, 192)',
+	blue: 'rgb(54, 162, 235)',
+	purple: 'rgb(153, 102, 255)',
+	grey: 'rgb(231,233,237)'
+};
+
 var xhttp = new XMLHttpRequest();
 xhttp.onreadystatechange = function() {
     // Dictionaries to hold renter and provider information (we use this to retrieve it quickly).
@@ -57,32 +67,46 @@ xhttp.onreadystatechange = function() {
             }
         });
 
+        const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        let currentWeekday = new Date().getDay();
+        
+        let labels = [];
+        for (let i = 0; i < 7; i++) {
+            labels[i] = weekdays[(currentWeekday + i) % 7];
+        }
+
+        // Get number of contracts formed over last 7 weekdays.
+        let numContracts = [];
+        for (let i = 0; i < 7; i++) {
+            let currDate = new Date();
+            currDate.setDate(currDate.getDate() - 7 + i);
+
+            let currNumber = 0;
+            for (let contract of response.contracts) {
+                let contractDate = new Date(contract.startDate);
+                if (contractDate.getDate() == currDate.getDate() && contractDate.getFullYear() == currDate.getFullYear() && 
+                  contractDate.getMonth() == currDate.getMonth()) {
+                    currNumber++;
+                }
+            }
+            
+            numContracts[i] = currNumber;
+        }
+
         // Create "contracts over time" chart.
         let cot = document.getElementById("contracts-over-time").getContext('2d');
         let contractsOverTime = new Chart(cot, {
-            type: 'bar',
+            type: 'line',
             data: {
-                labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+                // labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+                labels: labels.reverse(),
                 datasets: [{
-                    label: '# of Votes',
-                    data: [12, 19, 3, 5, 2, 3],
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.2)',
-                        'rgba(54, 162, 235, 0.2)',
-                        'rgba(255, 206, 86, 0.2)',
-                        'rgba(75, 192, 192, 0.2)',
-                        'rgba(153, 102, 255, 0.2)',
-                        'rgba(255, 159, 64, 0.2)'
-                    ],
-                    borderColor: [
-                        'rgba(255,99,132,1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)',
-                        'rgba(255, 159, 64, 1)'
-                    ],
-                    borderWidth: 1
+                    label: '# of Contracts',
+                    // data: [12, 19, 3, 5, 2, 3],
+                    data: numContracts,
+                    backgroundColor: chartColors.blue,
+                    borderColor: chartColors.blue,
+                    fill: false,
                 }]
             },
             options: {

@@ -185,13 +185,22 @@ class TestContext:
         for filename in self._test_files:
             os.remove(filename)
 
-    def create_test_file(self, size):
+    def create_test_file(self, size, parent_folder=None):
         """Create a test file. Returns the file's name."""
+        parent_folder = parent_folder or self.test_file_dir
         file_name = create_file_name()
-        file_path = '{}/{}'.format(self.test_file_dir, file_name)
+        file_path = '{}/{}'.format(parent_folder, file_name)
         create_test_file(file_path, size)
         self._test_files.append(file_path)
         return file_path
+
+    def create_test_folder(self, parent_folder=None):
+        """Create a test folder. Returns the folder's name."""
+        parent_folder = parent_folder or self.test_file_dir
+        folder_name = 'folder' + str(random.randint(1, 1000))
+        folder_path = '{}/{}'.format(parent_folder, folder_name)
+        os.makedirs(folder_path)
+        return folder_path
 
     def create_output_path(self):
         """Get an output path that a file can be downloaded to."""
@@ -347,8 +356,8 @@ def setup_test(num_providers=1,
         for i in range(num_additional_renters):
             ctxt.additional_renters.append(
                 create_renter(
-                    ctxt.metaserver.address, 
-                    repo_dir=repo_dir, 
+                    ctxt.metaserver.address,
+                    repo_dir=repo_dir,
                     alias=create_renter_alias(),
                 )
             )

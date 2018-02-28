@@ -19,31 +19,55 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"strings"
+	"time"
 
 	"github.com/klauspost/reedsolomon"
 )
 
-func (r *Renter) Download(fileId string, destPath string, versionNum *int) error {
+type BlockDownloadInfo struct {
+	BlockId     string `json:"blockId"`
+	ProviderId  string `json:"providerId"`
+	Location    string `json:"location"`
+	TotalTimeMs int64  `json:"totalTimeMs"`
+	Error       string `json:"error,omitempty"`
+}
+
+type FileDownloadInfo struct {
+	FileId      string               `json:"fileId"`
+	Name        string               `json:"name"`
+	IsDir       bool                 `json:"isDir"`
+	VersionNum  int                  `json:"versionNum"`
+	DestPath    string               `json:"destPath"`
+	TotalTimeMs int64                `json:"totalTimeMs"`
+	Blocks      []*BlockDownloadInfo `json:"blocks"`
+}
+
+type DownloadInfo struct {
+	TotalTimeMs int64               `json:"totalTimeMs"`
+	Files       []*FileDownloadInfo `json:"files"`
+}
+
+func (r *Renter) Download(fileId string, destPath string, versionNum *int) (*DownloadInfo, error) {
 	file, err := r.GetFile(fileId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if file.IsDir && versionNum != nil {
-		return errors.New("Cannot give version option with folder download")
+		return nil, errors.New("Cannot give version option with folder download")
 	}
 
 	// Download to home directory if no destination given
 	if len(destPath) == 0 {
 		destPath, err = defaultDownloadLocation(file)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if file.IsDir {
 		return r.downloadDir(file, destPath)
 	}
 	if len(file.Versions) == 0 {
-		return errors.New("File has no versions")
+		return nil, errors.New("File has no versions")
 	}
 
 	// Download the latest version by default
@@ -51,68 +75,141 @@ func (r *Renter) Download(fileId string, destPath string, versionNum *int) error
 	if versionNum != nil {
 		version = findVersion(file, *versionNum)
 		if version == nil {
-			return fmt.Errorf("Cannot find version %d", *versionNum)
+			return nil, fmt.Errorf("Cannot find version %d", *versionNum)
 		}
 	}
-	return r.performDownload(file, version, destPath)
+	fileInfo, err := r.downloadFile(file, version, destPath)
+	if err != nil {
+		return nil, err
+	}
+	return &DownloadInfo{
+		TotalTimeMs: fileInfo.TotalTimeMs,
+		Files:       []*FileDownloadInfo{fileInfo},
+	}, nil
 }
 
 // Downloads a folder tree, including all subfolders and files.
 // This may partially succeed, in that some children of the folder may
 // be downloaded while others may fail.
-func (r *Renter) downloadDir(dir *core.File, destPath string) error {
-	err := os.MkdirAll(destPath, 0777)
+func (r *Renter) downloadDir(dir *core.File, destPath string) (*DownloadInfo, error) {
+	startTime := time.Now()
+	fileInfo, err := r.performDirDownload(dir, destPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	endTime := time.Now()
+	totalTimeMs := toMilliseconds(endTime.Sub(startTime))
+	return &DownloadInfo{
+		TotalTimeMs: totalTimeMs,
+		Files:       fileInfo,
+	}, nil
+}
+
+// Downloads a single version of a single file.
+func (r *Renter) downloadFile(file *core.File, version *core.Version, destPath string) (*FileDownloadInfo, error) {
+	startTime := time.Now()
+	blockInfo, err := r.performFileDownload(file, version, destPath)
+	if err != nil {
+		return nil, err
+	}
+	endTime := time.Now()
+	totalTimeMs := toMilliseconds(endTime.Sub(startTime))
+	return &FileDownloadInfo{
+		FileId:      file.ID,
+		Name:        file.Name,
+		IsDir:       false,
+		VersionNum:  version.Num,
+		DestPath:    destPath,
+		TotalTimeMs: totalTimeMs,
+		Blocks:      blockInfo,
+	}, nil
+}
+
+func (r *Renter) performDirDownload(dir *core.File, destPath string) ([]*FileDownloadInfo, error) {
+	var fileSummaries []*FileDownloadInfo
+	dirInfo, err := mkdir(dir, destPath)
+	if err != nil {
+		return nil, err
+	}
+	fileSummaries = append(fileSummaries, dirInfo)
 	children := r.findChildren(dir)
 	for _, child := range children {
 		relPath := strings.TrimPrefix(child.Name, dir.Name+"/")
 		fullPath := path.Join(destPath, relPath)
 		if child.IsDir {
-			err = os.MkdirAll(fullPath, 0777)
+			dirInfo, err = mkdir(child, fullPath)
 			if err != nil {
-				return fmt.Errorf("Unable to create folder %s. Error: %s", fullPath, err)
+				return nil, fmt.Errorf("Unable to create folder %s. Error: %s", fullPath, err)
 			}
+			fileSummaries = append(fileSummaries, dirInfo)
 			continue
 		}
 		if len(child.Versions) == 0 {
-			return fmt.Errorf("File %s has no versions to download.", child.Name)
+			return nil, fmt.Errorf("File %s has no versions to download.", child.Name)
 		}
 		version := &child.Versions[len(child.Versions)-1]
-		err = r.performDownload(child, version, fullPath)
+		fileInfo, err := r.downloadFile(child, version, fullPath)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		fileSummaries = append(fileSummaries, fileInfo)
 	}
-	return nil
+	return fileSummaries, nil
 }
 
-// Download a version of a file.
-func (r *Renter) performDownload(file *core.File, version *core.Version, destPath string) error {
-	var blockFiles []*os.File
+func (r *Renter) performFileDownload(file *core.File, version *core.Version, destPath string) ([]*BlockDownloadInfo, error) {
+	var blockInfos []*BlockDownloadInfo
 	successes := 0
 	failures := 0
+	var blockFiles []*os.File
 	for i := 0; successes < version.NumDataBlocks && failures <= version.NumParityBlocks; i++ {
 		temp, err := ioutil.TempFile("", "skybin_download")
 		if err != nil {
-			return fmt.Errorf("Cannot create temp file. Error: %s", err)
+			return nil, fmt.Errorf("Cannot create temp file. Error: %s", err)
 		}
 		defer temp.Close()
 		defer os.Remove(temp.Name())
-		err = r.downloadBlock(file.OwnerID, &version.Blocks[i], temp)
+		block := &version.Blocks[i]
+		blockInfo := &BlockDownloadInfo{
+			BlockId:    block.ID,
+			ProviderId: block.Location.ProviderId,
+			Location:   block.Location.Addr,
+		}
+		startTime := time.Now()
+		err = r.downloadBlock(file.OwnerID, block, temp)
+		endTime := time.Now()
+		totalTimeMs := toMilliseconds(endTime.Sub(startTime))
+		blockInfo.TotalTimeMs = totalTimeMs
 		if err == nil {
 			successes++
 			blockFiles = append(blockFiles, temp)
 		} else {
 			failures++
 			blockFiles = append(blockFiles, nil)
+			blockInfo.Error = err.Error()
 		}
+		blockInfos = append(blockInfos, blockInfo)
 	}
 	if successes < version.NumDataBlocks {
-		return errors.New("Failed to download enough file data blocks.")
+		return nil, errors.New("Failed to download enough file data blocks.")
 	}
-	if failures > 0 {
+	needsReconstruction := failures > 0
+	err := r.finishDownload(file, version, destPath, blockFiles, needsReconstruction)
+	if err != nil {
+		return nil, err
+	}
+	return blockInfos, nil
+}
+
+// Completes a file download by reconstructing the file from data and parity blocks (if necessary),
+// then decrypting it, decompressing it, and writing it to the destination path.
+// blockFiles should be a slice of the files' data and parity blocks, in order,
+// with blockFiles[i] set to nil if block i could not be downloaded. The number
+// of non-nil elements in blockFiles should equal the number of data blocks in the file.
+func (r *Renter) finishDownload(file *core.File, version *core.Version, destPath string,
+	blockFiles []*os.File, needsReconstruction bool) error {
+
+	if needsReconstruction {
 
 		// Reconstruct file from parity blocks
 		for _, blockFile := range blockFiles {
@@ -241,10 +338,10 @@ func (r *Renter) downloadBlock(renterId string, block *core.Block, out *os.File)
 	defer blockReader.Close()
 	n, err := io.Copy(out, blockReader)
 	if err != nil {
-		return fmt.Errorf("Cannot write block %s to local file. Error: %s", block.ID, err)
+		return fmt.Errorf("Cannot write block to local file. Error: %s", err)
 	}
 	if n != block.Size {
-		return errors.New("Downloaded block has incorrect size.")
+		return errors.New("Corrupted block: block has incorrect size.")
 	}
 	_, err = out.Seek(0, os.SEEK_SET)
 	if err != nil {
@@ -257,10 +354,9 @@ func (r *Renter) downloadBlock(renterId string, block *core.Block, out *os.File)
 	}
 	blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
 	if blockHash != block.Sha256Hash {
-		return errors.New("Block hash does not match expected.")
+		return errors.New("Corrupted block: block hash does not match that expected.")
 	}
 	return nil
-
 }
 
 // Decrypts and returns f's AES key and AES IV.
@@ -323,6 +419,20 @@ func defaultDownloadLocation(f *core.File) (string, error) {
 	return destPath, nil
 }
 
+func mkdir(dir *core.File, destPath string) (*FileDownloadInfo, error) {
+	err := os.MkdirAll(destPath, 0777)
+	if err != nil {
+		return nil, err
+	}
+	return &FileDownloadInfo{
+		FileId:   dir.ID,
+		Name:     dir.Name,
+		IsDir:    true,
+		DestPath: destPath,
+		Blocks:   []*BlockDownloadInfo{},
+	}, nil
+}
+
 func convertToWriterSlice(files []*os.File) []io.Writer {
 	var res []io.Writer
 	for _, f := range files {
@@ -350,7 +460,6 @@ func convertToReaderSlice(files []*os.File) []io.Reader {
 	return res
 }
 
-
 func findVersion(file *core.File, versionNum int) *core.Version {
 	for i := 0; i < len(file.Versions); i++ {
 		if file.Versions[i].Num == versionNum {
@@ -358,4 +467,8 @@ func findVersion(file *core.File, versionNum int) *core.Version {
 		}
 	}
 	return nil
+}
+
+func toMilliseconds(d time.Duration) int64 {
+	return int64(d.Seconds() * 1000.0)
 }

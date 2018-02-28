@@ -42,6 +42,7 @@ class RenterAPI:
         resp = requests.post(url, json=args)
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))
 
     def rename_file(self, file_id, name):
         url = self.base_url + '/files/rename'

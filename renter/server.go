@@ -167,7 +167,7 @@ func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = server.renter.Download(req.FileId, req.DestPath, req.VersionNum)
+	downloadInfo, err := server.renter.Download(req.FileId, req.DestPath, req.VersionNum)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,
@@ -175,7 +175,7 @@ func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	server.writeResp(w, http.StatusCreated, &errorResp{})
+	server.writeResp(w, http.StatusCreated, downloadInfo)
 }
 
 type createFolderReq struct {

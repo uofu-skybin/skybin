@@ -74,6 +74,23 @@ type Activity struct {
 	StorageReservations []int `json:"storageReservations"`
 }
 
+// TODO: I don't think this is the right way to nest these structures...
+type Recents struct {
+	Hour Summary `json:"hour"`
+	Day  Summary `json:"day"`
+	Week Summary `json:"week"`
+}
+type Summary struct {
+	BlockUploads        int `json:"blockUploads"`
+	BlockDownloads      int `json:"blockDownloads"`
+	BlockDeletions      int `json:"blockDeletions"`
+	StorageReservations int `json:"storageReservations"`
+}
+type getStatsResp struct {
+	RecentSummary   Recents  `json:"recentSummary"`
+	ActivityCounter Activity `json:"activityCounters"`
+}
+
 type BlockInfo struct {
 	BlockId string `json:"blockId"`
 	Size    int64  `json:"blockSize"`
@@ -134,6 +151,15 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.stats = s.Stats
 		provider.renters = s.Renters
 	}
+	// Recalculate storage reserved and used
+	// alternatively: store in snapshot and/or move to maintenance
+	// provider.StorageReserved = 0
+	// provider.StorageUsed = 0
+	for _, r := range provider.renters {
+		provider.StorageReserved += r.StorageReserved
+		provider.StorageUsed += r.StorageUsed
+	}
+
 	// 12 - 5 minute intervals
 	provider.stats.Hour.Interval = time.Minute * 5
 	provider.stats.Hour.Cycles = 12
@@ -154,10 +180,9 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 
 // Add statistics in Time Series format for charting
 func (provider *Provider) addActivity(op string, bytes int64) {
-
 	metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
 	for _, act := range metrics {
-		// add and cycle activity as needed
+		// add and cycle activity within metric as needed
 		provider.cycleActivity(act)
 
 		// update data in current frame
@@ -165,8 +190,6 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 		if op == "upload" {
 			act.BlockUploads[idx]++
 			act.BytesUploaded[idx] += bytes
-			provider.TotalBlocks++
-			provider.StorageUsed -= bytes
 		}
 		if op == "download" {
 			act.BlockDownloads[idx]++
@@ -174,14 +197,24 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 		}
 		if op == "delete" {
 			act.BlockDeletions[idx]++
-			provider.TotalBlocks--
-			provider.StorageUsed += bytes
 		}
 		if op == "contract" {
 			act.StorageReservations[idx]++
-			provider.StorageReserved += bytes
 		}
 	}
+	// update provider information
+	if op == "upload" {
+		provider.TotalBlocks++
+		provider.StorageUsed += bytes
+	}
+	if op == "delete" {
+		provider.TotalBlocks--
+		provider.StorageUsed -= bytes
+	}
+	if op == "contract" {
+		provider.StorageReserved += bytes
+	}
+
 }
 
 // takes in a pointer to an activity cycle and adds any new activity cycles

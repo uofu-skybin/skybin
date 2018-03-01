@@ -62,7 +62,11 @@ func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 	// don't change any metrics but cycle data as needed
 	server.provider.addActivity("update", 0)
-	server.writeResp(w, http.StatusOK, server.provider.stats)
+
+	resp := getStatsResp{
+		ActivityCounter: server.provider.stats.Day,
+	}
+	server.writeResp(w, http.StatusOK, resp)
 }
 
 func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {

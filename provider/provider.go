@@ -84,11 +84,6 @@ type Activity struct {
 	StorageReservations []int `json:"storageReservations"`
 }
 
-// type TimeSeries struct {
-// 	Time time.Time `json:"time"`
-// 	Data int64     `json:"data"`
-// }
-
 type BlockInfo struct {
 	BlockId string `json:"blockId"`
 	Size    int64  `json:"blockSize"`
@@ -180,62 +175,79 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 // Add statistics in Time Series format for charting
 func (provider *Provider) addActivity(op string, bytes int64) {
 	// Time increment to distinguish stats (intentionally short for dev purposes)
-	d := 5 * time.Minute
+	// d := 5 * time.Minute
 
 	// // Round current time to nearest time increment
-	t := time.Now()
-	t = t.Truncate(d)
+	// t := time.Now()
+	// t = t.Truncate(d)
 
-	// add and cycle old activity as needed
-	provider.newActivity(&provider.stats.Hour)
-	provider.newActivity(&provider.stats.Day)
-	provider.newActivity(&provider.stats.Week)
+	// provider.newActivity(&provider.stats.Hour)
+	// provider.newActivity(&provider.stats.Day)
+	// provider.newActivity(&provider.stats.Week)
 
-	// if op == "upload" {
-	// 	provider.statsUploadBlocks[numStats-1]++
-	// 	provider.stats.UploadBytes[numStats-1] += bytes
-	// }
-	// if op == "download" {
-	// 	provider.stats.DownloadBlocks[numStats-1]++
-	// 	provider.stats.DownloadBytes[numStats-1] += bytes
-	// }
-	// if op == "delete" {
-	// 	provider.stats.DeleteBlocks[numStats-1]++
-	// 	provider.stats.DeleteBytes[numStats-1] += bytes
-	// }
-	// if op == "negotiate" {
-	// 	provider.stats.NewContracts[numStats-1]++
-	// 	provider.stats.ContractSize[numStats-1] += bytes
-	// }
+	metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
+	for _, act := range metrics {
+		// add and cycle activity as needed
+		provider.newActivity(act)
 
+		// update data in current frame
+		idx := len(act.Timestamps) - 1
+		if op == "upload" {
+			act.BlockUploads[idx]++
+			act.BytesUploaded[idx] += bytes
+			provider.TotalBlocks++
+			provider.StorageUsed -= bytes
+		}
+		if op == "download" {
+			act.BlockDownloads[idx]++
+			act.BytesDownloaded[idx] += bytes
+		}
+		if op == "delete" {
+			act.BlockDeletions[idx]++
+			provider.TotalBlocks--
+			provider.StorageUsed += bytes
+		}
+		if op == "contract" {
+			act.StorageReservations[idx]++
+			provider.StorageReserved += bytes
+		}
+	}
 }
 
 // takes in a pointer to an activity cycle and adds any new activity cycles
 // and discards old cycles
-func (provider *Provider) newActivity(act *Activity) error {
+func (provider *Provider) newActivity(act *Activity) {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
 
 	// Round current time to nearest time increment
 	t := time.Now()
 	t = t.Truncate(act.Interval)
 
 	// if no activity is present add a starting activity
+	// if len(act.Timestamps) == 0 {
+	// 	// current time - (intervals * cycles)
+	// 	start := t.Add(-1 * act.Interval * time.Duration(act.Cycles))
+	// 	act.Timestamps = append(act.Timestamps, start)
+
+	// 	act.BlockUploads = append(act.BlockUploads, 0)
+	// 	act.BlockDownloads = append(act.BlockDownloads, 0)
+	// 	act.BlockDeletions = append(act.BlockDeletions, 0)
+
+	// 	act.BytesUploaded = append(act.BytesUploaded, 0)
+	// 	act.BytesDownloaded = append(act.BytesDownloaded, 0)
+
+	// 	act.StorageReservations = append(act.StorageReservations, 0)
+	// }
+
+	var currTime time.Time
+	// if no timestamps set to oldest interval within the frame
 	if len(act.Timestamps) == 0 {
-		// current time - (intervals * cycles)
-		start := t.Add(-1 * act.Interval * time.Duration(act.Cycles))
-		act.Timestamps = append(act.Timestamps, start)
-
-		act.BlockUploads = append(act.BlockUploads, 0)
-		act.BlockDownloads = append(act.BlockDownloads, 0)
-		act.BlockDeletions = append(act.BlockDeletions, 0)
-
-		act.BytesUploaded = append(act.BytesUploaded, 0)
-		act.BytesDownloaded = append(act.BytesDownloaded, 0)
-
-		act.StorageReservations = append(act.StorageReservations, 0)
+		currTime = t.Add(-1 * act.Interval * time.Duration(act.Cycles))
+	} else {
+		currTime = act.Timestamps[len(act.Timestamps)-1]
 	}
-
-	// Fills in empty intervals from most recent frame with 0's
-	currTime := act.Timestamps[len(act.Timestamps)-1]
+	// Fill in empty intervals from most recent frame with 0's
 	if currTime != t {
 		for currTime != t {
 			currTime = currTime.Add(act.Interval)
@@ -266,7 +278,6 @@ func (provider *Provider) newActivity(act *Activity) error {
 
 		act.StorageReservations = act.StorageReservations[idx:]
 	}
-	return nil
 }
 
 type Info struct {

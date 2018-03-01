@@ -95,22 +95,22 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Update stats
-	server.provider.StorageUsed += n
-	server.provider.TotalBlocks += 1
-	renter.StorageUsed += n
-	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
-
 	// activity := Activity{
 	// 	RequestType: postBlockType,
 	// 	BlockId:     blockID,
 	// 	RenterId:    renterID,
 	// 	TimeStamp:   time.Now(),
 	// }
-
-	// server.provider.addStat("upload", n)
-
+	// Update stats
+	// server.provider.StorageUsed += n
+	// server.provider.TotalBlocks++
 	// server.provider.addActivity(activity)
+
+	renter.StorageUsed += n
+	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
+
+	server.provider.addActivity("upload", n)
+
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
@@ -149,8 +149,9 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	// fi, err := f.Stat()
-	// server.provider.addStat("download", fi.Size())
+
+	fi, err := f.Stat()
+	server.provider.addActivity("download", fi.Size())
 
 	// activity := Activity{
 	// 	RequestType: getBlockType,
@@ -159,6 +160,10 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 	// 	RenterId:    renterID,
 	// }
 	// server.provider.addActivity(activity)
+	err = server.provider.saveSnapshot()
+	if err != nil {
+		server.logger.Println("Error saving snapshot: ", err)
+	}
 
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, f)
@@ -218,14 +223,6 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	for i, block := range renter.Blocks {
-		if block.BlockId == blockID {
-			renter.Blocks = append(renter.Blocks[:i], renter.Blocks[i+1:]...)
-			server.provider.StorageUsed -= fi.Size()
-			renter.StorageUsed -= fi.Size()
-		}
-	}
-	server.provider.addActivity("delete", fi.Size())
 	// activity := Activity{
 	// 	RequestType: deleteBlockType,
 	// 	BlockId:     blockID,
@@ -233,6 +230,15 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 	// 	RenterId:    renterID,
 	// }
 	// server.provider.addActivity(activity)
+
+	for i, block := range renter.Blocks {
+		if block.BlockId == blockID {
+			renter.Blocks = append(renter.Blocks[:i], renter.Blocks[i+1:]...)
+			renter.StorageUsed -= fi.Size()
+		}
+	}
+	server.provider.addActivity("delete", fi.Size())
+
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Error saving snapshot: ", err)

@@ -66,7 +66,8 @@ func (server *localServer) getActivity(w http.ResponseWriter, r *http.Request) {
 
 // This could potentially replace getActivity (which is not currently used)
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
-	// server.provider.addStat("update", 0)
+	// don't change any metrics but cycle data as needed
+	server.provider.addActivity("update", 0)
 	server.writeResp(w, http.StatusOK, server.provider.stats)
 }
 

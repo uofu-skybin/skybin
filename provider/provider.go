@@ -35,6 +35,10 @@ type Provider struct {
 	activity   []Activity
 	renters    map[string]*RenterInfo
 	mu         sync.Mutex
+
+	StorageReserved int64 `json:"storageReserved"`
+	StorageUsed     int64 `json:"storageUsed"`
+	TotalBlocks     int   `json:"totalBlocks"`
 }
 
 const (
@@ -46,22 +50,38 @@ const (
 )
 
 // Provider node statistics
-// TODO: revisit the naming scheme
 type Stats struct {
-	StorageReserved int64 `json:"storageReserved"`
-	StorageUsed     int64 `json:"storageUsed"`
+	Hour Activity `json:"hour"`
+	Day  Activity `json:"day"`
+	Week Activity `json:"week"`
+}
 
-	// This structure is somewhat messy as it is designed to be plug and play
-	// with the chart.js data model
-	TimeStamps     []time.Time `json:"time"`
-	UploadBytes    []int64     `json:"uploadBytes"`
-	UploadBlocks   []int64     `json:"uploadBlocks"`
-	DownloadBytes  []int64     `json:"downloadBytes"`
-	DownloadBlocks []int64     `json:"downloadBlocks"`
-	DeleteBytes    []int64     `json:"deleteBytes"`
-	DeleteBlocks   []int64     `json:"deleteBlocks"`
-	ContractCount  []int64     `json:"contractCount"`
-	ContractSize   []int64     `json:"contractSize"`
+// recentSummary: [{
+// 	period: ‘hour’ | ‘day’ | ‘week’
+// 	counters: {
+// 		blockUploads: int,
+// 		blockDownloads: int,
+// 		blockDeletions: int,
+// 		storageReservations: int,
+// 	}
+// ],
+
+type Activity struct {
+	// time interval to truncate time
+	Interval time.Duration `json:"interval"`
+	// number of activity cycles to save
+	Cycles int `json:"cycles"`
+
+	Timestamps []time.Time `json:"timestamps"`
+
+	BlockUploads   []int64 `json:"blockUploads"`
+	BlockDownloads []int64 `json:"blockDownloads"`
+	BlockDeletions []int64 `json:"blockDeletions"`
+
+	BytesUploaded   []int64 `json:"bytesUploaded"`
+	BytesDownloaded []int64 `json:"bytesDownloaded"`
+
+	StorageReservations []int `json:"storageReservations"`
 }
 
 // type TimeSeries struct {
@@ -78,14 +98,6 @@ type RenterInfo struct {
 	StorageUsed     int64            `json:"storageUsed"`
 	Contracts       []*core.Contract `json:"contracts"`
 	Blocks          []*BlockInfo     `json:"blocks"`
-}
-
-type Activity struct {
-	RequestType string         `json:"requestType,omitempty"`
-	BlockId     string         `json:"blockId,omitempty"`
-	RenterId    string         `json:"renterId,omitempty"`
-	TimeStamp   time.Time      `json:"time,omitempty"`
-	Contract    *core.Contract `json:"contract,omitempty"`
 }
 
 const (
@@ -147,6 +159,15 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		provider.stats = s.Stats
 		provider.renters = s.Renters
 	}
+	// 12 - 5 minute intervals
+	provider.stats.Hour.Interval = time.Minute * 5
+	provider.stats.Hour.Cycles = 12
+	// 24 - 1 hour intervals
+	provider.stats.Day.Interval = time.Hour
+	provider.stats.Day.Cycles = 24
+	// 7 - 1 day intervals
+	provider.stats.Week.Interval = time.Hour * 24
+	provider.stats.Week.Cycles = 7
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
 	if err != nil {
@@ -156,92 +177,96 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	return provider, err
 }
 
-func (provider *Provider) addActivity(activity Activity) {
-	provider.activity = append(provider.activity, activity)
-	if len(provider.activity) > maxActivity {
-		// Drop the oldest activity.
-		provider.activity = provider.activity[1:]
-	}
-}
-
 // Add statistics in Time Series format for charting
-func (provider *Provider) addStat(op string, bytes int64) {
+func (provider *Provider) addActivity(op string, bytes int64) {
 	// Time increment to distinguish stats (intentionally short for dev purposes)
 	d := 5 * time.Minute
 
-	// Round current time to nearest time increment
+	// // Round current time to nearest time increment
 	t := time.Now()
 	t = t.Truncate(d)
 
-	// This could potentially be moved to loadFromDisk
-	numStats := len(provider.stats.TimeStamps)
-	if numStats == 0 {
-		curr := t
-		i := 0
-		for i < 24 {
-			i++
-			curr = curr.Add(-d)
-			provider.stats.TimeStamps = append(provider.stats.TimeStamps, curr)
-			provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
-			provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
-			provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
-			provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
-			provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
-			provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
-			provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
-			provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
-			numStats++
-		}
+	// add and cycle old activity as needed
+	provider.newActivity(&provider.stats.Hour)
+	provider.newActivity(&provider.stats.Day)
+	provider.newActivity(&provider.stats.Week)
+
+	// if op == "upload" {
+	// 	provider.statsUploadBlocks[numStats-1]++
+	// 	provider.stats.UploadBytes[numStats-1] += bytes
+	// }
+	// if op == "download" {
+	// 	provider.stats.DownloadBlocks[numStats-1]++
+	// 	provider.stats.DownloadBytes[numStats-1] += bytes
+	// }
+	// if op == "delete" {
+	// 	provider.stats.DeleteBlocks[numStats-1]++
+	// 	provider.stats.DeleteBytes[numStats-1] += bytes
+	// }
+	// if op == "negotiate" {
+	// 	provider.stats.NewContracts[numStats-1]++
+	// 	provider.stats.ContractSize[numStats-1] += bytes
+	// }
+
+}
+
+// takes in a pointer to an activity cycle and adds any new activity cycles
+// and discards old cycles
+func (provider *Provider) newActivity(act *Activity) error {
+
+	// Round current time to nearest time increment
+	t := time.Now()
+	t = t.Truncate(act.Interval)
+
+	// if no activity is present add a starting activity
+	if len(act.Timestamps) == 0 {
+		// current time - (intervals * cycles)
+		start := t.Add(-1 * act.Interval * time.Duration(act.Cycles))
+		act.Timestamps = append(act.Timestamps, start)
+
+		act.BlockUploads = append(act.BlockUploads, 0)
+		act.BlockDownloads = append(act.BlockDownloads, 0)
+		act.BlockDeletions = append(act.BlockDeletions, 0)
+
+		act.BytesUploaded = append(act.BytesUploaded, 0)
+		act.BytesDownloaded = append(act.BytesDownloaded, 0)
+
+		act.StorageReservations = append(act.StorageReservations, 0)
 	}
 
-	currTime := provider.stats.TimeStamps[numStats-1]
+	// Fills in empty intervals from most recent frame with 0's
+	currTime := act.Timestamps[len(act.Timestamps)-1]
 	if currTime != t {
-		// Populate empty timeframes if last timestamp is not current
 		for currTime != t {
-			currTime = currTime.Add(d)
-			provider.stats.TimeStamps = append(provider.stats.TimeStamps, currTime)
-			provider.stats.UploadBlocks = append(provider.stats.UploadBlocks, int64(0))
-			provider.stats.UploadBytes = append(provider.stats.UploadBytes, int64(0))
-			provider.stats.DownloadBlocks = append(provider.stats.DownloadBlocks, int64(0))
-			provider.stats.DownloadBytes = append(provider.stats.DownloadBytes, int64(0))
-			provider.stats.DeleteBlocks = append(provider.stats.DeleteBlocks, int64(0))
-			provider.stats.DeleteBytes = append(provider.stats.DeleteBytes, int64(0))
-			provider.stats.ContractCount = append(provider.stats.ContractCount, int64(0))
-			provider.stats.ContractSize = append(provider.stats.ContractSize, int64(0))
-			numStats++
+			currTime = currTime.Add(act.Interval)
+			act.Timestamps = append(act.Timestamps, currTime)
+
+			act.BlockUploads = append(act.BlockUploads, 0)
+			act.BlockDownloads = append(act.BlockDownloads, 0)
+			act.BlockDeletions = append(act.BlockDeletions, 0)
+
+			act.BytesUploaded = append(act.BytesUploaded, 0)
+			act.BytesDownloaded = append(act.BytesDownloaded, 0)
+
+			act.StorageReservations = append(act.StorageReservations, 0)
 		}
 	}
-	if op == "upload" {
-		provider.stats.UploadBlocks[numStats-1]++
-		provider.stats.UploadBytes[numStats-1] += bytes
-	}
-	if op == "download" {
-		provider.stats.DownloadBlocks[numStats-1]++
-		provider.stats.DownloadBytes[numStats-1] += bytes
-	}
-	if op == "delete" {
-		provider.stats.DeleteBlocks[numStats-1]++
-		provider.stats.DeleteBytes[numStats-1] += bytes
-	}
-	if op == "contract" {
-		provider.stats.ContractCount[numStats-1]++
-		provider.stats.ContractSize[numStats-1] += bytes
-	}
 
-	// Drop any activity older than a day
-	statCount := 24 // int(time.Hour * 24 / d)
-	if len(provider.stats.TimeStamps) > statCount {
-		idx := len(provider.stats.TimeStamps) - statCount
-		provider.stats.TimeStamps = provider.stats.TimeStamps[idx:]
-		provider.stats.UploadBlocks = provider.stats.UploadBlocks[idx:]
-		provider.stats.UploadBytes = provider.stats.UploadBytes[idx:]
-		provider.stats.DownloadBlocks = provider.stats.DownloadBlocks[idx:]
-		provider.stats.DownloadBytes = provider.stats.DownloadBytes[idx:]
-		provider.stats.DeleteBlocks = provider.stats.DeleteBlocks[idx:]
-		provider.stats.DeleteBytes = provider.stats.DeleteBytes[idx:]
-		provider.stats.ContractCount = provider.stats.ContractCount[idx:]
-		provider.stats.ContractSize = provider.stats.ContractSize[idx:]
+	// Discard any out of frame cycles
+	if len(act.Timestamps) > act.Cycles {
+		idx := len(act.Timestamps) - act.Cycles
+		act.Timestamps = act.Timestamps[idx:]
+
+		act.BlockUploads = act.BlockUploads[idx:]
+		act.BlockDownloads = act.BlockDownloads[idx:]
+		act.BlockDeletions = act.BlockDeletions[idx:]
+
+		act.BytesUploaded = act.BytesUploaded[idx:]
+		act.BytesDownloaded = act.BytesDownloaded[idx:]
+
+		act.StorageReservations = act.StorageReservations[idx:]
 	}
+	return nil
 }
 
 type Info struct {
@@ -251,6 +276,8 @@ type Info struct {
 	StorageUsed      int64  `json:"storageUsed"`
 	StorageFree      int64  `json:"storageFree"`
 	TotalContracts   int    `json:"totalContracts"`
+	TotalBlocks      int    `json:"totalBlocks"`
+	TotalRenters     int    `json:"totalRenters"`
 }
 
 func (provider *Provider) GetInfo() *Info {
@@ -259,10 +286,12 @@ func (provider *Provider) GetInfo() *Info {
 	return &Info{
 		ProviderId:       provider.Config.ProviderID,
 		StorageAllocated: provider.Config.SpaceAvail,
-		StorageReserved:  provider.stats.StorageReserved,
-		StorageUsed:      provider.stats.StorageUsed,
-		StorageFree:      provider.Config.SpaceAvail - provider.stats.StorageReserved - provider.stats.StorageUsed,
+		StorageReserved:  provider.StorageReserved,
+		StorageUsed:      provider.StorageUsed,
+		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved - provider.StorageUsed,
 		TotalContracts:   len(provider.contracts),
+		TotalRenters:     len(provider.renters),
+		TotalBlocks:      provider.TotalBlocks,
 	}
 }
 
@@ -303,7 +332,7 @@ func (provider *Provider) UpdateMeta() error {
 		ID:          provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
 		Addr:        provider.Config.PublicApiAddr,
-		SpaceAvail:  provider.Config.SpaceAvail - provider.stats.StorageReserved,
+		SpaceAvail:  provider.Config.SpaceAvail - provider.StorageReserved,
 		StorageRate: provider.Config.StorageRate,
 	}
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
@@ -317,3 +346,19 @@ func (provider *Provider) UpdateMeta() error {
 	}
 	return nil
 }
+
+// type Activity struct {
+// 	RequestType string         `json:"requestType,omitempty"`
+// 	BlockId     string         `json:"blockId,omitempty"`
+// 	RenterId    string         `json:"renterId,omitempty"`
+// 	TimeStamp   time.Time      `json:"time,omitempty"`
+// 	Contract    *core.Contract `json:"contract,omitempty"`
+// }
+
+// func (provider *Provider) addActivity(activity Activity) {
+// 	provider.activity = append(provider.activity, activity)
+// 	if len(provider.activity) > maxActivity {
+// 		// Drop the oldest activity.
+// 		provider.activity = provider.activity[1:]
+// 	}
+// }

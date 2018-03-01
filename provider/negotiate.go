@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"skybin/core"
-	"time"
 )
 
 func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Contract, error) {
@@ -20,7 +19,7 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// Determine if provider has sufficient space available for the contract
-	avail := provider.Config.SpaceAvail - provider.stats.StorageReserved
+	avail := provider.Config.SpaceAvail - provider.StorageReserved
 	if contract.StorageSpace > avail {
 		return nil, errors.New("Provider does not have sufficient storage available")
 	}
@@ -43,17 +42,17 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	}
 	renter.StorageReserved += contract.StorageSpace
 	renter.Contracts = append(renter.Contracts, contract)
-	provider.stats.StorageReserved += contract.StorageSpace
+	provider.StorageReserved += contract.StorageSpace
 	provider.contracts = append(provider.contracts, contract)
 
-	provider.addStat("contract", contract.StorageSpace)
-	activity := Activity{
-		RequestType: negotiateType,
-		Contract:    contract,
-		TimeStamp:   time.Now(),
-		RenterId:    contract.RenterId,
-	}
-	provider.addActivity(activity)
+	// provider.addStat("contract", contract.StorageSpace)
+	// activity := Activity{
+	// 	RequestType: negotiateType,
+	// 	Contract:    contract,
+	// 	TimeStamp:   time.Now(),
+	// 	RenterId:    contract.RenterId,
+	// }
+	// provider.addActivity(activity)
 
 	err = provider.saveSnapshot()
 	if err != nil {

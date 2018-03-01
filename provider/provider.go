@@ -32,7 +32,6 @@ type Provider struct {
 	PrivateKey *rsa.PrivateKey
 	contracts  []*core.Contract
 	stats      Stats
-	activity   []Activity
 	renters    map[string]*RenterInfo
 	mu         sync.Mutex
 
@@ -56,18 +55,9 @@ type Stats struct {
 	Week Activity `json:"week"`
 }
 
-// recentSummary: [{
-// 	period: ‘hour’ | ‘day’ | ‘week’
-// 	counters: {
-// 		blockUploads: int,
-// 		blockDownloads: int,
-// 		blockDeletions: int,
-// 		storageReservations: int,
-// 	}
-// ],
-
+// Structure to cycle activity over a set interval
 type Activity struct {
-	// time interval to truncate time
+	// time interval to truncate time on
 	Interval time.Duration `json:"interval"`
 	// number of activity cycles to save
 	Cycles int `json:"cycles"`
@@ -95,19 +85,6 @@ type RenterInfo struct {
 	Blocks          []*BlockInfo     `json:"blocks"`
 }
 
-const (
-	// Max activity feed size
-	maxActivity = 10
-)
-
-const (
-	// Activity types
-	negotiateType   = "NEGOTIATE CONTRACT"
-	postBlockType   = "POST BLOCK"
-	getBlockType    = "GET BLOCK"
-	deleteBlockType = "DELETE BLOCK"
-)
-
 type snapshot struct {
 	Contracts []*core.Contract       `json:"contracts"`
 	Stats     Stats                  `json:"stats"`
@@ -115,6 +92,9 @@ type snapshot struct {
 }
 
 func (provider *Provider) saveSnapshot() error {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+
 	s := snapshot{
 		Contracts: provider.contracts,
 		Stats:     provider.stats,
@@ -174,21 +154,11 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 
 // Add statistics in Time Series format for charting
 func (provider *Provider) addActivity(op string, bytes int64) {
-	// Time increment to distinguish stats (intentionally short for dev purposes)
-	// d := 5 * time.Minute
-
-	// // Round current time to nearest time increment
-	// t := time.Now()
-	// t = t.Truncate(d)
-
-	// provider.newActivity(&provider.stats.Hour)
-	// provider.newActivity(&provider.stats.Day)
-	// provider.newActivity(&provider.stats.Week)
 
 	metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
 	for _, act := range metrics {
 		// add and cycle activity as needed
-		provider.newActivity(act)
+		provider.cycleActivity(act)
 
 		// update data in current frame
 		idx := len(act.Timestamps) - 1
@@ -216,29 +186,13 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 
 // takes in a pointer to an activity cycle and adds any new activity cycles
 // and discards old cycles
-func (provider *Provider) newActivity(act *Activity) {
+func (provider *Provider) cycleActivity(act *Activity) {
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 
 	// Round current time to nearest time increment
 	t := time.Now()
 	t = t.Truncate(act.Interval)
-
-	// if no activity is present add a starting activity
-	// if len(act.Timestamps) == 0 {
-	// 	// current time - (intervals * cycles)
-	// 	start := t.Add(-1 * act.Interval * time.Duration(act.Cycles))
-	// 	act.Timestamps = append(act.Timestamps, start)
-
-	// 	act.BlockUploads = append(act.BlockUploads, 0)
-	// 	act.BlockDownloads = append(act.BlockDownloads, 0)
-	// 	act.BlockDeletions = append(act.BlockDeletions, 0)
-
-	// 	act.BytesUploaded = append(act.BytesUploaded, 0)
-	// 	act.BytesDownloaded = append(act.BytesDownloaded, 0)
-
-	// 	act.StorageReservations = append(act.StorageReservations, 0)
-	// }
 
 	var currTime time.Time
 	// if no timestamps set to oldest interval within the frame
@@ -357,19 +311,3 @@ func (provider *Provider) UpdateMeta() error {
 	}
 	return nil
 }
-
-// type Activity struct {
-// 	RequestType string         `json:"requestType,omitempty"`
-// 	BlockId     string         `json:"blockId,omitempty"`
-// 	RenterId    string         `json:"renterId,omitempty"`
-// 	TimeStamp   time.Time      `json:"time,omitempty"`
-// 	Contract    *core.Contract `json:"contract,omitempty"`
-// }
-
-// func (provider *Provider) addActivity(activity Activity) {
-// 	provider.activity = append(provider.activity, activity)
-// 	if len(provider.activity) > maxActivity {
-// 		// Drop the oldest activity.
-// 		provider.activity = provider.activity[1:]
-// 	}
-// }

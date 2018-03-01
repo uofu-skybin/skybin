@@ -42,16 +42,8 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	}
 	renter.StorageReserved += contract.StorageSpace
 	renter.Contracts = append(renter.Contracts, contract)
-	// provider.StorageReserved += contract.StorageSpace
-	provider.contracts = append(provider.contracts, contract)
 
-	// provider.addStat("contract", contract.StorageSpace)
-	// activity := Activity{
-	// 	RequestType: negotiateType,
-	// 	Contract:    contract,
-	// 	TimeStamp:   time.Now(),
-	// 	RenterId:    contract.RenterId,
-	// }
+	provider.contracts = append(provider.contracts, contract)
 	provider.addActivity("contract", contract.StorageSpace)
 
 	err = provider.saveSnapshot()

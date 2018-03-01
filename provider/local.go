@@ -30,7 +30,6 @@ func NewLocalServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/config", server.getConfig).Methods("GET")
 	router.HandleFunc("/config", server.postConfig).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
-	router.HandleFunc("/activity", server.getActivity).Methods("GET")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/stats", server.getStats).Methods("GET")
 
@@ -60,11 +59,6 @@ func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) 
 		getContractsResp{Contracts: server.provider.contracts})
 }
 
-func (server *localServer) getActivity(w http.ResponseWriter, r *http.Request) {
-	server.writeResp(w, http.StatusOK, &getActivityResp{Activity: server.provider.activity})
-}
-
-// This could potentially replace getActivity (which is not currently used)
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 	// don't change any metrics but cycle data as needed
 	server.provider.addActivity("update", 0)
@@ -82,6 +76,9 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	server.provider.Config.SpaceAvail = params.SpaceAvail
 	server.provider.Config.StorageRate = params.StorageRate
 	server.provider.Config.PublicApiAddr = params.PublicApiAddr
+	server.provider.Config.LocalApiAddr = params.LocalApiAddr
+
+	//TODO: if local or public addr changed reset provider???
 
 	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
 	if err != nil {
@@ -98,15 +95,11 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
-type getActivityResp struct {
-	Activity []Activity `json:"activity"`
-}
-
 func (server *localServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
 	w.WriteHeader(status)
 	data, err := json.MarshalIndent(body, "", "    ")
 	if err != nil {
-		server.logger.Fatalf("error: cannot to encode response. error: %s", err)
+		server.logger.Fatalf("error: cannot encode response. error: %s", err)
 	}
 	_, err = w.Write(data)
 	if err != nil {

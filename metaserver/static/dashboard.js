@@ -244,16 +244,37 @@ function createUploadsOverTime(files, numberOfDays) {
         });
 }
 
-function bytesToSize(bytes) {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-    if (bytes === 0) return 'n/a'
-    const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)), 10)
-    if (i === 0) return `${bytes} ${sizes[i]})`
-    return `${(bytes / (1024 ** i)).toFixed(1)} ${sizes[i]}`
+function bytesToSize(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+
+    let amt = value;
+    let suffix = 'B';
+
+    if (value >= 1e12) {
+        amt = value / 1e12;
+        suffix = 'TB';
+    } else if (value >= 1e9) {
+        amt = value / 1e9;
+        suffix = 'GB';
+    } else if (value >= 1e6) {
+        amt = value / 1e6;
+        suffix = 'MB';
+    } else if (value >= 1e3) {
+        amt = value / 1e3;
+        suffix = 'KB';
+    }
+
+    if (amt % 1 !== 0) {
+        amt = parseFloat(amt.toFixed(1));
+    }
+
+    return amt + suffix;
 }
 
 function createFileSizeDistribution(files) {
-    const startSize = 1048576; // 10 Mb
+    const startSize = 1000000; // 10 Mb
     const maxSize = 1000000000; // 1 Gb
 
     let sizesToNumber = {};

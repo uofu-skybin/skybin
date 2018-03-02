@@ -223,7 +223,7 @@ function bytesToSize(bytes) {
 }
 
 function createFileSizeDistribution(files) {
-    const startSize = 1000000; // 10 Mb
+    const startSize = 1048576; // 10 Mb
     const maxSize = 1000000000; // 1 Gb
 
     let sizesToNumber = {};

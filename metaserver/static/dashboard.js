@@ -1,3 +1,7 @@
+$(document).ready(function() {
+    
+  });
+
 let response = null;
 
 // Colors to use when creating charts.
@@ -27,12 +31,14 @@ function showNodeInfo(params) {
 
         let numberOfFiles = 0;
         let storageUsed = 0;
+        $('#file-list').empty()
         for (let file of response.files) {
             if (file.ownerId == renter.id) {
                 numberOfFiles++;
                 for (let version of file.versions) {
                     storageUsed += version.uploadSize;
                 }
+                $('#file-list').append('<li>' + file.name + '</li>');
             }
         }
 
@@ -49,6 +55,7 @@ function showNodeInfo(params) {
 
         $('#provider-info').hide();
         $('#renter-info').show();
+        $("#file-list-container").css("max-height", $("#node-info").height()-$("#renter-info").height()-$("#general-info").height());
     }
 
     let provider = providers[params.nodes[0]];
@@ -66,8 +73,26 @@ function showNodeInfo(params) {
         $('#storage-leased').text(bytesToSize(amountReserved));
         $('#storage-offering').text(bytesToSize(amountReserved + provider.spaceAvail));
 
+        $('#file-list').empty()
+        for (let file of response.files) {
+            for (let version of file.versions) {
+                let fileStored = false;
+                for (let block of version.blocks) {
+                    if (block.location.providerId == provider.id) {
+                        $('#file-list').append('<li>' + file.name + '</li>');
+                        fileStored = true;
+                        break;
+                    }
+                }
+                if (fileStored) {
+                    break;
+                }
+            }
+        }
+
         $('#renter-info').hide();
         $('#provider-info').show();
+        $("#file-list-container").css("max-height", $("#node-info").height()-$("#provider-info").height()-$("#general-info").height());
     }
 }
 
@@ -154,7 +179,7 @@ function createContractsOverTime(contracts, numberOfDays) {
         data: {
             labels: days,
             datasets: [{
-                label: '# of Contracts',
+                label: '# of Reservations',
                 data: numberOfContractsPerDay,
                 backgroundColor: chartColors.blue,
                 borderColor: chartColors.blue,
@@ -180,7 +205,7 @@ function createContractsOverTime(contracts, numberOfDays) {
             },
             title: {
                 display: true,
-                text: "Contracts Established Per Day"
+                text: "Storage Reservations Per Day"
             }
         }
     });

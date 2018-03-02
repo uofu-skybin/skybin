@@ -11,6 +11,7 @@ body, html {
 
 #top-content-container {
     height: 60%;
+    max-height: 60%;
 }
 
 #network-container {
@@ -28,10 +29,13 @@ body, html {
 
 #node-info {
     margin: 0;
+    /* overflow-y: scroll; */
+    max-height: calc(100% - 38px);
 }
 
 #node-info p {
     margin: 0;
+    max-height: inherit;
 }
 
 #node-id-container {
@@ -71,4 +75,9 @@ body, html {
 
 .node-type-info {
     display: none;
+    max-height: inherit;
+}
+
+#file-list-container {
+    overflow-y: auto;
 }

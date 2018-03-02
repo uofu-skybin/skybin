@@ -32,21 +32,30 @@
                 <div id="node-info-container" class="card">
                     <h2 id="node-title" class="card-title">Node Details</h2>
                     <div id="node-info" class="card-body">
-                        <p id="node-id-container">Node ID: <span id="node-id"></span></p>
-                        <p>Node type: <span id="node-type"></span></p>
+                        <div id="general-info">
+                            <p id="node-id-container">Node ID: <span id="node-id"></span></p>
+                            <p>Node type: <span id="node-type"></span></p>
+                        </div>
 
                         <div class="node-type-info" id="provider-info">
                             <p>Storage offering: <span id="storage-offering"></span></p>
                             <p>Storage leased: <span id="storage-leased"></span></p>
                             <p>Storage available: <span id="storage-available"></span></p>
+                            Files stored here:
                         </div>
 
                         <div class="node-type-info" id="renter-info">
                             <p>Renter name: <span id="renter-name"></span></p>
-                            <p>Number of files uploaded: <span id="files-uploaded"></span></p>
                             <p>Storage reserved: <span id="storage-reserved"></span></p>
                             <p>Storage used: <span id="storage-used"></span></p>
                             <p>Storage available: <span id="storage-available-renter"></span></p>
+                            <p>Number of files uploaded: <span id="files-uploaded"></span></p>
+                            Files uploaded:
+                        </div>
+
+                        <div id="file-list-container">
+                            <ul id="file-list">
+                            </ul>
                         </div>
                     </div>
                 </div>

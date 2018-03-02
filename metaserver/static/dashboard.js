@@ -64,6 +64,7 @@ function showNodeInfo(params) {
             }
         }
         $('#storage-leased').text(bytesToSize(amountReserved));
+        $('#storage-offering').text(bytesToSize(amountReserved + provider.spaceAvail));
 
         $('#renter-info').hide();
         $('#provider-info').show();
@@ -319,6 +320,7 @@ function createFileSizeDistribution(files) {
                     backgroundColor: chartColors.blue,
                     borderColor: chartColors.blue,
                     fill: false,
+                    lineTension:0
                 }]
             },
             options: {

@@ -176,8 +176,6 @@ function createUploadsOverTime(files, numberOfDays) {
         uploadsPerDay[i] = dates[days[i].toDateString()];
     }
 
-    console.log(uploadsPerDay);
-
     let uot = document.getElementById("uploads-over-time").getContext('2d');
         let uploadsOverTime = new Chart(uot, {
             type: 'line',
@@ -216,6 +214,82 @@ function createUploadsOverTime(files, numberOfDays) {
         });
 }
 
+function bytesToSize(bytes) {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    if (bytes === 0) return 'n/a'
+    const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)), 10)
+    if (i === 0) return `${bytes} ${sizes[i]})`
+    return `${(bytes / (1024 ** i)).toFixed(1)} ${sizes[i]}`
+}
+
+function createFileSizeDistribution(files) {
+    const startSize = 1000000; // 10 Mb
+    const maxSize = 1000000000; // 1 Gb
+
+    let sizesToNumber = {};
+    let fileSizes = [];
+
+    let currSize = startSize;
+    while (currSize < maxSize) {
+        sizesToNumber[currSize] = 0;
+        fileSizes.push(currSize);
+        currSize *= 2;
+    }
+
+    // Round each size to the nearest 10 MB, then place them in the file sizes dictionary.
+    for (let file of files) {
+        for (let version of file.versions) {
+            for (let i = 0; i < fileSizes.length; i++) {
+                let currSize = fileSizes[i];
+                if (version.size < currSize) {
+                    sizesToNumber[currSize]++;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Clean up the labels and create adataset
+    let labels = [];
+    let data = [];
+    for (let i = 0; i < fileSizes.length; i++) {
+        labels[i] = bytesToSize(fileSizes[i]);
+        data[i] = sizesToNumber[fileSizes[i]];
+    }
+
+    let fsd = document.getElementById("file-size-distribution").getContext('2d');
+        let fileSizeDistribution = new Chart(fsd, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '# of Files',
+                    data: data,
+                    backgroundColor: chartColors.blue,
+                    borderColor: chartColors.blue,
+                    fill: false,
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero:true,
+                        },
+                    }]
+                },
+                legend: {
+                    display: false
+                },
+                title: {
+                    display: true,
+                    text: "File Size Distribution"
+                }
+            }
+        });
+}
+
 var xhttp = new XMLHttpRequest();
 xhttp.onreadystatechange = function() {
     // Dictionaries to hold renter and provider information (we use this to retrieve it quickly).
@@ -232,40 +306,7 @@ xhttp.onreadystatechange = function() {
 
         createUploadsOverTime(response.files, 7);
 
-        let fsd = document.getElementById("file-size-distribution").getContext('2d');
-        let fileSizeDistribution = new Chart(fsd, {
-            type: 'line',
-            data: {
-                // labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
-                labels: labels.reverse(),
-                datasets: [{
-                    label: '# of Contracts',
-                    // data: [12, 19, 3, 5, 2, 3],
-                    data: numContracts,
-                    backgroundColor: chartColors.blue,
-                    borderColor: chartColors.blue,
-                    fill: false,
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    yAxes: [{
-                        ticks: {
-                            beginAtZero:true,
-                            stepSize:1,
-                        },
-                    }]
-                },
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: "File Size Distribution"
-                }
-            }
-        });
+        createFileSizeDistribution(response.files);
     }
 }
 

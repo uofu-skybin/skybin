@@ -25,6 +25,28 @@ function showNodeInfo(params) {
         $('#node-type').text('renter');
         $('#renter-name').text(renter.alias);
 
+        let numberOfFiles = 0;
+        let storageUsed = 0;
+        for (let file of response.files) {
+            if (file.ownerId == renter.id) {
+                numberOfFiles++;
+                for (let version of file.versions) {
+                    storageUsed += version.uploadSize;
+                }
+            }
+        }
+
+        let storageReserved = 0;
+        for (let contract of response.contracts) {
+            if (contract.renterId == renter.id) {
+                storageReserved += contract.storageSpace;
+            }
+        }
+        $('#files-uploaded').text(numberOfFiles);
+        $('#storage-used').text(bytesToSize(storageUsed));
+        $('#storage-reserved').text(bytesToSize(storageReserved));
+        $('#storage-available-renter').text(bytesToSize(storageReserved - storageUsed));
+
         $('#provider-info').hide();
         $('#renter-info').show();
     }
@@ -33,7 +55,15 @@ function showNodeInfo(params) {
     if (provider != undefined) {
         $('#node-id').text(provider.id);
         $('#node-type').text('provider');
-        $('#storage-available').text(provider.spaceAvail);
+        $('#storage-available').text(bytesToSize(provider.spaceAvail));
+
+        let amountReserved = 0;
+        for (let contract of response.contracts) {
+            if (contract.providerId == provider.id) {
+                amountReserved += contract.storageSpace;
+            }
+        }
+        $('#storage-leased').text(bytesToSize(amountReserved));
 
         $('#renter-info').hide();
         $('#provider-info').show();

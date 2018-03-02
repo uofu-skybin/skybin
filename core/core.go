@@ -65,7 +65,8 @@ type Block struct {
 type Permission struct {
 
 	// The renter who this permission grants access to
-	RenterId string `json:"renterId"`
+	RenterId    string `json:"renterId"`
+	RenterAlias string `json:"renterAlias"`
 
 	// The file's encryption information encrypted with the user's public key
 	AesKey string `json:"aesKey"`

@@ -68,3 +68,7 @@ body, html {
 .row-container {
     padding: 10px 0 10px 0;
 }
+
+.node-type-info {
+    display: none;
+}

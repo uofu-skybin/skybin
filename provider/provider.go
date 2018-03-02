@@ -71,7 +71,7 @@ type Activity struct {
 	BytesUploaded   []int64 `json:"bytesUploaded"`
 	BytesDownloaded []int64 `json:"bytesDownloaded"`
 
-	StorageReservations []int `json:"storageReservations"`
+	StorageReservations []int64 `json:"storageReservations"`
 }
 
 // TODO: I don't think this is the right way to nest these structures...
@@ -89,6 +89,41 @@ type Summary struct {
 type getStatsResp struct {
 	RecentSummary   Recents  `json:"recentSummary"`
 	ActivityCounter Activity `json:"activityCounters"`
+}
+
+func (provider *Provider) makeStatsResp() *getStatsResp {
+	resp := getStatsResp{
+		ActivityCounter: provider.stats.Day,
+		RecentSummary: Recents{
+			Hour: Summary{
+				BlockUploads:        sum(provider.stats.Hour.BlockUploads),
+				BlockDownloads:      sum(provider.stats.Hour.BlockDownloads),
+				BlockDeletions:      sum(provider.stats.Hour.BlockDeletions),
+				StorageReservations: sum(provider.stats.Hour.StorageReservations),
+			},
+			Day: Summary{
+				BlockUploads:        sum(provider.stats.Day.BlockUploads),
+				BlockDownloads:      sum(provider.stats.Day.BlockDownloads),
+				BlockDeletions:      sum(provider.stats.Day.BlockDeletions),
+				StorageReservations: sum(provider.stats.Day.StorageReservations),
+			},
+			Week: Summary{
+				BlockUploads:        sum(provider.stats.Week.BlockUploads),
+				BlockDownloads:      sum(provider.stats.Week.BlockDownloads),
+				BlockDeletions:      sum(provider.stats.Week.BlockDeletions),
+				StorageReservations: sum(provider.stats.Week.StorageReservations),
+			},
+		},
+	}
+	return &resp
+}
+
+func sum(arr []int64) int {
+	tot := 0
+	for _, i := range arr {
+		tot += int(i)
+	}
+	return tot
 }
 
 type BlockInfo struct {

@@ -130,6 +130,9 @@ func (db *mongoDB) FindAllRenters() ([]core.RenterInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		result = make([]core.RenterInfo, 0)
+	}
 	return result, nil
 }
 
@@ -198,6 +201,9 @@ func (db *mongoDB) FindAllProviders() ([]core.ProviderInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		result = make([]core.ProviderInfo, 0)
+	}
 	return result, nil
 }
 
@@ -248,6 +254,9 @@ func (db *mongoDB) FindAllFiles() ([]core.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		result = make([]core.File, 0)
+	}
 	return result, nil
 }
 
@@ -285,6 +294,9 @@ func (db *mongoDB) FindFilesInRenterDirectory(renterID string) ([]core.File, err
 	if err != nil {
 		return nil, err
 	}
+	if foundFiles == nil {
+		foundFiles = make([]core.File, 0)
+	}
 
 	return foundFiles, nil
 }
@@ -312,6 +324,9 @@ func (db *mongoDB) FindFilesSharedWithRenter(renterID string) ([]core.File, erro
 	err = files.Find(fileSelector).All(&foundFiles)
 	if err != nil {
 		return nil, err
+	}
+	if foundFiles == nil {
+		foundFiles = make([]core.File, 0)
 	}
 
 	return foundFiles, nil
@@ -390,6 +405,9 @@ func (db *mongoDB) FindFilesByOwner(renterID string) ([]core.File, error) {
 	err = c.Find(selector).All(&result)
 	if err != nil {
 		return nil, err
+	}
+	if result == nil {
+		result = make([]core.File, 0)
 	}
 
 	return result, nil
@@ -488,6 +506,9 @@ func (db *mongoDB) RemoveFolderChildren(folder *core.File) ([]core.File, error) 
 	err := files.Find(selector).All(&removed)
 	if err != nil {
 		return nil, err
+	}
+	if removed == nil {
+		removed = make([]core.File, 0)
 	}
 
 	_, err = files.RemoveAll(selector)
@@ -594,6 +615,9 @@ func (db *mongoDB) FindAllContracts() ([]core.Contract, error) {
 	if err != nil {
 		return nil, err
 	}
+	if result == nil {
+		result = make([]core.Contract, 0)
+	}
 	return result, nil
 }
 
@@ -620,6 +644,9 @@ func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, erro
 	err = c.Find(selector).All(&result)
 	if err != nil {
 		return nil, err
+	}
+	if result == nil {
+		result = make([]core.Contract, 0)
 	}
 
 	return result, nil

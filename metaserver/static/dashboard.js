@@ -103,7 +103,7 @@ function setupNetworkAndNodeDetails() {
     network = new vis.Network(container, dataSet, options);
 
     // Set up events so we retrieve information for clicked node.
-    network.on("selectNode", showNodeInfo);
+    network.on("click", showNodeInfo);
 }
 
 function updateNetworkAndNodeDetails() {
@@ -171,6 +171,11 @@ function showNodeInfo(params) {
     /** 
      * Display information about the node in the given parameters.
     */
+    let nodeId = network.getNodeAt({x: params.pointer.DOM.x, y: params.pointer.DOM.y});
+    if (!nodeId) {
+        return
+    } 
+
     let renter = renters[params.nodes[0]];
     if (renter != undefined) {
         $('#node-id').text(renter.id);
@@ -186,7 +191,14 @@ function showNodeInfo(params) {
                 for (let version of file.versions) {
                     storageUsed += version.uploadSize;
                 }
-                $('#file-list').append('<li>' + file.name + '</li>');
+
+                let li = $('<li>')
+                li.append(file.name);
+                li.click(() => {
+                    showFileContractsAndLocations(renter.id, file.id);
+                });
+
+                $('#file-list').append(li);
             }
         }
 
@@ -263,8 +275,34 @@ function showNodeInfo(params) {
     }
 }
 
-function showOrHideBlocks(listItem) {
+function showOrHideBlocks(event) {
     $(this).siblings('.block-list').toggle();
+}
+
+function showFileContractsAndLocations(renterId, fileId) {
+    let nodesToSelect = [renterId];
+    let edgesToSelect = [];
+    for (let file of response.files) {
+        if (file.id == fileId) {
+            if (file.versions.length > 0) {
+                let latestVersion = file.versions[file.versions.length - 1];
+                for (let block of latestVersion.blocks) {
+                    nodesToSelect.push(block.location.providerId);
+                    edgesToSelect.push(block.location.contractId);
+                }
+            }
+            break;
+        }
+    }
+
+    network.setSelection({
+        nodes: nodesToSelect,
+        edges: edgesToSelect,
+    },
+    {
+        unselectAll: true,
+        highlightEdges: false
+    });
 }
 
 function getPreviousDays(numDays) {

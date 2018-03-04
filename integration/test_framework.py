@@ -275,7 +275,9 @@ def create_renter(metaserver_addr, repo_dir, alias):
 
     # Create repo
     homedir = '{}/renter{}'.format(repo_dir, random.randint(1, 1024))
-    api_addr = '127.0.0.1:{}'.format(rand_port())
+    while os.path.exists(homedir):
+    api_addr = '127.0.0.1:{}'.format(rand_port()):
+            homedir = '{}/renter{}'.format(repo_dir, random.randint(1, 1024))
     init_renter(
         homedir,
         alias=alias,

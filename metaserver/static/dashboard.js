@@ -229,7 +229,13 @@ function showNodeInfo(params) {
 
             let latestVersion = file.versions[file.versions.length - 1];
             let listItem = $('<li>');
-            listItem.append(file.name);
+
+            let nameSpan = $('<span>');
+            nameSpan.append(file.name);
+            nameSpan.click(showOrHideBlocks);
+
+
+            listItem.append(nameSpan);
 
             let span = $('<span>', {"style": "display: none;", "class": "block-list text-muted"})
             span.append('<br>Block IDs:<br>')
@@ -246,8 +252,6 @@ function showNodeInfo(params) {
             span.append(blockList);
             listItem.append(span);
 
-            listItem.click(showOrHideBlocks);
-
             if (blockStored) {
                 $('#file-list').append(listItem);
             }
@@ -260,7 +264,7 @@ function showNodeInfo(params) {
 }
 
 function showOrHideBlocks(listItem) {
-    $(this).children('.block-list').toggle();
+    $(this).siblings('.block-list').toggle();
 }
 
 function getPreviousDays(numDays) {

@@ -236,10 +236,12 @@ class TestContext:
         for r in self.additional_renters:
             r.teardown(rm_files)
 
-def create_metaserver(api_addr=None):
+def create_metaserver(api_addr=None, dashboard=False):
     """Create and start a new metaserver instance"""
     api_addr = api_addr or '127.0.0.1:{}'.format(rand_port())
     args = [SKYBIN_CMD, 'metaserver', '-addr', api_addr]
+    if dashboard:
+        args.append('-dash')
     process = subprocess.Popen(args, stderr=subprocess.PIPE)
     return Service(process=process, address=api_addr)
 

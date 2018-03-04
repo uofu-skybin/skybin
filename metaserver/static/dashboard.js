@@ -1,11 +1,5 @@
-$(document).ready(function() {
-    
-  });
-
-let response = null;
-
 // Colors to use when creating charts.
-let chartColors = {
+const chartColors = {
 	red: 'rgb(255, 99, 132)',
 	orange: 'rgb(255, 159, 64)',
 	yellow: 'rgb(255, 205, 86)',
@@ -15,9 +9,163 @@ let chartColors = {
 	grey: 'rgb(231,233,237)'
 };
 
+// Current set of data from the metaserver.
+let response = null;
+
 // Renter and provider mappings used to display their details
 let renters = {};
 let providers = {};
+
+$(document).ready(function() {
+    setupPage();
+    setInterval(updatePage, 2500);
+});
+
+function setupPage() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            response = JSON.parse(this.responseText);
+
+            setupNetworkAndNodeDetails();
+
+            createContractsOverTime(7);
+
+            createUploadsOverTime(7);
+
+            createFileSizeDistribution();
+        }
+    }
+    // Get data from metaserver.
+    xhttp.open("GET", "dashboard.json", true)
+    xhttp.send()
+}
+
+function updatePage() {
+    console.log('Updating!');
+    
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            response = JSON.parse(this.responseText);
+
+            updateNetworkAndNodeDetails();
+        }
+    }
+    // Get data from metaserver.
+    xhttp.open("GET", "dashboard.json", true)
+    xhttp.send()
+}
+
+// Create nodes for each of the renters and providers.
+let network = null;
+
+let nodeDataSet = null;
+let edgeDataSet = null;
+
+function setupNetworkAndNodeDetails() {
+    /**
+     * Build the network graph and node details pane.
+     */
+    let nodes = [];
+
+    renters = {};
+    for (let renter of response.renters) {
+        nodes.push({id: renter.id, group: 0})
+        renters[renter.id] = renter;
+    }
+
+    providers = {};
+    for (let provider of response.providers) {
+        nodes.push({id: provider.id, group: 1})
+        providers[provider.id] = provider;
+    }
+
+    // Create edges for each of the contracts between the renters and providers.
+    let edges = [];
+    for (let contract of response.contracts) {
+        edges.push({
+            id: contract.contractId,
+            from: contract.renterId, 
+            to: contract.providerId
+        })
+    }
+
+    // Build our network.
+    nodeDataSet = new vis.DataSet(nodes);
+    edgeDataSet = new vis.DataSet(edges);
+    let container = document.getElementById('my-network');
+    let dataSet = {
+        nodes: nodeDataSet,
+        edges: edgeDataSet,
+    }
+    let options = {};
+    network = new vis.Network(container, dataSet, options);
+
+    // Set up events so we retrieve information for clicked node.
+    network.on("selectNode", showNodeInfo);
+}
+
+function updateNetworkAndNodeDetails() {
+    /**
+     * Update the network graph.
+     */
+    let nodes = [];
+
+    renters = {};
+    for (let renter of response.renters) {
+        nodes.push({id: renter.id, group: 0})
+        renters[renter.id] = renter;
+    }
+
+    providers = {};
+    for (let provider of response.providers) {
+        nodes.push({id: provider.id, group: 1})
+        providers[provider.id] = provider;
+    }
+
+    // If any of the nodes are not already present, add them to the network.
+    for (let node of nodes) {
+        let existingNode = nodeDataSet.get(node.id)
+        if (!existingNode) {
+            nodeDataSet.add(node);
+        }
+    }
+
+    // If any of the network's nodes are not present in renters or providers, remove them.
+    for (let id of nodeDataSet.getIds()) {
+        if (!renters[id] && !providers[id]) {
+            nodeDataSet.remove(id);
+        }
+    }
+
+    // Create edges for each of the contracts between the renters and providers.
+    let edges = [];
+    let edgeSet = {};
+    for (let contract of response.contracts) {
+        edgeSet[contract.contractId] = true;
+        edges.push({
+            id: contract.contractId,
+            from: contract.renterId, 
+            to: contract.providerId
+        })
+    }
+
+    // If any of the edges are not present in the graph, add them.
+    for (let edge of edges) {
+        let existingEdge = edgeDataSet.get(edge.id)
+        if (!existingEdge) {
+            edgeDataSet.add(edge);
+        }
+    }
+
+    // If any of the network's edges are not present in renters or providers, remove them.
+    for (let id of edgeDataSet.getIds()) {
+        if (!edgeSet[id]) {
+            edgeDataSet.remove(id);
+        }
+    }
+}
 
 function showNodeInfo(params) {
     /** 
@@ -96,47 +244,6 @@ function showNodeInfo(params) {
     }
 }
 
-function setupNetworkAndNodeDetails(data) {
-    /**
-     * Build the network graph and node details pane.
-     */
-
-    // Create nodes for each of the renters and providers.
-    let nodes = [];
-
-    renters = {};
-    for (let renter of data.renters) {
-        nodes.push({id: renter.id, group: 0})
-        renters[renter.id] = renter;
-    }
-
-    providers = {};
-    for (let provider of data.providers) {
-        nodes.push({id: provider.id, group: 1})
-        providers[provider.id] = provider;
-    }
-
-    // Create edges for each of the contracts between the renters and providers.
-    let edges = [];
-    for (let contract of data.contracts) {
-        edges.push({from: contract.renterId, to: contract.providerId})
-    }
-
-    // Build our network.
-    let nodeDataSet = new vis.DataSet(nodes);
-    let edgeDataSet = new vis.DataSet(edges);
-    let container = document.getElementById('my-network');
-    let dataSet = {
-        nodes: nodeDataSet,
-        edges: edgeDataSet,
-    }
-    let options = {};
-    let network = new vis.Network(container, dataSet, options);
-
-    // Set up events so we retrieve information for clicked node.
-    network.on("selectNode", showNodeInfo);
-}
-
 function getPreviousDays(numDays) {
     /** 
      * Create an array containing the specified number of days, moving backward starting with the current day.
@@ -150,7 +257,7 @@ function getPreviousDays(numDays) {
     return days;
 }
 
-function createContractsOverTime(contracts, numberOfDays) {
+function createContractsOverTime(numberOfDays) {
     /** 
      * Create the contracts per day chart
     */
@@ -160,7 +267,7 @@ function createContractsOverTime(contracts, numberOfDays) {
         dates[day.toDateString()] = 0;
     }
 
-    for (let contract of contracts) {
+    for (let contract of response.contracts) {
         let contractDate = new Date(contract.startDate).toDateString();
         if (dates[contractDate] != undefined) {
             dates[contractDate]++;
@@ -196,7 +303,6 @@ function createContractsOverTime(contracts, numberOfDays) {
                 yAxes: [{
                     ticks: {
                         beginAtZero:true,
-                        stepSize:1,
                     },
                 }]
             },
@@ -211,14 +317,14 @@ function createContractsOverTime(contracts, numberOfDays) {
     });
 }
 
-function createUploadsOverTime(files, numberOfDays) {
+function createUploadsOverTime(numberOfDays) {
     let days = getPreviousDays(numberOfDays);
     let dates = {};
     for (let day of days) {
         dates[day.toDateString()] = 0;
     }
 
-    for (let file of files) {
+    for (let file of response.files) {
         for (let version of file.versions) {
             let versionDate = new Date(version.uploadTime).toDateString();
             if (dates[versionDate] != undefined) {
@@ -255,7 +361,6 @@ function createUploadsOverTime(files, numberOfDays) {
                     yAxes: [{
                         ticks: {
                             beginAtZero:true,
-                            stepSize:1,
                         },
                     }]
                 },
@@ -270,36 +375,7 @@ function createUploadsOverTime(files, numberOfDays) {
         });
 }
 
-function bytesToSize(value) {
-    if (value === undefined || value === null) {
-        return '';
-    }
-
-    let amt = value;
-    let suffix = 'B';
-
-    if (value >= 1e12) {
-        amt = value / 1e12;
-        suffix = 'TB';
-    } else if (value >= 1e9) {
-        amt = value / 1e9;
-        suffix = 'GB';
-    } else if (value >= 1e6) {
-        amt = value / 1e6;
-        suffix = 'MB';
-    } else if (value >= 1e3) {
-        amt = value / 1e3;
-        suffix = 'KB';
-    }
-
-    if (amt % 1 !== 0) {
-        amt = parseFloat(amt.toFixed(1));
-    }
-
-    return amt + suffix;
-}
-
-function createFileSizeDistribution(files) {
+function createFileSizeDistribution() {
     const startSize = 1000000; // 10 Mb
     const maxSize = 5000000000; // 5 Gb
 
@@ -314,7 +390,7 @@ function createFileSizeDistribution(files) {
     }
 
     // Round each size to the nearest 10 MB, then place them in the file sizes dictionary.
-    for (let file of files) {
+    for (let file of response.files) {
         for (let version of file.versions) {
             for (let i = 0; i < fileSizes.length; i++) {
                 let currSize = fileSizes[i];
@@ -368,26 +444,31 @@ function createFileSizeDistribution(files) {
         });
 }
 
-var xhttp = new XMLHttpRequest();
-xhttp.onreadystatechange = function() {
-    // Dictionaries to hold renter and provider information (we use this to retrieve it quickly).
-    let renters = {};
-    let providers = {};
-
-    if (this.readyState == 4 && this.status == 200) {
-        response = JSON.parse(this.responseText);
-        console.log(response);
-
-        setupNetworkAndNodeDetails(response);
-
-        createContractsOverTime(response.contracts, 7);
-
-        createUploadsOverTime(response.files, 7);
-
-        createFileSizeDistribution(response.files);
+function bytesToSize(value) {
+    if (value === undefined || value === null) {
+        return '';
     }
-}
 
-// Get data from metaserver.
-xhttp.open("GET", "dashboard.json", true)
-xhttp.send()
+    let amt = value;
+    let suffix = 'B';
+
+    if (value >= 1e12) {
+        amt = value / 1e12;
+        suffix = 'TB';
+    } else if (value >= 1e9) {
+        amt = value / 1e9;
+        suffix = 'GB';
+    } else if (value >= 1e6) {
+        amt = value / 1e6;
+        suffix = 'MB';
+    } else if (value >= 1e3) {
+        amt = value / 1e3;
+        suffix = 'KB';
+    }
+
+    if (amt % 1 !== 0) {
+        amt = parseFloat(amt.toFixed(1));
+    }
+
+    return amt + suffix;
+}

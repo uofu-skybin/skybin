@@ -219,7 +219,7 @@ def setup_test_net(options):
 
     print('starting metaserver')
     meta_addr = '{}:{}'.format(options.ip_addr, options.meta_port)
-    net.metaserver = test_framework.create_metaserver(api_addr=meta_addr)
+    net.metaserver = test_framework.create_metaserver(api_addr=meta_addr, dashboard=True)
 
     # Wait for metaserver to start before starting other services
     time.sleep(1.0)

@@ -3,9 +3,9 @@ package core
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"testing"
 	"time"
-	"encoding/json"
 )
 
 func TestSignVerify(t *testing.T) {
@@ -198,13 +198,13 @@ func TestCompareTerms(t *testing.T) {
 
 func TestSerializeDeserialize(t *testing.T) {
 	c1 := Contract{
-		ID: "cid",
-		RenterId: "renter",
-		ProviderId: "provider",
-		StorageSpace: int64(123456789),
-		StartDate: time.Now().UTC().Round(0),
-		EndDate: time.Now().AddDate(0, 0, 30 * 6),
-		RenterSignature: "dkjadsf",
+		ID:                "cid",
+		RenterId:          "renter",
+		ProviderId:        "provider",
+		StorageSpace:      int64(123456789),
+		StartDate:         time.Now().UTC().Round(0),
+		EndDate:           time.Now().AddDate(0, 0, 30*6),
+		RenterSignature:   "dkjadsf",
 		ProviderSignature: "dlsjojifea",
 	}
 

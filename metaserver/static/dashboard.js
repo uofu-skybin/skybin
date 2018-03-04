@@ -223,18 +223,33 @@ function showNodeInfo(params) {
 
         $('#file-list').empty()
         for (let file of response.files) {
-            for (let version of file.versions) {
-                let fileStored = false;
-                for (let block of version.blocks) {
-                    if (block.location.providerId == provider.id) {
-                        $('#file-list').append('<li>' + file.name + '</li>');
-                        fileStored = true;
-                        break;
-                    }
+            if (file.versions.length == 0) {
+                continue;
+            }
+
+            let latestVersion = file.versions[file.versions.length - 1];
+            let listItem = $('<li>');
+            listItem.append(file.name);
+
+            let span = $('<span>', {"style": "display: none;", "class": "block-list"})
+            span.append('<br>Block IDs:<br>')
+
+            let blockList = $('<ul>')
+            let blockStored = false;
+            for (let block of latestVersion.blocks) {
+                if (block.location.providerId == provider.id) {
+                    blockStored = true;
+                    blockList.append('<li>' + block.id + '</li>');
                 }
-                if (fileStored) {
-                    break;
-                }
+            }
+
+            span.append(blockList);
+            listItem.append(span);
+
+            listItem.click(showOrHideBlocks);
+
+            if (blockStored) {
+                $('#file-list').append(listItem);
             }
         }
 
@@ -242,6 +257,10 @@ function showNodeInfo(params) {
         $('#provider-info').show();
         $("#file-list-container").css("max-height", $("#node-info").height()-$("#provider-info").height()-$("#general-info").height());
     }
+}
+
+function showOrHideBlocks(listItem) {
+    $(this).children('.block-list').toggle();
 }
 
 function getPreviousDays(numDays) {

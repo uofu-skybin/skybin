@@ -78,7 +78,8 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	server.provider.Config.SpaceAvail = params.SpaceAvail
 	server.provider.Config.StorageRate = params.StorageRate
 	server.provider.Config.PublicApiAddr = params.PublicApiAddr
-	server.provider.Config.LocalApiAddr = params.LocalApiAddr
+	// Maybe allow this to be mutated (whether or not we display in UI)
+	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
 
 	//TODO: if local or public addr changed reset provider???
 

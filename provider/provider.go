@@ -74,17 +74,18 @@ type Activity struct {
 	StorageReservations []int64 `json:"storageReservations"`
 }
 
-// TODO: I don't think this is the right way to nest these structures...
 type Recents struct {
 	Hour Summary `json:"hour"`
 	Day  Summary `json:"day"`
 	Week Summary `json:"week"`
+	// Period string `json:"period"`
+	// Counters RecentCounters `json:"counters"`
 }
 type Summary struct {
-	BlockUploads        int `json:"blockUploads"`
-	BlockDownloads      int `json:"blockDownloads"`
-	BlockDeletions      int `json:"blockDeletions"`
-	StorageReservations int `json:"storageReservations"`
+	BlockUploads        int64 `json:"blockUploads"`
+	BlockDownloads      int64 `json:"blockDownloads"`
+	BlockDeletions      int64 `json:"blockDeletions"`
+	StorageReservations int64 `json:"storageReservations"`
 }
 type getStatsResp struct {
 	RecentSummary   Recents  `json:"recentSummary"`
@@ -118,10 +119,10 @@ func (provider *Provider) makeStatsResp() *getStatsResp {
 	return &resp
 }
 
-func sum(arr []int64) int {
-	tot := 0
+func sum(arr []int64) int64 {
+	tot := int64(0)
 	for _, i := range arr {
-		tot += int(i)
+		tot += i
 	}
 	return tot
 }
@@ -218,7 +219,7 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 	metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
 	for _, act := range metrics {
 		// add and cycle activity within metric as needed
-		provider.cycleActivity(act)
+		act.cycleActivity()
 
 		// update data in current frame
 		idx := len(act.Timestamps) - 1
@@ -254,9 +255,7 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 
 // takes in a pointer to an activity cycle and adds any new activity cycles
 // and discards old cycles
-func (provider *Provider) cycleActivity(act *Activity) {
-	provider.mu.Lock()
-	defer provider.mu.Unlock()
+func (act *Activity) cycleActivity() {
 
 	// Round current time to nearest time increment
 	t := time.Now()
@@ -270,20 +269,18 @@ func (provider *Provider) cycleActivity(act *Activity) {
 		currTime = act.Timestamps[len(act.Timestamps)-1]
 	}
 	// Fill in empty intervals from most recent frame with 0's
-	if currTime != t {
-		for currTime != t {
-			currTime = currTime.Add(act.Interval)
-			act.Timestamps = append(act.Timestamps, currTime)
+	for currTime != t {
+		currTime = currTime.Add(act.Interval)
+		act.Timestamps = append(act.Timestamps, currTime)
 
-			act.BlockUploads = append(act.BlockUploads, 0)
-			act.BlockDownloads = append(act.BlockDownloads, 0)
-			act.BlockDeletions = append(act.BlockDeletions, 0)
+		act.BlockUploads = append(act.BlockUploads, 0)
+		act.BlockDownloads = append(act.BlockDownloads, 0)
+		act.BlockDeletions = append(act.BlockDeletions, 0)
 
-			act.BytesUploaded = append(act.BytesUploaded, 0)
-			act.BytesDownloaded = append(act.BytesDownloaded, 0)
+		act.BytesUploaded = append(act.BytesUploaded, 0)
+		act.BytesDownloaded = append(act.BytesDownloaded, 0)
 
-			act.StorageReservations = append(act.StorageReservations, 0)
-		}
+		act.StorageReservations = append(act.StorageReservations, 0)
 	}
 
 	// Discard any out of frame cycles

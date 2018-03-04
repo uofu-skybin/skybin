@@ -231,7 +231,7 @@ function showNodeInfo(params) {
             let listItem = $('<li>');
             listItem.append(file.name);
 
-            let span = $('<span>', {"style": "display: none;", "class": "block-list"})
+            let span = $('<span>', {"style": "display: none;", "class": "block-list text-muted"})
             span.append('<br>Block IDs:<br>')
 
             let blockList = $('<ul>')

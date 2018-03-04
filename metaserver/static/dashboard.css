@@ -81,3 +81,7 @@ body, html {
 #file-list-container {
     overflow-y: auto;
 }
+
+.block-list {
+    font-size: 0.9em;
+}

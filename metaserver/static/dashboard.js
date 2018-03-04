@@ -28,11 +28,8 @@ function setupPage() {
             response = JSON.parse(this.responseText);
 
             setupNetworkAndNodeDetails();
-
             createContractsOverTime(7);
-
             createUploadsOverTime(7);
-
             createFileSizeDistribution();
         }
     }
@@ -50,6 +47,9 @@ function updatePage() {
             response = JSON.parse(this.responseText);
 
             updateNetworkAndNodeDetails();
+            updateContractsOverTime(7);
+            updateUploadsOverTime(7);
+            updateFileSizeDistribution();
         }
     }
     // Get data from metaserver.
@@ -257,37 +257,25 @@ function getPreviousDays(numDays) {
     return days;
 }
 
+let contractsOverTime = null;
+
 function createContractsOverTime(numberOfDays) {
     /** 
      * Create the contracts per day chart
     */
-    let days = getPreviousDays(numberOfDays);
-    let dates = {};
-    for (let day of days) {
-        dates[day.toDateString()] = 0;
-    }
-
-    for (let contract of response.contracts) {
-        let contractDate = new Date(contract.startDate).toDateString();
-        if (dates[contractDate] != undefined) {
-            dates[contractDate]++;
-        }
-    }
-
-    let numberOfContractsPerDay = [];
-    for (let i = 0; i < days.length; i++) {
-        numberOfContractsPerDay[i] = dates[days[i].toDateString()];
-    }
+    let labelsAndData = calculateContractsOverTime(numberOfDays);
+    let labels = labelsAndData[0];
+    let data = labelsAndData[1];
 
     // Create "contracts over time" chart.
     let cot = document.getElementById("contracts-over-time").getContext('2d');
-    let contractsOverTime = new Chart(cot, {
+    contractsOverTime = new Chart(cot, {
         type: 'line',
         data: {
-            labels: days,
+            labels: labels,
             datasets: [{
                 label: '# of Reservations',
-                data: numberOfContractsPerDay,
+                data: data,
                 backgroundColor: chartColors.blue,
                 borderColor: chartColors.blue,
                 fill: false,
@@ -317,7 +305,95 @@ function createContractsOverTime(numberOfDays) {
     });
 }
 
+function updateContractsOverTime(numberOfDays) {
+    let labelsAndData = calculateContractsOverTime(numberOfDays);
+    let labels = labelsAndData[0];
+    let data = labelsAndData[1];
+
+    contractsOverTime.labels = labels;
+    contractsOverTime.data.datasets[0].data = data;
+
+    contractsOverTime.update();
+}
+
+function calculateContractsOverTime(numberOfDays) {
+    let days = getPreviousDays(numberOfDays);
+    let dates = {};
+    for (let day of days) {
+        dates[day.toDateString()] = 0;
+    }
+
+    for (let contract of response.contracts) {
+        let contractDate = new Date(contract.startDate).toDateString();
+        if (dates[contractDate] != undefined) {
+            dates[contractDate]++;
+        }
+    }
+
+    let numberOfContractsPerDay = [];
+    for (let i = 0; i < days.length; i++) {
+        numberOfContractsPerDay[i] = dates[days[i].toDateString()];
+    }
+
+    return [days, numberOfContractsPerDay];
+}
+
+let uploadsOverTime = null;
+
 function createUploadsOverTime(numberOfDays) {
+    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+    let labels = labelsAndData[0];
+    let data = labelsAndData[1];
+
+    let uot = document.getElementById("uploads-over-time").getContext('2d');
+    uploadsOverTime = new Chart(uot, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '# of Uploads',
+                data: data,
+                backgroundColor: chartColors.blue,
+                borderColor: chartColors.blue,
+                fill: false,
+                lineTension:0,
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                xAxes: [{
+                    type: 'time'
+                }],
+                yAxes: [{
+                    ticks: {
+                        beginAtZero:true,
+                    },
+                }]
+            },
+            legend: {
+                display: false
+            },
+            title: {
+                display: true,
+                text: "Uploads Per Day"
+            }
+        }
+    });
+}
+
+function updateUploadsOverTime(numberOfDays) {
+    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+    let labels = labelsAndData[0];
+    let data = labelsAndData[1];
+
+    uploadsOverTime.labels = labels;
+    uploadsOverTime.data.datasets[0].data = data;
+
+    uploadsOverTime.update();
+}
+
+function calculateUploadsOverTime(numberOfDays) {
     let days = getPreviousDays(numberOfDays);
     let dates = {};
     for (let day of days) {
@@ -338,44 +414,60 @@ function createUploadsOverTime(numberOfDays) {
         uploadsPerDay[i] = dates[days[i].toDateString()];
     }
 
-    let uot = document.getElementById("uploads-over-time").getContext('2d');
-        let uploadsOverTime = new Chart(uot, {
-            type: 'line',
-            data: {
-                labels: days,
-                datasets: [{
-                    label: '# of Uploads',
-                    data: uploadsPerDay,
-                    backgroundColor: chartColors.blue,
-                    borderColor: chartColors.blue,
-                    fill: false,
-                    lineTension:0,
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    xAxes: [{
-                        type: 'time'
-                    }],
-                    yAxes: [{
-                        ticks: {
-                            beginAtZero:true,
-                        },
-                    }]
-                },
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: "Uploads Per Day"
-                }
-            }
-        });
+    return [days, uploadsPerDay];
 }
 
+let fileSizeDistribution = null;
+
 function createFileSizeDistribution() {
+    let labelsAndData = calculateFileSizeDistribution();
+    let labels = labelsAndData[0];
+    let data = labelsAndData[1];
+
+    let fsd = document.getElementById("file-size-distribution").getContext('2d');
+    fileSizeDistribution = new Chart(fsd, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '# of Files',
+                data: data,
+                backgroundColor: chartColors.blue,
+                borderColor: chartColors.blue,
+                fill: false,
+                lineTension:0
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero:true,
+                    },
+                }]
+            },
+            legend: {
+                display: false
+            },
+            title: {
+                display: true,
+                text: "File Size Distribution"
+            }
+        }
+    });
+}
+
+function updateFileSizeDistribution() {
+    let labelsAndData = calculateFileSizeDistribution();
+    let data = labelsAndData[1];
+
+    fileSizeDistribution.data.datasets[0].data = data;
+
+    fileSizeDistribution.update();
+}
+
+function calculateFileSizeDistribution() {
     const startSize = 1000000; // 10 Mb
     const maxSize = 5000000000; // 5 Gb
 
@@ -410,38 +502,7 @@ function createFileSizeDistribution() {
         data[i] = sizesToNumber[fileSizes[i]];
     }
 
-    let fsd = document.getElementById("file-size-distribution").getContext('2d');
-        let fileSizeDistribution = new Chart(fsd, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '# of Files',
-                    data: data,
-                    backgroundColor: chartColors.blue,
-                    borderColor: chartColors.blue,
-                    fill: false,
-                    lineTension:0
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    yAxes: [{
-                        ticks: {
-                            beginAtZero:true,
-                        },
-                    }]
-                },
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: "File Size Distribution"
-                }
-            }
-        });
+    return [labels, data];
 }
 
 function bytesToSize(value) {

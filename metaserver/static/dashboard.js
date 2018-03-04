@@ -100,7 +100,11 @@ function setupNetworkAndNodeDetails() {
         nodes: nodeDataSet,
         edges: edgeDataSet,
     }
-    let options = {};
+    let options = {
+        interaction: {
+            selectConnectedEdges: false
+        }
+    };
     network = new vis.Network(container, dataSet, options);
 
     // Set up events so we retrieve information for clicked node.

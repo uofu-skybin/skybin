@@ -100,7 +100,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		ID:          server.provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
 		Addr:        server.provider.Config.PublicApiAddr,
-		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.stats.StorageReserved,
+		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
 		StorageRate: 1,
 	}
 

@@ -50,6 +50,7 @@ function updatePage() {
             updateContractsOverTime(7);
             updateUploadsOverTime(7);
             updateFileSizeDistribution();
+            updateNodeInfo();
         }
     }
     // Get data from metaserver.
@@ -103,7 +104,13 @@ function setupNetworkAndNodeDetails() {
     network = new vis.Network(container, dataSet, options);
 
     // Set up events so we retrieve information for clicked node.
-    network.on("click", showNodeInfo);
+    network.on("click", function(params) {
+        let nodeId = network.getNodeAt({x: params.pointer.DOM.x, y: params.pointer.DOM.y});
+        if (!nodeId) {
+            return
+        } 
+        showNodeInfo(nodeId);
+    });
 }
 
 function updateNetworkAndNodeDetails() {
@@ -167,16 +174,11 @@ function updateNetworkAndNodeDetails() {
     }
 }
 
-function showNodeInfo(params) {
+function showNodeInfo(nodeId) {
     /** 
      * Display information about the node in the given parameters.
     */
-    let nodeId = network.getNodeAt({x: params.pointer.DOM.x, y: params.pointer.DOM.y});
-    if (!nodeId) {
-        return
-    } 
-
-    let renter = renters[params.nodes[0]];
+    let renter = renters[nodeId];
     if (renter != undefined) {
         $('#node-id').text(renter.id);
         $('#node-type').text('renter');
@@ -218,7 +220,7 @@ function showNodeInfo(params) {
         $("#file-list-container").css("max-height", $("#node-info").height()-$("#renter-info").height()-$("#general-info").height());
     }
 
-    let provider = providers[params.nodes[0]];
+    let provider = providers[nodeId];
     if (provider != undefined) {
         $('#node-id').text(provider.id);
         $('#node-type').text('provider');
@@ -233,6 +235,23 @@ function showNodeInfo(params) {
         $('#storage-leased').text(bytesToSize(amountReserved));
         $('#storage-offering').text(bytesToSize(amountReserved + provider.spaceAvail));
 
+        let expandedSet = {};
+        for (let item of $('#file-list').children()) {
+            let name = '';
+            let isExpanded = false;
+            for (let span of $(item).children()) {
+                if ($(span).hasClass('block-list')) {
+                    if ($(span).css('display') != 'none') {
+                        isExpanded = true;
+                    }
+                } else {
+                    name = $(span).text();
+                }
+            }
+            if (isExpanded) {
+                expandedSet[name] = true;
+            }
+        }
         $('#file-list').empty()
         for (let file of response.files) {
             if (file.versions.length == 0) {
@@ -249,7 +268,10 @@ function showNodeInfo(params) {
 
             listItem.append(nameSpan);
 
-            let span = $('<span>', {"style": "display: none;", "class": "block-list text-muted"})
+            let span = $('<span>', {"class": "block-list text-muted"})
+            if (!expandedSet[file.name]) {
+                span.hide();
+            }
             span.append('<br>Block IDs:<br>')
 
             let blockList = $('<ul>')
@@ -273,6 +295,10 @@ function showNodeInfo(params) {
         $('#provider-info').show();
         $("#file-list-container").css("max-height", $("#node-info").height()-$("#provider-info").height()-$("#general-info").height());
     }
+}
+
+function updateNodeInfo() {
+    showNodeInfo($('#node-id').text());
 }
 
 function showOrHideBlocks(event) {

@@ -318,7 +318,7 @@ func (provider *Provider) GetInfo() *Info {
 		StorageAllocated: provider.Config.SpaceAvail,
 		StorageReserved:  provider.StorageReserved,
 		StorageUsed:      provider.StorageUsed,
-		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved - provider.StorageUsed,
+		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
 		TotalContracts:   len(provider.contracts),
 		TotalRenters:     len(provider.renters),
 		TotalBlocks:      provider.TotalBlocks,

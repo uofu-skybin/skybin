@@ -26,13 +26,6 @@ import shutil
 import sys
 import test_framework
 
-# Sizes of files to create for uploads.
-FILE_SIZES = {
-    'small': 1024,
-    'medium': 1024*1024,
-    'large': 50*1024*1024,
-}
-
 # We configure providers with lots of storage space to avoid
 # running out.
 PROVIDER_STORAGE_SPACE = 100 * 1024 * 1024 * 1024
@@ -69,9 +62,8 @@ class TestNet:
 
     def __init__(self):
 
-        # Map of file size name to file names.
-        # e.g. 'small': '/foo/bar'
-        self.files = {}
+        # List of full file names available for uploads
+        self.files = []
 
         # Service objects
         self.metaserver = None
@@ -81,19 +73,11 @@ class TestNet:
         # Command-line options
         self.options = None
 
-        # logging.Logger object
         self.log_file = None
 
     def _pick_test_file(self):
         """Chooses a random test file."""
-        r = random.random()
-        if r < 0.4:
-            size = 'small'
-        elif r < 0.8:
-            size = 'medium'
-        else:
-            size = 'large'
-        return self.files[size]
+        return random.choice(self.files)
 
     def _create_download_path(self):
         """Returns a location to download a file to."""
@@ -123,7 +107,7 @@ class TestNet:
         # If the renter has no files, upload a bunch of small ones to get started.
         if renter_info['totalFiles'] == 0:
             self.log_op(renter_info, 'uploading first files')
-            input_file = self.files['small']
+            input_file = self.files[0]
             for _ in range(20):
                 dest_path = create_dest_path(files)
                 files.append(renter.upload_file(input_file, dest_path))
@@ -135,7 +119,7 @@ class TestNet:
             renter.remove_file(f['id'])
             return
 
-        if renter_info['freeStorage'] <  FILE_SIZES['large']*2:
+        if renter_info['freeStorage'] <  self.options.max_file_size*2:
             self.log_op(renter_info, 'removing file (free storage insufficient for upload)')
             f = random.choice(files)
             renter.remove_file(f['id'])
@@ -211,11 +195,15 @@ def setup_test_net(options):
     print('creating folders and files')
     os.makedirs(options.files_dir)
     os.makedirs(options.repo_dir)
-    for size_str, file_size in FILE_SIZES.items():
+    step_size = int((options.max_file_size - options.min_file_size) / options.num_files)
+    for i in range(options.num_files):
         file_name = test_framework.create_file_name()
         full_path = '{}/{}'.format(options.files_dir, file_name)
+        min_size = options.min_file_size + i * step_size
+        max_size = min_size + step_size
+        file_size = random.randint(min_size, max_size)
         test_framework.create_test_file(full_path, file_size)
-        net.files[size_str] = full_path
+        net.files.append(full_path)
 
     print('starting metaserver')
     meta_addr = '{}:{}'.format(options.ip_addr, options.meta_port)
@@ -273,6 +261,12 @@ def main():
                         help='port to run the public metaserver API at')
     parser.add_argument('--keep_files', action='store_true', default=False,
                         help='whether to keep test files and repo directories when shutting down')
+    parser.add_argument('--num_files', type=int, default=10,
+                        help='number of test files to create for uploads')
+    parser.add_argument('--min_file_size', type=int, default=10000,
+                        help='minimum test file size')
+    parser.add_argument('--max_file_size', type=int, default=10000000,
+                        help='maximum test file size')
 
     args = parser.parse_args()
 
@@ -286,6 +280,8 @@ def main():
             print(('Be sure to either set the repo_dir and files_dir options '
                    'or remove the default directories'))
             sys.exit(1)
+
+    assert args.min_file_size < args.max_file_size, 'min_file_size must be less than max_file_size'
 
     net = setup_test_net(args)
     try:

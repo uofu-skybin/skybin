@@ -84,12 +84,17 @@ function setupNetworkAndNodeDetails() {
 
     // Create edges for each of the contracts between the renters and providers.
     let edges = [];
+    let edgeSet = {};
     for (let contract of response.contracts) {
-        edges.push({
-            id: contract.contractId,
-            from: contract.renterId, 
-            to: contract.providerId
-        })
+        let edgeId = contract.renterId + ' ' + contract.providerId;
+        if (!edgeSet[edgeId]) {
+            edges.push({
+                id: edgeId,
+                from: contract.renterId, 
+                to: contract.providerId
+            })
+            edgeSet[edgeId] = true;
+        }
     }
 
     // Build our network.
@@ -154,12 +159,15 @@ function updateNetworkAndNodeDetails() {
     let edges = [];
     let edgeSet = {};
     for (let contract of response.contracts) {
-        edgeSet[contract.contractId] = true;
-        edges.push({
-            id: contract.contractId,
-            from: contract.renterId, 
-            to: contract.providerId
-        })
+        let edgeId = contract.renterId + ' ' + contract.providerId;
+        if (!edgeSet[edgeId]) {
+            edgeSet[edgeId] = true;
+            edges.push({
+                id: edgeId,
+                from: contract.renterId, 
+                to: contract.providerId
+            })
+        }
     }
 
     // If any of the edges are not present in the graph, add them.
@@ -318,7 +326,7 @@ function showFileContractsAndLocations(renterId, fileId) {
                 let latestVersion = file.versions[file.versions.length - 1];
                 for (let block of latestVersion.blocks) {
                     nodesToSelect.push(block.location.providerId);
-                    edgesToSelect.push(block.location.contractId);
+                    edgesToSelect.push(renterId + ' ' + block.location.providerId);
                 }
             }
             break;

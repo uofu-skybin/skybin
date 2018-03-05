@@ -385,13 +385,13 @@ func (r *Renter) performUpload(srcPath string, finfo os.FileInfo, aesKey []byte,
 			done:  false,
 		})
 	}
-	for _, uploads := range uploadsByAddr {
+	for addr, uploads := range uploadsByAddr {
+		client := provider.NewClient(addr, &http.Client{})
+		err = client.AuthorizeRenter(r.privKey, r.Config.RenterId)
+		if err != nil {
+			goto unwind
+		}
 		for _, upload := range uploads {
-			client := provider.NewClient(upload.blob.Addr, &http.Client{})
-			err = client.AuthorizeRenter(r.privKey, r.Config.RenterId)
-			if err != nil {
-				goto unwind
-			}
 			err = client.PutBlock(r.Config.RenterId, upload.block.ID, upload.data)
 			if err != nil {
 				goto unwind

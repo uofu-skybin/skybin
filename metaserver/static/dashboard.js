@@ -326,7 +326,7 @@ function showFileContractsAndLocations(renterId, fileId) {
                 let latestVersion = file.versions[file.versions.length - 1];
                 for (let block of latestVersion.blocks) {
                     nodesToSelect.push(block.location.providerId);
-                    edgesToSelect.push(block.location.contractId);
+                    edgesToSelect.push(renterId + ' ' + block.location.providerId);
                 }
             }
             break;

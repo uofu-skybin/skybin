@@ -19,7 +19,18 @@ let providers = {};
 $(document).ready(function() {
     setupPage();
     setInterval(updatePage, 2500);
+
+    $('#node-id').click(copyToClipboard);
 });
+
+function copyToClipboard(event) {
+    $('#copy-alert').show(0).delay(1000).hide(0);
+    var $temp = $("<input>");
+    $("body").append($temp);
+    $temp.val($(this).text()).select();
+    document.execCommand("copy");
+    $temp.remove();
+}
 
 function setupPage() {
     var xhttp = new XMLHttpRequest();
@@ -291,7 +302,10 @@ function showNodeInfo(nodeId) {
             for (let block of latestVersion.blocks) {
                 if (block.location.providerId == provider.id) {
                     blockStored = true;
-                    blockList.append('<li>' + block.id + '</li>');
+                    let listItem = $('<li>');
+                    listItem.append(block.id);
+                    listItem.click(copyToClipboard);
+                    blockList.append(listItem);
                 }
             }
 

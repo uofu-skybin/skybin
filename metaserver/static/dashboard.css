@@ -85,3 +85,11 @@ body, html {
 .block-list {
     font-size: 0.9em;
 }
+
+#copy-alert {
+    position: absolute;
+    z-index: 5;
+    left: 50%;
+    top: 15px;
+    display: none;
+}

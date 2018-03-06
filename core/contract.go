@@ -73,11 +73,18 @@ func VerifyContractSignature(contract *Contract, signature string, key rsa.Publi
 // CompareContracts returns whether two contracts are the same, that is,
 // that they have the same fields.
 func CompareContracts(c1, c2 Contract) bool {
-	return c1 == c2
+	return CompareContractTerms(&c1, &c2) &&
+		c1.RenterSignature == c2.RenterSignature &&
+		c1.ProviderSignature == c2.ProviderSignature
 }
 
 // CompareContractTerms returns whether the terms of two contracts match.
 // The terms of a contract include all fields except the signatures.
 func CompareContractTerms(c1, c2 *Contract) bool {
-	return makeTerms(c1) == makeTerms(c2)
+	return c1.ID == c2.ID &&
+		c1.RenterId == c2.RenterId &&
+		c1.ProviderId == c2.ProviderId &&
+		c1.StorageSpace == c2.StorageSpace &&
+		c1.StartDate.Equal(c2.StartDate) &&
+		c1.EndDate.Equal(c2.EndDate)
 }

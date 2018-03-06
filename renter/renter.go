@@ -337,9 +337,10 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 	encryptedIV, err := rsa.EncryptOAEP(sha256.New(), rng, pubKey, decryptedIV, nil)
 
 	permission := core.Permission{
-		RenterId: renterInfo.ID,
-		AesKey:   base64.URLEncoding.EncodeToString(encryptedKey),
-		AesIV:    base64.URLEncoding.EncodeToString(encryptedIV),
+		RenterId:    renterInfo.ID,
+		RenterAlias: renterAlias,
+		AesKey:      base64.URLEncoding.EncodeToString(encryptedKey),
+		AesIV:       base64.URLEncoding.EncodeToString(encryptedIV),
 	}
 
 	err = r.authorizeMeta()

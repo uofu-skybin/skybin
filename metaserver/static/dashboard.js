@@ -19,7 +19,18 @@ let providers = {};
 $(document).ready(function() {
     setupPage();
     setInterval(updatePage, 2500);
+
+    $('#node-id').click(copyToClipboard);
 });
+
+function copyToClipboard(event) {
+    $('#copy-alert').show(0).delay(1000).hide(0);
+    var $temp = $("<input>");
+    $("body").append($temp);
+    $temp.val($(this).text()).select();
+    document.execCommand("copy");
+    $temp.remove();
+}
 
 function setupPage() {
     var xhttp = new XMLHttpRequest();
@@ -84,12 +95,17 @@ function setupNetworkAndNodeDetails() {
 
     // Create edges for each of the contracts between the renters and providers.
     let edges = [];
+    let edgeSet = {};
     for (let contract of response.contracts) {
-        edges.push({
-            id: contract.contractId,
-            from: contract.renterId, 
-            to: contract.providerId
-        })
+        let edgeId = contract.renterId + ' ' + contract.providerId;
+        if (!edgeSet[edgeId]) {
+            edges.push({
+                id: edgeId,
+                from: contract.renterId, 
+                to: contract.providerId
+            })
+            edgeSet[edgeId] = true;
+        }
     }
 
     // Build our network.
@@ -154,12 +170,15 @@ function updateNetworkAndNodeDetails() {
     let edges = [];
     let edgeSet = {};
     for (let contract of response.contracts) {
-        edgeSet[contract.contractId] = true;
-        edges.push({
-            id: contract.contractId,
-            from: contract.renterId, 
-            to: contract.providerId
-        })
+        let edgeId = contract.renterId + ' ' + contract.providerId;
+        if (!edgeSet[edgeId]) {
+            edgeSet[edgeId] = true;
+            edges.push({
+                id: edgeId,
+                from: contract.renterId, 
+                to: contract.providerId
+            })
+        }
     }
 
     // If any of the edges are not present in the graph, add them.
@@ -283,7 +302,10 @@ function showNodeInfo(nodeId) {
             for (let block of latestVersion.blocks) {
                 if (block.location.providerId == provider.id) {
                     blockStored = true;
-                    blockList.append('<li>' + block.id + '</li>');
+                    let listItem = $('<li>');
+                    listItem.append(block.id);
+                    listItem.click(copyToClipboard);
+                    blockList.append(listItem);
                 }
             }
 
@@ -318,7 +340,7 @@ function showFileContractsAndLocations(renterId, fileId) {
                 let latestVersion = file.versions[file.versions.length - 1];
                 for (let block of latestVersion.blocks) {
                     nodesToSelect.push(block.location.providerId);
-                    edgesToSelect.push(block.location.contractId);
+                    edgesToSelect.push(renterId + ' ' + block.location.providerId);
                 }
             }
             break;

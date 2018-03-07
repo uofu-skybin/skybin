@@ -17,9 +17,10 @@ import (
 	"skybin/util"
 	"strings"
 
-	"github.com/satori/go.uuid"
 	"log"
 	"time"
+
+	"github.com/satori/go.uuid"
 )
 
 type Renter struct {
@@ -274,7 +275,8 @@ func (r *Renter) ListSharedFiles() ([]*core.File, error) {
 	// Do this to match ListFile's signature, for now.
 	returnList := make([]*core.File, len(files))
 	for i, f := range files {
-		returnList[i] = &f
+		newFile := f
+		returnList[i] = &newFile
 	}
 
 	return returnList, nil

@@ -3,6 +3,7 @@ package metaserver
 import (
 	"encoding/json"
 	"net/http"
+	"path"
 	"skybin/core"
 	"skybin/util"
 	"strconv"
@@ -15,6 +16,14 @@ import (
 type fileResp struct {
 	FileID core.File `json:"file,omitempty"`
 	Error  string    `json:"error,omitempty"`
+}
+
+func userOwnsFile(file *core.File, claims jwt.MapClaims) bool {
+	renterID, present := claims["renterID"]
+	if !present {
+		return false
+	}
+	return renterID.(string) == file.OwnerID
 }
 
 func canAccessFile(file *core.File, claims jwt.MapClaims) bool {
@@ -135,6 +144,9 @@ func (server *MetaServer) getFileHandler() http.HandlerFunc {
 		if !canAccessFile(file, claims) {
 			writeErr("not authorized to access file", http.StatusUnauthorized, w)
 			return
+		}
+		if !userOwnsFile(file, claims) {
+			file.Name = path.Base(file.Name)
 		}
 
 		json.NewEncoder(w).Encode(file)

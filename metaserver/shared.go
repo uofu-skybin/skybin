@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"skybin/util"
 
+	"path"
+
 	"github.com/gorilla/mux"
 )
 
@@ -39,6 +41,9 @@ func (server *MetaServer) getSharedFilesHandler() http.HandlerFunc {
 			resp := errorResp{Error: "internal server error"}
 			json.NewEncoder(w).Encode(resp)
 			return
+		}
+		for i, _ := range files {
+			files[i].Name = path.Base(files[i].Name)
 		}
 		json.NewEncoder(w).Encode(files)
 	})

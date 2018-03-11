@@ -75,9 +75,9 @@ type Activity struct {
 }
 
 type Recents struct {
-	Hour Summary `json:"hour"`
-	Day  Summary `json:"day"`
-	Week Summary `json:"week"`
+	Hour *Summary `json:"hour"`
+	Day  *Summary `json:"day"`
+	Week *Summary `json:"week"`
 	// Period string `json:"period"`
 	// Counters RecentCounters `json:"counters"`
 }
@@ -88,27 +88,27 @@ type Summary struct {
 	StorageReservations int64 `json:"storageReservations"`
 }
 type getStatsResp struct {
-	RecentSummary   Recents  `json:"recentSummary"`
-	ActivityCounter Activity `json:"activityCounters"`
+	RecentSummary   *Recents  `json:"recentSummary"`
+	ActivityCounter *Activity `json:"activityCounters"`
 }
 
 func (provider *Provider) makeStatsResp() *getStatsResp {
 	resp := getStatsResp{
-		ActivityCounter: provider.stats.Day,
-		RecentSummary: Recents{
-			Hour: Summary{
+		ActivityCounter: &provider.stats.Day,
+		RecentSummary: &Recents{
+			Hour: &Summary{
 				BlockUploads:        sum(provider.stats.Hour.BlockUploads),
 				BlockDownloads:      sum(provider.stats.Hour.BlockDownloads),
 				BlockDeletions:      sum(provider.stats.Hour.BlockDeletions),
 				StorageReservations: sum(provider.stats.Hour.StorageReservations),
 			},
-			Day: Summary{
+			Day: &Summary{
 				BlockUploads:        sum(provider.stats.Day.BlockUploads),
 				BlockDownloads:      sum(provider.stats.Day.BlockDownloads),
 				BlockDeletions:      sum(provider.stats.Day.BlockDeletions),
 				StorageReservations: sum(provider.stats.Day.StorageReservations),
 			},
-			Week: Summary{
+			Week: &Summary{
 				BlockUploads:        sum(provider.stats.Week.BlockUploads),
 				BlockDownloads:      sum(provider.stats.Week.BlockDownloads),
 				BlockDeletions:      sum(provider.stats.Week.BlockDeletions),

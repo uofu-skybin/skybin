@@ -9,7 +9,6 @@ import random
 from test_framework import setup_test
 
 def rm_file_test(ctxt):
-    ctxt.log('rm file test')
 
     ctxt.log('reserving space')
     file_size = random.randint(1, 10*1024*1024)
@@ -49,8 +48,6 @@ def rm_file_test(ctxt):
     upload_name = '{}-{}'.format(input_file, 11)
     ctxt.renter.upload_file(input_file, upload_name)
 
-    ctxt.log('ok')
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_providers', type=int, default=3,
@@ -60,7 +57,9 @@ def main():
         num_providers=args.num_providers,
     )
     try:
+        ctxt.log('rm file test')
         rm_file_test(ctxt)
+        ctxt.log('ok')
     finally:
         ctxt.teardown()
 

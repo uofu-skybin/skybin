@@ -184,6 +184,9 @@ func (r *Renter) performFileDownload(file *core.File, version *core.Version, des
 			successes++
 			blockFiles = append(blockFiles, temp)
 		} else {
+			r.logger.Printf("Error downloading block %s for file %s from provider %s\n",
+				block.ID, file.Name, block.Location.ProviderId)
+			r.logger.Println("Error: ", err)
 			failures++
 			blockFiles = append(blockFiles, nil)
 			blockInfo.Error = err.Error()

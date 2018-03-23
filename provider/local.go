@@ -82,6 +82,13 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
 
 	//TODO: if local or public addr changed reset provider???
+	// This is best addressed in the frontend
+
+	err = server.provider.UpdateMeta()
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving updating metaserver"})
+		return
+	}
 
 	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
 	if err != nil {

@@ -46,6 +46,11 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	provider.contracts = append(provider.contracts, contract)
 	provider.addActivity("contract", contract.StorageSpace)
 
+	err = provider.UpdateMeta()
+	if err != nil {
+		return nil, fmt.Errorf("Error updating metaserver: %s", err)
+	}
+
 	err = provider.saveSnapshot()
 	if err != nil {
 

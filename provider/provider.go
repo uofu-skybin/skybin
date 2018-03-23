@@ -153,10 +153,7 @@ func (provider *Provider) saveSnapshot() error {
 		Stats:     provider.stats,
 		Renters:   provider.renters,
 	}
-	err := provider.UpdateMeta()
-	if err != nil {
-		return fmt.Errorf("Error updating metaserver: %s", err)
-	}
+
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
 }
 

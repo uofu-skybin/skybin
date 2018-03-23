@@ -13,6 +13,7 @@ import (
 	"skybin/metaserver"
 	"skybin/provider"
 	"skybin/util"
+	"strings"
 )
 
 const providerUsage = `provider <command>
@@ -236,8 +237,9 @@ func runProviderDaemon(args ...string) {
 	}
 
 	server := provider.NewServer(p, logger)
+	port := p.Config.PublicApiAddr[strings.LastIndex(p.Config.PublicApiAddr, ":"):]
 	log.Println("starting public provider server at", p.Config.PublicApiAddr)
-	log.Fatal(http.ListenAndServe(p.Config.PublicApiAddr, server))
+	log.Fatal(http.ListenAndServe(port, server))
 }
 
 var providerInfoCmd = Cmd{

@@ -387,13 +387,13 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	return r.removeFile(file)
 }
 
-func (r *Renter) CreatePaypalPayment(amount float64) (string, error) {
+func (r *Renter) CreatePaypalPayment(amount float64, returnURL, cancelURL string) (string, error) {
 	err := r.authorizeMeta()
 	if err != nil {
 		return "", err
 	}
 
-	id, err := r.metaClient.CreatePaypalPayment(amount)
+	id, err := r.metaClient.CreatePaypalPayment(amount, returnURL, cancelURL)
 	if err != nil {
 		return "", err
 	}

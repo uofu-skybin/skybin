@@ -11,7 +11,9 @@ import (
 )
 
 type CreatePaypalPaymentReq struct {
-	Amount float64 `json:"amount"`
+	Amount    float64 `json:"amount"`
+	ReturnURL string  `json:"returnURL"`
+	CancelURL string  `json:"cancelURL"`
 }
 
 type CreatePaypalPaymentResp struct {
@@ -57,8 +59,8 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 				Description: "My Payment",
 			}},
 			RedirectURLs: &paypalsdk.RedirectURLs{
-				ReturnURL: "/my-wallet",
-				CancelURL: "/my-wallet",
+				ReturnURL: payload.ReturnURL,
+				CancelURL: payload.CancelURL,
 			},
 		}
 		resp, err := c.CreatePayment(p)

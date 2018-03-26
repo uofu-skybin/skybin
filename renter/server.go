@@ -318,7 +318,10 @@ func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	paymentID, err := server.renter.CreatePaypalPayment(amount)
+	returnURL := r.FormValue("returnURL")
+	cancelURL := r.FormValue("cancelURL")
+
+	paymentID, err := server.renter.CreatePaypalPayment(amount, returnURL, cancelURL)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})

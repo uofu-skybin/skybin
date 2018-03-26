@@ -939,10 +939,10 @@ func (client *Client) CreatePaypalPayment(amount int) (string, error) {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		return "", decodeError(resp.Body)
@@ -955,4 +955,43 @@ func (client *Client) CreatePaypalPayment(amount int) (string, error) {
 	}
 
 	return paymentResp.ID, nil
+}
+
+func (client *Client) ExecutePaypalPayment(paymentID, payerID, renterID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/execute", client.addr)
+
+	reqBody := PaypalExecuteReq{
+		PaymentID: paymentID,
+		PayerID:   payerID,
+		RenterID:  renterID,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
 }

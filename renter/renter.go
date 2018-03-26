@@ -401,6 +401,20 @@ func (r *Renter) CreatePaypalPayment(amount int) (string, error) {
 	return id, nil
 }
 
+func (r *Renter) ExecutePaypalPayment(paymentID, payerID, renterID string) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.ExecutePaypalPayment(paymentID, payerID, renterID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Renter) removeFile(file *core.File) error {
 	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
 	if err != nil {

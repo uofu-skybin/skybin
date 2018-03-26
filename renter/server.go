@@ -33,7 +33,8 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
 	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
-	router.HandleFunc("/paypal/create", server.createPayment).Methods("POST")
+	router.HandleFunc("/paypal/create", server.createPaypalPayment).Methods("POST")
+	router.HandleFunc("/paypal/execute", server.executePaypalPayment).Methods("POST")
 
 	return server
 }
@@ -300,7 +301,7 @@ type depositResp struct {
 	ID string `json:"id"`
 }
 
-func (server *renterServer) createPayment(w http.ResponseWriter, r *http.Request) {
+func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.Request) {
 	paymentID, err := server.renter.CreatePaypalPayment(14)
 	if err != nil {
 		server.logger.Println(err)
@@ -309,6 +310,28 @@ func (server *renterServer) createPayment(w http.ResponseWriter, r *http.Request
 	}
 
 	server.writeResp(w, http.StatusOK, &depositResp{ID: paymentID})
+}
+
+func (server *renterServer) executePaypalPayment(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	err = server.renter.ExecutePaypalPayment(
+		r.FormValue("paymentID"),
+		r.FormValue("payerID"),
+		r.FormValue("renterID"),
+	)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

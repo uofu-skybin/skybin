@@ -98,5 +98,5 @@ type Version struct {
 }
 
 type Wallet struct {
-	Balance int `json:"balance"`
+	Balance float64 `json:"balance"`
 }

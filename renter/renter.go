@@ -387,7 +387,7 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	return r.removeFile(file)
 }
 
-func (r *Renter) CreatePaypalPayment(amount int) (string, error) {
+func (r *Renter) CreatePaypalPayment(amount float64) (string, error) {
 	err := r.authorizeMeta()
 	if err != nil {
 		return "", err

@@ -2,6 +2,7 @@ package metaserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"skybin/util"
 	"strconv"
@@ -10,7 +11,7 @@ import (
 )
 
 type CreatePaypalPaymentReq struct {
-	Amount int `json:"amount"`
+	Amount float64 `json:"amount"`
 }
 
 type CreatePaypalPaymentResp struct {
@@ -19,6 +20,14 @@ type CreatePaypalPaymentResp struct {
 
 func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// BUG(kincaid): Perform validation on the amount we recieve.
+		var payload CreatePaypalPaymentReq
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			writeErr("Could not parse payload", http.StatusBadRequest, w)
+			return
+		}
+
 		c, err := paypalsdk.NewClient(
 			"AVxS4Zhi1bwj9ahQx_Rx6x99blBFPNkUkMPOGOxLVGhl3mwjzxJ1RuW_eIqyO7DWempaJLKleD267Jqo",
 			"EEWY_gYzFbIh4xduZ5t-AtuexnSBwgdzA7FmaDeUKF1qAKlgX2RoTFaTRSfD5UUVwuSXSvJrxCUog3cw",
@@ -43,7 +52,7 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 			Transactions: []paypalsdk.Transaction{{
 				Amount: &paypalsdk.Amount{
 					Currency: "USD",
-					Total:    "7.00",
+					Total:    fmt.Sprintf("%.2f", payload.Amount),
 				},
 				Description: "My Payment",
 			}},

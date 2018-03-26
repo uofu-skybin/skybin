@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"skybin/core"
 	"skybin/metaserver"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -302,7 +303,22 @@ type depositResp struct {
 }
 
 func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.Request) {
-	paymentID, err := server.renter.CreatePaypalPayment(14)
+	err := r.ParseForm()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	amountString := r.FormValue("amount")
+	amount, err := strconv.ParseFloat(amountString, 64)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	paymentID, err := server.renter.CreatePaypalPayment(amount)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})

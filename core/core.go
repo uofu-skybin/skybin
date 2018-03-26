@@ -25,6 +25,7 @@ type RenterInfo struct {
 	PublicKey string   `json:"publicKey"`
 	Files     []string `json:"files"`
 	Shared    []string `json:"shared"`
+	Wallet    Wallet   `json:"wallet"`
 }
 
 type Contract struct {
@@ -94,4 +95,8 @@ type Version struct {
 	NumDataBlocks   int       `json:"numDataBlocks"`
 	NumParityBlocks int       `json:"numParityBlocks"`
 	Blocks          []Block   `json:"blocks"`
+}
+
+type Wallet struct {
+	Balance int `json:"balance"`
 }

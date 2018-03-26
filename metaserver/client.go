@@ -915,3 +915,44 @@ func (client *Client) DeleteContract(renterID string, contractID string) error {
 
 	return nil
 }
+
+func (client *Client) CreatePaypalPayment(amount int) (string, error) {
+	if client.token == "" {
+		return "", errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/create", client.addr)
+
+	reqBody := CreatePaypalPaymentReq{Amount: amount}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return "", decodeError(resp.Body)
+	}
+
+	var paymentResp CreatePaypalPaymentResp
+	err = json.NewDecoder(resp.Body).Decode(&paymentResp)
+	if err != nil {
+		return "", err
+	}
+
+	return paymentResp.ID, nil
+}

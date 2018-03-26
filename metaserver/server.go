@@ -89,6 +89,8 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
+	router.Handle("/paypal/create", authMiddleware.Handler(server.getCreatePaypalPaymentHandler())).Methods("POST")
+
 	if showDash {
 		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")
 

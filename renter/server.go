@@ -33,6 +33,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
 	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
+	router.HandleFunc("/paypal/create", server.createPayment).Methods("POST")
 
 	return server
 }
@@ -293,6 +294,21 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type depositResp struct {
+	ID string `json:"id"`
+}
+
+func (server *renterServer) createPayment(w http.ResponseWriter, r *http.Request) {
+	paymentID, err := server.renter.CreatePaypalPayment(14)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &depositResp{ID: paymentID})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

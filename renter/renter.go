@@ -387,6 +387,20 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	return r.removeFile(file)
 }
 
+func (r *Renter) CreatePaypalPayment(amount int) (string, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return "", err
+	}
+
+	id, err := r.metaClient.CreatePaypalPayment(amount)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
 func (r *Renter) removeFile(file *core.File) error {
 	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
 	if err != nil {

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"crypto/rsa"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,6 +14,8 @@ import (
 	"skybin/util"
 	"sync"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Config struct {
@@ -27,14 +30,14 @@ type Config struct {
 }
 
 type Provider struct {
-	Config     *Config
-	Homedir    string //move this maybe
-	PrivateKey *rsa.PrivateKey
-	contracts  []*core.Contract
-	stats      Stats
-	renters    map[string]*RenterInfo
-	mu         sync.Mutex
-
+	Config          *Config
+	Homedir         string //move this maybe
+	PrivateKey      *rsa.PrivateKey
+	contracts       []*core.Contract
+	stats           Stats
+	renters         map[string]*RenterInfo
+	mu              sync.Mutex
+	db              *sql.DB
 	StorageReserved int64 `json:"storageReserved"`
 	StorageUsed     int64 `json:"storageUsed"`
 	TotalBlocks     int   `json:"totalBlocks"`
@@ -164,6 +167,9 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		contracts: make([]*core.Contract, 0),
 		renters:   make(map[string]*RenterInfo, 0),
 	}
+
+	dbPath := path.Join(homedir, "provider.db")
+	provider.db, _ = provider.setup_db(dbPath)
 
 	config := &Config{}
 	err := util.LoadJson(path.Join(homedir, "config.json"), config)

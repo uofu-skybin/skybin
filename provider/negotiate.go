@@ -43,6 +43,8 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	renter.StorageReserved += contract.StorageSpace
 	renter.Contracts = append(renter.Contracts, contract)
 
+	provider.InsertContract(contract)
+	provider.GetContractsByRenter(contract.RenterId)
 	provider.contracts = append(provider.contracts, contract)
 	provider.addActivity("contract", contract.StorageSpace)
 

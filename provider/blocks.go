@@ -94,6 +94,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
 		return
 	}
+	server.provider.InsertBlock(renterID, blockID, n)
 
 	renter.StorageUsed += n
 	renter.Blocks = append(renter.Blocks, &BlockInfo{BlockId: blockID, Size: n})
@@ -212,7 +213,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		}
 	}
 	server.provider.addActivity("delete", fi.Size())
-
+	server.provider.DeleteBlockById(blockID)
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Error saving snapshot: ", err)

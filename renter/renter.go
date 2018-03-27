@@ -126,15 +126,16 @@ func (r *Renter) saveSnapshot() error {
 
 // Info is information about a renter
 type Info struct {
-	ID              string `json:"id"`
-	Alias           string `json:"alias"`
-	ApiAddr         string `json:"apiAddress"`
-	HomeDir         string `json:"homedir"`
-	ReservedStorage int64  `json:"reservedStorage"`
-	FreeStorage     int64  `json:"freeStorage"`
-	UsedStorage     int64  `json:"usedStorage"`
-	TotalContracts  int    `json:"totalContracts"`
-	TotalFiles      int    `json:"totalFiles"`
+	ID              string  `json:"id"`
+	Alias           string  `json:"alias"`
+	ApiAddr         string  `json:"apiAddress"`
+	HomeDir         string  `json:"homedir"`
+	ReservedStorage int64   `json:"reservedStorage"`
+	FreeStorage     int64   `json:"freeStorage"`
+	UsedStorage     int64   `json:"usedStorage"`
+	TotalContracts  int     `json:"totalContracts"`
+	TotalFiles      int     `json:"totalFiles"`
+	Balance         float64 `json:"balance"`
 }
 
 func (r *Renter) Info() (*Info, error) {
@@ -146,6 +147,16 @@ func (r *Renter) Info() (*Info, error) {
 	for _, blob := range r.freelist {
 		free += blob.Amount
 	}
+
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	renter, err := r.metaClient.GetRenter(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Info{
 		ID:              r.Config.RenterId,
 		Alias:           r.Config.Alias,
@@ -156,6 +167,7 @@ func (r *Renter) Info() (*Info, error) {
 		FreeStorage:     free,
 		TotalContracts:  len(r.contracts),
 		TotalFiles:      len(r.files),
+		Balance:         renter.Wallet.Balance,
 	}, nil
 }
 

@@ -999,3 +999,42 @@ func (client *Client) ExecutePaypalPayment(paymentID, payerID, renterID string) 
 
 	return nil
 }
+
+func (client *Client) Withdraw(renterID, email string, amount float64) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/withdraw", client.addr)
+
+	reqBody := PaypalWithdrawReq{
+		RenterID: renterID,
+		Email:    email,
+		Amount:   amount,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}

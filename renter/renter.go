@@ -413,13 +413,27 @@ func (r *Renter) CreatePaypalPayment(amount float64, returnURL, cancelURL string
 	return id, nil
 }
 
-func (r *Renter) ExecutePaypalPayment(paymentID, payerID, renterID string) error {
+func (r *Renter) ExecutePaypalPayment(paymentID, payerID string) error {
 	err := r.authorizeMeta()
 	if err != nil {
 		return err
 	}
 
-	err = r.metaClient.ExecutePaypalPayment(paymentID, payerID, renterID)
+	err = r.metaClient.ExecutePaypalPayment(paymentID, payerID, r.Config.RenterId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Renter) Withdraw(email string, amount float64) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.Withdraw(r.Config.RenterId, email, amount)
 	if err != nil {
 		return err
 	}

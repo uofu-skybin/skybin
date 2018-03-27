@@ -36,6 +36,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
 	router.HandleFunc("/paypal/create", server.createPaypalPayment).Methods("POST")
 	router.HandleFunc("/paypal/execute", server.executePaypalPayment).Methods("POST")
+	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
 
 	return server
 }
@@ -342,7 +343,28 @@ func (server *renterServer) executePaypalPayment(w http.ResponseWriter, r *http.
 	err = server.renter.ExecutePaypalPayment(
 		r.FormValue("paymentID"),
 		r.FormValue("payerID"),
-		r.FormValue("renterID"),
+	)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+func (server *renterServer) withdraw(w http.ResponseWriter, r *http.Request) {
+	var payload metaserver.PaypalWithdrawReq
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	err = server.renter.Withdraw(
+		payload.Email,
+		payload.Amount,
 	)
 	if err != nil {
 		server.logger.Println(err)

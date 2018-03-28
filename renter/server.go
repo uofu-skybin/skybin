@@ -127,7 +127,7 @@ func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Reques
 type uploadFileReq struct {
 	SourcePath      string `json:"sourcePath"`
 	DestPath        string `json:"destPath"`
-	ShouldOverwrite bool   `json:"shouldOverwrite"`
+	ShouldOverwrite bool   `json:"shouldOverwrite,omitempty"`
 }
 
 func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +154,7 @@ func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
 type downloadFileReq struct {
 	FileId     string `json:"fileId"`
 	DestPath   string `json:"destPath"`
-	VersionNum *int   `json:"versionNum"`
+	VersionNum *int   `json:"versionNum,omitempty"`
 }
 
 func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +271,7 @@ func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {
 
 type removeFileReq struct {
 	FileID     string `json:"fileID"`
-	VersionNum *int   `json:"versionNum"`
+	VersionNum *int   `json:"versionNum,omitempty"`
 }
 
 func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {

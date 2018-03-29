@@ -6,14 +6,16 @@ import (
 	"net/http"
 	"skybin/util"
 	"strconv"
+	"strings"
 
 	"github.com/logpacker/PayPal-Go-SDK"
 )
 
 type CreatePaypalPaymentReq struct {
-	Amount    float64 `json:"amount"`
-	ReturnURL string  `json:"returnURL"`
-	CancelURL string  `json:"cancelURL"`
+	// Amount for the payment, in cents.
+	Amount    int    `json:"amount"`
+	ReturnURL string `json:"returnURL"`
+	CancelURL string `json:"cancelURL"`
 }
 
 type CreatePaypalPaymentResp struct {
@@ -22,7 +24,7 @@ type CreatePaypalPaymentResp struct {
 
 func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// BUG(kincaid): Perform validation on the amount we recieve.
+		// TODO: Perform validation on the amount we recieve.
 		var payload CreatePaypalPaymentReq
 		err := json.NewDecoder(r.Body).Decode(&payload)
 		if err != nil {
@@ -46,6 +48,10 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 			return
 		}
 
+		dollars := payload.Amount / 100
+		cents := payload.Amount % 100
+		amount := fmt.Sprintf("%d.%d", dollars, cents)
+
 		p := paypalsdk.Payment{
 			Intent: "sale",
 			Payer: &paypalsdk.Payer{
@@ -54,7 +60,7 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 			Transactions: []paypalsdk.Transaction{{
 				Amount: &paypalsdk.Amount{
 					Currency: "USD",
-					Total:    fmt.Sprintf("%.2f", payload.Amount),
+					Total:    amount,
 				},
 				Description: "My Payment",
 			}},
@@ -134,12 +140,15 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 
 		// BUG(kincaid): Possible race condition here. Add DB operation for atomically incrementing wallet balance.
 		server.logger.Println(resp.Transactions[0].Amount.Total)
-		amount, err := strconv.ParseFloat(resp.Transactions[0].Amount.Total, 64)
+		amountInCents, err := strconv.Atoi(
+			strings.Replace(resp.Transactions[0].Amount.Total, ".", "", 1),
+		)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
-		renter.Wallet.Balance += amount
+		// The renter balance is in tenths of cents, so convert accordingly.
+		renter.Balance += amountInCents * 10
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
@@ -151,9 +160,10 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 }
 
 type PaypalWithdrawReq struct {
-	Amount   float64 `json:"amount"`
-	Email    string  `json:"email"`
-	RenterID string  `json:"renterID"`
+	// Amount to withdraw in cents.
+	Amount   int    `json:"amount"`
+	Email    string `json:"email"`
+	RenterID string `json:"renterID"`
 }
 
 func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
@@ -203,10 +213,14 @@ func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
 		}
 
 		// Fail if the user tries to withdraw more than they currently have.
-		if payload.Amount > renter.Wallet.Balance {
+		if payload.Amount*10 > renter.Balance {
 			writeErr("Cannot withdraw more than balance", http.StatusBadRequest, w)
 			return
 		}
+
+		dollars := payload.Amount / 100
+		cents := payload.Amount % 100
+		amountToWithdraw := fmt.Sprintf("%d.%d", dollars, cents)
 
 		_, err = c.CreateSinglePayout(paypalsdk.Payout{
 			SenderBatchHeader: &paypalsdk.SenderBatchHeader{
@@ -218,7 +232,7 @@ func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
 					Receiver:      payload.Email,
 					Amount: &paypalsdk.AmountPayout{
 						Currency: "USD",
-						Value:    fmt.Sprintf("%.2f", payload.Amount),
+						Value:    amountToWithdraw,
 					},
 					Note: fmt.Sprintf("Renter ID: %s", renter.ID),
 				},
@@ -232,7 +246,7 @@ func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
 		}
 
 		// BUG(kincaid): Possible race condition here. Add DB operation for atomically decrementing wallet balance.
-		renter.Wallet.Balance -= payload.Amount
+		renter.Balance -= payload.Amount * 10
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)

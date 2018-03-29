@@ -126,16 +126,16 @@ func (r *Renter) saveSnapshot() error {
 
 // Info is information about a renter
 type Info struct {
-	ID              string  `json:"id"`
-	Alias           string  `json:"alias"`
-	ApiAddr         string  `json:"apiAddress"`
-	HomeDir         string  `json:"homedir"`
-	ReservedStorage int64   `json:"reservedStorage"`
-	FreeStorage     int64   `json:"freeStorage"`
-	UsedStorage     int64   `json:"usedStorage"`
-	TotalContracts  int     `json:"totalContracts"`
-	TotalFiles      int     `json:"totalFiles"`
-	Balance         float64 `json:"balance"`
+	ID              string `json:"id"`
+	Alias           string `json:"alias"`
+	ApiAddr         string `json:"apiAddress"`
+	HomeDir         string `json:"homedir"`
+	ReservedStorage int64  `json:"reservedStorage"`
+	FreeStorage     int64  `json:"freeStorage"`
+	UsedStorage     int64  `json:"usedStorage"`
+	TotalContracts  int    `json:"totalContracts"`
+	TotalFiles      int    `json:"totalFiles"`
+	Balance         int    `json:"balance"`
 }
 
 func (r *Renter) Info() (*Info, error) {
@@ -167,7 +167,7 @@ func (r *Renter) Info() (*Info, error) {
 		FreeStorage:     free,
 		TotalContracts:  len(r.contracts),
 		TotalFiles:      len(r.files),
-		Balance:         renter.Wallet.Balance,
+		Balance:         renter.Balance,
 	}, nil
 }
 
@@ -221,8 +221,8 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 		for _, child := range children {
 			err := r.metaClient.UpdateFile(r.Config.RenterId, child)
 			if err != nil {
-				return nil, err
 				r.logger.Println("RenameFile: Error updating child's name with metaserver:", err)
+				return nil, err
 			}
 		}
 	}
@@ -399,7 +399,7 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	return r.removeFile(file)
 }
 
-func (r *Renter) CreatePaypalPayment(amount float64, returnURL, cancelURL string) (string, error) {
+func (r *Renter) CreatePaypalPayment(amount int, returnURL, cancelURL string) (string, error) {
 	err := r.authorizeMeta()
 	if err != nil {
 		return "", err
@@ -427,7 +427,7 @@ func (r *Renter) ExecutePaypalPayment(paymentID, payerID string) error {
 	return nil
 }
 
-func (r *Renter) Withdraw(email string, amount float64) error {
+func (r *Renter) Withdraw(email string, amount int) error {
 	err := r.authorizeMeta()
 	if err != nil {
 		return err

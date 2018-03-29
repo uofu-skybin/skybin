@@ -916,7 +916,7 @@ func (client *Client) DeleteContract(renterID string, contractID string) error {
 	return nil
 }
 
-func (client *Client) CreatePaypalPayment(amount float64, returnURL, cancelURL string) (string, error) {
+func (client *Client) CreatePaypalPayment(amount int, returnURL, cancelURL string) (string, error) {
 	if client.token == "" {
 		return "", errors.New("must authorize before calling this method")
 	}
@@ -1000,7 +1000,7 @@ func (client *Client) ExecutePaypalPayment(paymentID, payerID, renterID string) 
 	return nil
 }
 
-func (client *Client) Withdraw(renterID, email string, amount float64) error {
+func (client *Client) Withdraw(renterID, email string, amount int) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}

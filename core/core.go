@@ -17,6 +17,8 @@ type ProviderInfo struct {
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int64  `json:"storageRate"`
+	// The provider's balance, in tenths of cents.
+	Balance int `json:"balance"`
 }
 
 type RenterInfo struct {
@@ -25,7 +27,8 @@ type RenterInfo struct {
 	PublicKey string   `json:"publicKey"`
 	Files     []string `json:"files"`
 	Shared    []string `json:"shared"`
-	Wallet    Wallet   `json:"wallet"`
+	// The renter's balance, in tenths of cents.
+	Balance int `json:"balance"`
 }
 
 type Contract struct {
@@ -95,8 +98,4 @@ type Version struct {
 	NumDataBlocks   int       `json:"numDataBlocks"`
 	NumParityBlocks int       `json:"numParityBlocks"`
 	Blocks          []Block   `json:"blocks"`
-}
-
-type Wallet struct {
-	Balance float64 `json:"balance"`
 }

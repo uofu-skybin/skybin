@@ -134,6 +134,7 @@ type BlockInfo struct {
 	BlockId string `json:"blockId"`
 	Size    int64  `json:"blockSize"`
 }
+
 type RenterInfo struct {
 	StorageReserved int64            `json:"storageReserved"`
 	StorageUsed     int64            `json:"storageUsed"`
@@ -168,15 +169,15 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		renters:   make(map[string]*RenterInfo, 0),
 	}
 
-	dbPath := path.Join(homedir, "provider.db")
-	provider.db, _ = provider.setup_db(dbPath)
-
 	config := &Config{}
 	err := util.LoadJson(path.Join(homedir, "config.json"), config)
 	if err != nil {
 		return nil, err
 	}
 	provider.Config = config
+
+	dbPath := path.Join(homedir, "provider.db")
+	provider.db, err = provider.setup_db(dbPath)
 
 	snapshotPath := path.Join(homedir, "snapshot.json")
 	if _, err := os.Stat(snapshotPath); err == nil {
@@ -194,6 +195,8 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	// alternatively: store in snapshot and/or move to maintenance
 	// provider.StorageReserved = 0
 	// provider.StorageUsed = 0
+
+	// Use database to calculate this on load
 	for _, r := range provider.renters {
 		provider.StorageReserved += r.StorageReserved
 		provider.StorageUsed += r.StorageUsed
@@ -213,34 +216,68 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	provider.PrivateKey = privKey
 	return provider, err
 }
 
 // Add statistics in Time Series format for charting
 func (provider *Provider) addActivity(op string, bytes int64) {
-	metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
-	for _, act := range metrics {
-		// add and cycle activity within metric as needed
-		act.cycleActivity()
+	t := time.Now()
+	hour := t.Truncate(provider.stats.Hour.Interval)
+	day := t.Truncate(provider.stats.Day.Interval)
+	week := t.Truncate(provider.stats.Week.Interval)
+	// timestamp := t.Truncate(provider.stats.Day.Interval)
+	provider.InsertActivity("hour", hour)
+	provider.InsertActivity("day", day)
+	provider.InsertActivity("week", week)
 
-		// update data in current frame
-		idx := len(act.Timestamps) - 1
-		if op == "upload" {
-			act.BlockUploads[idx]++
-			act.BytesUploaded[idx] += bytes
-		}
-		if op == "download" {
-			act.BlockDownloads[idx]++
-			act.BytesDownloaded[idx] += bytes
-		}
-		if op == "delete" {
-			act.BlockDeletions[idx]++
-		}
-		if op == "contract" {
-			act.StorageReservations[idx]++
-		}
+	// provider.DeleteActivity()
+
+	// metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
+	// metrics := [["hour", provider.stats.Day.Interval]]
+	// for _, act := range metrics {
+	// add and cycle activity within metric as needed
+	// act.cycleActivity()
+
+	// update data in current frame
+	// idx := len(act.Timestamps) - 1
+	if op == "upload" {
+		provider.UpdateActivity("hour", hour, "BlockUploads", 1)
+		provider.UpdateActivity("day", day, "BlockUploads", 1)
+		provider.UpdateActivity("week", week, "BlockUploads", 1)
+
+		provider.UpdateActivity("hour", hour, "BytesUploaded", bytes)
+		provider.UpdateActivity("day", day, "BytesUploaded", bytes)
+		provider.UpdateActivity("week", week, "BytesUploaded", bytes)
+
+		// act.BlockUploads[idx]++
+		// act.BytesUploaded[idx] += bytes
 	}
+	if op == "download" {
+		provider.UpdateActivity("hour", hour, "BlockDownloads", 1)
+		provider.UpdateActivity("day", day, "BlockDownloads", 1)
+		provider.UpdateActivity("week", week, "BlockDownloads", 1)
+
+		provider.UpdateActivity("hour", hour, "BytesDownloaded", bytes)
+		provider.UpdateActivity("day", day, "BytesDownloaded", bytes)
+		provider.UpdateActivity("week", week, "BytesDownloaded", bytes)
+		// 	act.BlockDownloads[idx]++
+		// 	act.BytesDownloaded[idx] += bytes
+	}
+	if op == "delete" {
+		provider.UpdateActivity("hour", hour, "BlockDeletions", 1)
+		provider.UpdateActivity("day", day, "BlockDeletions", 1)
+		provider.UpdateActivity("week", week, "BlockDeletions", 1)
+		// act.BlockDeletions[idx]++
+	}
+	if op == "contract" {
+		provider.UpdateActivity("hour", hour, "StorageReservations", 1)
+		provider.UpdateActivity("day", day, "StorageReservations", 1)
+		provider.UpdateActivity("week", week, "StorageReservations", 1)
+		// act.StorageReservations[idx]++
+	}
+	// }
 	// update provider information
 	if op == "upload" {
 		provider.TotalBlocks++
@@ -357,6 +394,7 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 // Currently called after forming every contract could also be moved into maintenance
 // (It will still need to be called in the postInfo method)
 func (provider *Provider) UpdateMeta() error {
+	provider.makeStats()
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {
 		log.Fatal("Could not read public key file. Error: ", err)

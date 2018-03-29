@@ -26,7 +26,16 @@ func (p *Provider) setup_db(path string) (*sql.DB, error) {
 	stmt.Exec()
 
 	// Create renters table
+	// TODO: might not need the storage used or reserved fields
 	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS renters (id INTEGER PRIMARY KEY, RenterId TEXT, StorageReserved INTEGER, StorageUsed INTEGER)")
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	stmt.Exec()
+
+	// Create activity table
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS activity ( `id` INTEGER PRIMARY KEY, `Period` TEXT, `Timestamp` TEXT, `BlockUploads` INTEGER DEFAULT 0, `BlockDownloads` INTEGER DEFAULT 0, `BlockDeletions` INTEGER DEFAULT 0, `BytesUploaded` INTEGER DEFAULT 0, `BytesDownloaded` INTEGER DEFAULT 0, `StorageReservations` INTEGER DEFAULT 0 )")
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -43,6 +52,154 @@ func (p *Provider) InsertBlock(renterId string, blockId string, size int64) erro
 		return err
 	}
 	_, err = stmt.Exec(renterId, blockId, size)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (p *Provider) InsertActivity(period string, timestamp time.Time) error {
+	stmt, err := p.db.Prepare("INSERT INTO activity (Period, Timestamp) Select ?, ? WHERE NOT EXISTS(SELECT 1 FROM activity WHERE Period = ? and Timestamp = ? )")
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	_, err = stmt.Exec(period, timestamp.Format(time.RFC3339), period, timestamp.Format(time.RFC3339))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+// TODO: Evaluate whether or not this needs the period field
+func (p *Provider) UpdateActivity(period string, timestamp time.Time, op string, value int64) error {
+	query := fmt.Sprintf("UPDATE activity SET %s = %s + ? WHERE Timestamp = ? and Period = ?", op, op)
+
+	stmt, err := p.db.Prepare(query)
+	res, err := stmt.Exec(value, timestamp.Format(time.RFC3339), period)
+	if err != nil {
+		fmt.Println(res)
+		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (provider *Provider) makeStats() *getStatsResp {
+	var timestamps []time.Time
+	t := time.Now()
+	currTime := t.Add(-1 * provider.stats.Week.Interval)
+	for currTime != t {
+		currTime = currTime.Add(provider.stats.Day.Interval)
+		timestamps = append(timestamps, currTime)
+	}
+	resp := getStatsResp{
+		ActivityCounter: &Activity{
+			Timestamps:   timestamps,
+			BlockUploads: make([]int64, 24),
+		},
+		RecentSummary: &Recents{
+			Hour: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Day: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Week: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+		},
+	}
+	fmt.Println(resp.ActivityCounter.Timestamps)
+	fmt.Println(resp.RecentSummary.Hour)
+	return &resp
+}
+
+func (p *Provider) GetStatsResp() (*getStatsResp, error) {
+	query := fmt.Sprintf("SELECT Period, Timestamp, BlockUploads, BlockDownloads, BlockDeletions, BytesUploaded, BytesDownloaded, StorageReservations FROM activity") // WHERE Period=%s", period)
+	resp := p.makeStats()
+	rows, err := p.db.Query(query)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	var period string
+	var timestamp string
+	var blockUploads int64
+	var blockDownloads int64
+	var blockDeletions int64
+	var bytesUploaded int64
+	var bytesDownloaded int64
+	var storageReservations int64
+
+	for rows.Next() {
+		// scan does not parse these directly into time.Time correctly
+		rows.Scan(&period, &timestamp, &blockUploads, &blockDownloads, &blockDeletions, &bytesUploaded, &bytesDownloaded, &storageReservations)
+		if period == "day" {
+			resp.RecentSummary.Day.BlockUploads += blockUploads
+			resp.RecentSummary.Day.BlockDownloads += blockDownloads
+			resp.RecentSummary.Day.BlockDeletions += blockDeletions
+			resp.RecentSummary.Day.StorageReservations += storageReservations
+
+			stamp, err := time.Parse(time.RFC3339, timestamp)
+			if err != nil {
+				// TODO:
+			}
+			fmt.Println(stamp)
+			// TODO: increment by index
+		}
+		if period == "hour" {
+			resp.RecentSummary.Hour.BlockUploads += blockUploads
+			resp.RecentSummary.Hour.BlockDownloads += blockDownloads
+			resp.RecentSummary.Hour.BlockDeletions += blockDeletions
+			resp.RecentSummary.Hour.StorageReservations += storageReservations
+		}
+		if period == "week" {
+			resp.RecentSummary.Week.BlockUploads += blockUploads
+			resp.RecentSummary.Week.BlockDownloads += blockDownloads
+			resp.RecentSummary.Week.BlockDeletions += blockDeletions
+			resp.RecentSummary.Week.StorageReservations += storageReservations
+
+		}
+
+		t, _ := time.Parse(time.RFC3339, timestamp)
+		fmt.Println(t)
+	}
+	return resp, nil
+}
+
+// Drop old activity
+func (p *Provider) DeleteActivity() error {
+	stmt, err := p.db.Prepare("DELETE from activity WHERE Period=Hour and Timestamp < ?")
+	t := time.Now().Add(-1 * time.Hour)
+	_, err = stmt.Exec(t.Format(time.RFC3339))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	stmt, err = p.db.Prepare("DELETE from activity WHERE Period=Day and Timestamp < ?")
+	t = time.Now().Add(-1 * time.Hour * 24)
+	_, err = stmt.Exec(t.Format(time.RFC3339))
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	stmt, err = p.db.Prepare("DELETE from activity WHERE Period=Week and Timestamp < ?")
+	t = time.Now().Add(-1 * time.Hour * 24 * 7)
+	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -93,7 +250,7 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 
 	for rows.Next() {
 		c := &core.Contract{}
-		// scan does not parse these directly into time.Time
+		// scan does not parse these directly into time.Time correctly
 		var startDate string
 		var endDate string
 		rows.Scan(&c.ID, &c.RenterId, &c.ProviderId, &c.StorageSpace, &c.RenterSignature, &c.ProviderSignature, &startDate, &endDate)
@@ -102,4 +259,21 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 		contracts = append(contracts, c)
 	}
 	return contracts, nil
+}
+
+func (p *Provider) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
+	query := fmt.Sprintf("SELECT BlockId, Size FROM blocks where RenterId='%s'", renterId)
+	rows, err := p.db.Query(query)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	var blocks []*BlockInfo
+
+	for rows.Next() {
+		b := &BlockInfo{}
+		rows.Scan(&b.BlockId, &b.Size)
+		blocks = append(blocks, b)
+	}
+	return blocks, nil
 }

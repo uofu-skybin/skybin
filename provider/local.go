@@ -63,7 +63,8 @@ func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 	// don't change any metrics but cycle data as needed
 	server.provider.addActivity("update", 0)
 
-	resp := server.provider.makeStatsResp()
+	// resp := server.provider.makeStatsResp()
+	resp, _ := server.provider.GetStatsResp()
 	server.writeResp(w, http.StatusOK, resp)
 }
 

@@ -101,10 +101,6 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 
 	server.provider.addActivity("upload", n)
 
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Unable to save snapshot. Error:", err)
-	}
 	server.writeResp(w, http.StatusCreated, &errorResp{})
 }
 
@@ -142,11 +138,6 @@ func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
 
 	fi, err := f.Stat()
 	server.provider.addActivity("download", fi.Size())
-
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Error saving snapshot: ", err)
-	}
 
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, f)
@@ -214,9 +205,6 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 	}
 	server.provider.addActivity("delete", fi.Size())
 	server.provider.DeleteBlockById(blockID)
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Error saving snapshot: ", err)
-	}
+
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }

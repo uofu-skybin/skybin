@@ -101,12 +101,6 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Unable to save snapshot. Error:", err)
-		return
-	}
-
 	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 

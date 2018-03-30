@@ -41,7 +41,7 @@ type Provider struct {
 	StorageUsed     int64 `json:"storageUsed"`
 
 	TotalBlocks    int `json:"totalBlocks"`
-	TotalContracts int `json:"totalContracts`
+	TotalContracts int `json:"totalContracts"`
 }
 
 const (
@@ -51,13 +51,6 @@ const (
 	// A provider should provide at least this much space.
 	MinStorageSpace = 100 * 1e6
 )
-
-// Provider node statistics
-type Stats struct {
-	Hour Activity `json:"hour"`
-	Day  Activity `json:"day"`
-	Week Activity `json:"week"`
-}
 
 // Structure to cycle activity over a set interval
 type Activity struct {
@@ -92,33 +85,15 @@ type BlockInfo struct {
 }
 
 type RenterInfo struct {
-	// RenterId        string           `json:"RenterId`
-	StorageReserved int64            `json:"storageReserved"`
-	StorageUsed     int64            `json:"storageUsed"`
-	Contracts       []*core.Contract `json:"contracts"`
-	Blocks          []*BlockInfo     `json:"blocks"`
+	StorageReserved int64 `json:"storageReserved"`
+	StorageUsed     int64 `json:"storageUsed"`
+
+	// TODO: Remove
+	Contracts []*core.Contract `json:"contracts"`
+	Blocks    []*BlockInfo     `json:"blocks"`
 }
 
-type snapshot struct {
-	// Contracts []*core.Contract       `json:"contracts"`
-	// Stats     Stats                  `json:"stats"`
-	Renters map[string]*RenterInfo `json:"renters"`
-}
-
-func (provider *Provider) saveSnapshot() error {
-	provider.mu.Lock()
-	defer provider.mu.Unlock()
-
-	s := snapshot{
-	// Contracts: provider.contracts,
-	// Stats:     provider.stats,
-	// Renters: provider.renters,
-	}
-
-	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
-}
-
-// Loads configuration and snapshot information
+// Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir: homedir,
@@ -137,28 +112,6 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	provider.db, err = provider.setup_db(dbPath)
 
 	provider.LoadDBIntoMemory()
-	// snapshotPath := path.Join(homedir, "snapshot.json")
-	// if _, err := os.Stat(snapshotPath); err == nil {
-	// 	var s snapshot
-	// 	err := util.LoadJson(snapshotPath, &s)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("Unable to load snapshot. Error: %s", err)
-	// 	}
-
-	// 	// provider.contracts = s.Contracts
-	// 	// provider.stats = s.Stats
-	// 	provider.renters = s.Renters
-	// }
-	// TODO: Recalculate storage reserved and used
-	// alternatively: store in snapshot and/or move to maintenance
-	// provider.StorageReserved = 0
-	// provider.StorageUsed = 0
-
-	//TODO: Use database to calculate this on load
-	// for _, r := range provider.renters {
-	// 	provider.StorageReserved += r.StorageReserved
-	// 	provider.StorageUsed += r.StorageUsed
-	// }
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
 	if err != nil {

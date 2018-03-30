@@ -53,12 +53,5 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 		return nil, fmt.Errorf("Error updating metaserver: %s", err)
 	}
 
-	// err = provider.saveSnapshot()
-	// if err != nil {
-
-	// 	// TODO: Remove contract. I don't do this here
-	// 	// since we need to move to an improved storage scheme anyways.
-	// 	return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
-	// }
 	return contract, nil
 }

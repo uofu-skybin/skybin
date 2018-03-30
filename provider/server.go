@@ -113,7 +113,10 @@ func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) 
 }
 
 type getRenterResp struct {
-	renter *RenterInfo `json:"renter-info"`
+	StorageReserved int64            `json:"storageReserved"`
+	StorageUsed     int64            `json:"storageUsed"`
+	Contracts       []*core.Contract `json:"contracts"`
+	Blocks          []*BlockInfo     `json:"blocks"`
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
@@ -136,14 +139,29 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	renter, exists := server.provider.renters[renterID]
+	// TODO: maybe remove this
+	_, exists = server.provider.renters[renterID]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			errorResp{Error: "Provider has no record for this renter"})
 		return
 	}
+	contracts, err := server.provider.GetContractsByRenter(renterID)
+	if err != nil {
+		// TODO: error response
+	}
+	blocks, err := server.provider.GetBlocksByRenter(renterID)
+	if err != nil {
+		// TODO: error response
+	}
+	resp := &getRenterResp{
+		StorageReserved: server.provider.renters[renterID].StorageReserved,
+		StorageUsed:     server.provider.renters[renterID].StorageUsed,
+		Contracts:       contracts,
+		Blocks:          blocks,
+	}
 
-	server.writeResp(w, http.StatusOK, getRenterResp{renter: renter})
+	server.writeResp(w, http.StatusOK, resp)
 }
 
 func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

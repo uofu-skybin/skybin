@@ -18,7 +18,6 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 	blockID := blockquery[0]
 
-	// TODO: Maybe replace this with authorization token
 	renterquery, exists := r.URL.Query()["renterID"]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})

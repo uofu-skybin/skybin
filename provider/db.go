@@ -17,7 +17,15 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 	}
 
 	// Create contracts table
-	stmt, err := db.Prepare("CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY, ContractId TEXT, RenterId TEXT, ProviderId TEXT, StorageSpace INTEGER, StartDate TEXT, EndDate TEXT, RenterSignature TEXT, ProviderSignature TEXT)")
+	stmt, err := db.Prepare(`CREATE TABLE IF NOT EXISTS contracts ( id INTEGER PRIMARY KEY, 
+		ContractId TEXT, 
+		RenterId TEXT, 
+		ProviderId TEXT, 
+		StorageSpace INTEGER, 
+		StartDate TEXT, 
+		EndDate TEXT, 
+		RenterSignature TEXT, 
+		ProviderSignature TEXT)`)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to prepare contracts table. error: %s", err)
 	}
@@ -27,7 +35,10 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 	}
 
 	// Create blocks table
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS blocks (id INTEGER PRIMARY KEY, RenterId TEXT, BlockId TEXT, Size INTEGER)")
+	stmt, err = db.Prepare(`CREATE TABLE IF NOT EXISTS blocks ( id INTEGER PRIMARY KEY, 
+		RenterId TEXT, 
+		BlockId TEXT, 
+		Size INTEGER)`)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to prepare blocks table. error: %s", err)
 	}
@@ -37,7 +48,15 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 	}
 
 	// Create activity table
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS activity ( `id` INTEGER PRIMARY KEY, `Period` TEXT, `Timestamp` TEXT, `BlockUploads` INTEGER DEFAULT 0, `BlockDownloads` INTEGER DEFAULT 0, `BlockDeletions` INTEGER DEFAULT 0, `BytesUploaded` INTEGER DEFAULT 0, `BytesDownloaded` INTEGER DEFAULT 0, `StorageReservations` INTEGER DEFAULT 0 )")
+	stmt, err = db.Prepare(`CREATE TABLE IF NOT EXISTS activity ( id INTEGER PRIMARY KEY, 
+		Period TEXT, 
+		Timestamp TEXT, 
+		BlockUploads INTEGER DEFAULT 0, 
+		BlockDownloads INTEGER DEFAULT 0, 
+		BlockDeletions INTEGER DEFAULT 0, 
+		BytesUploaded INTEGER DEFAULT 0, 
+		BytesDownloaded INTEGER DEFAULT 0, 
+		StorageReservations INTEGER DEFAULT 0 )`)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to prepare activity table. error: %s", err)
 	}
@@ -56,7 +75,9 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 	day := t.Truncate(time.Hour).Format(time.RFC3339)
 	week := t.Truncate(time.Hour * 24).Format(time.RFC3339)
 
-	stmt, err := p.db.Prepare("INSERT INTO activity (Period, Timestamp) Select 'hour', ? WHERE NOT EXISTS(SELECT 1 FROM activity WHERE Period = 'hour' and Timestamp = ? )")
+	stmt, err := p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+		Select 'hour', ? WHERE NOT EXISTS(
+		SELECT 1 FROM activity WHERE Period = 'hour' and Timestamp = ?)`)
 	if err != nil {
 		return err
 	}
@@ -65,7 +86,9 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("INSERT INTO activity (Period, Timestamp) Select 'day', ? WHERE NOT EXISTS(SELECT 1 FROM activity WHERE Period = 'day' and Timestamp = ? )")
+	stmt, err = p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+		Select 'day', ? WHERE NOT EXISTS(
+		SELECT 1 FROM activity WHERE Period = 'day' and Timestamp = ? )`)
 	if err != nil {
 		return err
 	}
@@ -74,7 +97,9 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("INSERT INTO activity (Period, Timestamp) Select 'week', ? WHERE NOT EXISTS(SELECT 1 FROM activity WHERE Period = 'week' and Timestamp = ? )")
+	stmt, err = p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+		Select 'week', ? WHERE NOT EXISTS(
+		SELECT 1 FROM activity WHERE Period = 'week' and Timestamp = ? )`)
 	if err != nil {
 		return err
 	}
@@ -88,7 +113,10 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 
 // Increment activity corresponding to interval and operation by value
 func (p *Provider) UpdateActivity(op string, value int64) error {
-	query := fmt.Sprintf("UPDATE activity SET %s = %s + ? WHERE (Timestamp = ? and Period = 'hour') or (Timestamp = ? and Period = 'day') or (Timestamp = ? and Period = 'week')", op, op)
+	query := fmt.Sprintf(`UPDATE activity SET %s = %s + ? 
+		WHERE (Timestamp = ? and Period = 'hour') 
+		or (Timestamp = ? and Period = 'day') 
+		or (Timestamp = ? and Period = 'week')`, op, op)
 
 	t := time.Now()
 	hour := t.Truncate(time.Minute * 5).Format(time.RFC3339)
@@ -109,21 +137,21 @@ func (p *Provider) UpdateActivity(op string, value int64) error {
 
 // Drop activity that is no longer in scope
 func (p *Provider) DeleteActivity() error {
-	stmt, err := p.db.Prepare("DELETE from activity WHERE Period='hour' and Timestamp < ?")
+	stmt, err := p.db.Prepare(`DELETE from activity WHERE Period='hour' and Timestamp < ?`)
 	t := time.Now().Add(-1 * time.Hour)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("DELETE from activity WHERE Period='day' and Timestamp < ?")
+	stmt, err = p.db.Prepare(`DELETE from activity WHERE Period='day' and Timestamp < ?`)
 	t = time.Now().Add(-1 * time.Hour * 24)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("DELETE from activity WHERE Period='week' and Timestamp < ?")
+	stmt, err = p.db.Prepare(`DELETE from activity WHERE Period='week' and Timestamp < ?`)
 	t = time.Now().Add(-1 * time.Hour * 24 * 7)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
@@ -134,7 +162,9 @@ func (p *Provider) DeleteActivity() error {
 
 // This is called by the local provider server on GET /stats
 func (p *Provider) GetStatsResp() (*getStatsResp, error) {
-	query := fmt.Sprintf("SELECT Period, Timestamp, BlockUploads, BlockDownloads, BlockDeletions, BytesUploaded, BytesDownloaded, StorageReservations FROM activity") // WHERE Period=%s", period)
+	query := fmt.Sprintf(`SELECT Period, Timestamp, BlockUploads, 
+		BlockDownloads, BlockDeletions, BytesUploaded, 
+		BytesDownloaded, StorageReservations FROM activity`)
 
 	rows, err := p.db.Query(query)
 	if err != nil {
@@ -194,7 +224,10 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 }
 
 func (p *Provider) InsertContract(contract *core.Contract) error {
-	stmt, err := p.db.Prepare("INSERT INTO contracts (ContractId, RenterId, ProviderId, StorageSpace, StartDate, EndDate, RenterSignature, ProviderSignature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := p.db.Prepare(`INSERT INTO contracts 
+		(ContractId, RenterId, ProviderId, StorageSpace, 
+		StartDate, EndDate, RenterSignature, ProviderSignature) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -216,7 +249,7 @@ func (p *Provider) InsertContract(contract *core.Contract) error {
 
 // Currently unused, but probably relevant for canceling contracts
 func (p *Provider) DeleteContractkById(renterId string) error {
-	stmt, err := p.db.Prepare("DELETE from contracts where RenterId=?")
+	stmt, err := p.db.Prepare(`DELETE from contracts where RenterId=?`)
 	if err != nil {
 		return err
 	}
@@ -228,7 +261,9 @@ func (p *Provider) DeleteContractkById(renterId string) error {
 }
 
 func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, error) {
-	query := fmt.Sprintf("SELECT ContractId, RenterId, ProviderId, StorageSpace, RenterSignature, ProviderSignature, StartDate, EndDate FROM contracts where RenterId='%s'", renterId)
+	query := fmt.Sprintf(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
+		RenterSignature, ProviderSignature, StartDate, EndDate 
+		FROM contracts where RenterId='%s'`, renterId)
 	rows, err := p.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -252,7 +287,8 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 }
 
 func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
-	rows, err := p.db.Query("SELECT ContractId, RenterId, ProviderId, StorageSpace, RenterSignature, ProviderSignature, StartDate, EndDate FROM contracts")
+	rows, err := p.db.Query(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
+		RenterSignature, ProviderSignature, StartDate, EndDate FROM contracts`)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +311,7 @@ func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
 }
 
 func (p *Provider) InsertBlock(renterId string, blockId string, size int64) error {
-	stmt, err := p.db.Prepare("INSERT INTO blocks (RenterId, BlockId, Size) VALUES (?, ?, ?)")
+	stmt, err := p.db.Prepare(`INSERT INTO blocks (RenterId, BlockId, Size) VALUES (?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -287,7 +323,7 @@ func (p *Provider) InsertBlock(renterId string, blockId string, size int64) erro
 }
 
 func (p *Provider) DeleteBlockById(blockId string) error {
-	stmt, err := p.db.Prepare("DELETE from blocks where BlockId=?")
+	stmt, err := p.db.Prepare(`DELETE from blocks where BlockId=?`)
 	if err != nil {
 		return err
 	}
@@ -300,7 +336,7 @@ func (p *Provider) DeleteBlockById(blockId string) error {
 
 func (p *Provider) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
 
-	query := fmt.Sprintf("SELECT BlockId, Size FROM blocks where RenterId='%s'", renterId)
+	query := fmt.Sprintf(`SELECT BlockId, Size FROM blocks where RenterId='%s'`, renterId)
 	rows, err := p.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -320,7 +356,7 @@ func (p *Provider) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
 
 func (p *Provider) GetAllBlocks() ([]*BlockInfo, error) {
 
-	rows, err := p.db.Query("SELECT RenterId, BlockId, Size FROM blocks")
+	rows, err := p.db.Query(`SELECT RenterId, BlockId, Size FROM blocks`)
 	if err != nil {
 		return nil, err
 	}

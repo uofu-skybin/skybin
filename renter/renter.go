@@ -50,6 +50,8 @@ type Renter struct {
 	// deleted because the provider storing them was offline.
 	blocksToDelete []*core.Block
 
+	// Queue for batches of downloads to be performed by the download thread.
+	downloadQ chan []*fileDownload
 	logger *log.Logger
 }
 
@@ -76,6 +78,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		contracts:      make([]*core.Contract, 0),
 		freelist:       make([]*storageBlob, 0),
 		blocksToDelete: make([]*core.Block, 0),
+		downloadQ:      make(chan []*fileDownload),
 		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
@@ -108,6 +111,14 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	renter.privKey = privKey
 
 	return renter, err
+}
+
+func (r *Renter) StartThreads() {
+	go r.downloadThread()
+}
+
+func (r *Renter) ShutdownThreads() {
+	close(r.downloadQ)
 }
 
 func (r *Renter) SetLogger(logger *log.Logger) {
@@ -472,6 +483,49 @@ func (r *Renter) removeBlock(block *core.Block) {
 		ContractId: block.Location.ContractId,
 	}
 	r.addBlob(blob)
+}
+
+// Decrypts and returns f's AES key and AES IV.
+func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byte, err error) {
+	var keyToDecrypt string
+	var ivToDecrypt string
+
+	// If we own the file, use the AES key directly. Otherwise, retrieve them from the relevent permission
+	if f.OwnerID == r.Config.RenterId {
+		keyToDecrypt = f.AesKey
+		ivToDecrypt = f.AesIV
+	} else {
+		for _, permission := range f.AccessList {
+			if permission.RenterId == r.Config.RenterId {
+				keyToDecrypt = permission.AesKey
+				ivToDecrypt = permission.AesIV
+			}
+		}
+	}
+
+	if keyToDecrypt == "" || ivToDecrypt == "" {
+		return nil, nil, errors.New("could not find permission in access list")
+	}
+
+	keyBytes, err := base64.URLEncoding.DecodeString(keyToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ivBytes, err := base64.URLEncoding.DecodeString(ivToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, keyBytes, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes key. Error: %v", err)
+	}
+	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, ivBytes, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
+	}
+	return aesKey, aesIV, nil
 }
 
 // Add a storage blob back to the free list.

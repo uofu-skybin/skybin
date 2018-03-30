@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"log"
 	"net/http"
@@ -55,15 +56,18 @@ type getContractsResp struct {
 }
 
 func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) {
-	server.writeResp(w, http.StatusOK,
-		getContractsResp{Contracts: server.provider.contracts})
+	contracts, err := server.provider.GetAllContracts()
+	if err != nil {
+		msg := fmt.Sprintf("Error retrieving contract list: %s", err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
+	}
+	server.writeResp(w, http.StatusOK, contracts)
 }
 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 	// don't change any metrics but cycle data as needed
-	server.provider.addActivity("update", 0)
+	// server.provider.addActivity("update", 0)
 
-	// resp := server.provider.makeStatsResp()
 	resp, _ := server.provider.GetStatsResp()
 	server.writeResp(w, http.StatusOK, resp)
 }
@@ -82,7 +86,7 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	// Maybe allow this to be mutated (whether or not we display in UI)
 	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
 
-	//TODO: if local or public addr changed reset provider???
+	// TODO: if local or public addr changed reset provider???
 	// This is best addressed in the frontend
 
 	err = server.provider.UpdateMeta()

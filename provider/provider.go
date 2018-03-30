@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"skybin/core"
 	"skybin/metaserver"
@@ -30,16 +29,19 @@ type Config struct {
 }
 
 type Provider struct {
-	Config          *Config
-	Homedir         string //move this maybe
-	PrivateKey      *rsa.PrivateKey
-	contracts       []*core.Contract
-	renters         map[string]*RenterInfo
-	mu              sync.Mutex
-	db              *sql.DB
+	Config     *Config
+	Homedir    string //move this maybe
+	PrivateKey *rsa.PrivateKey
+	// contracts       []*core.Contract
+	renters map[string]*RenterInfo
+	mu      sync.Mutex
+	db      *sql.DB
+
 	StorageReserved int64 `json:"storageReserved"`
 	StorageUsed     int64 `json:"storageUsed"`
-	TotalBlocks     int   `json:"totalBlocks"`
+
+	TotalBlocks    int `json:"totalBlocks"`
+	TotalContracts int `json:"totalContracts`
 }
 
 const (
@@ -84,11 +86,13 @@ type getStatsResp struct {
 }
 
 type BlockInfo struct {
-	BlockId string `json:"blockId"`
-	Size    int64  `json:"blockSize"`
+	RenterId string `json:"renterId"`
+	BlockId  string `json:"blockId"`
+	Size     int64  `json:"blockSize"`
 }
 
 type RenterInfo struct {
+	// RenterId        string           `json:"RenterId`
 	StorageReserved int64            `json:"storageReserved"`
 	StorageUsed     int64            `json:"storageUsed"`
 	Contracts       []*core.Contract `json:"contracts"`
@@ -96,9 +100,9 @@ type RenterInfo struct {
 }
 
 type snapshot struct {
-	Contracts []*core.Contract       `json:"contracts"`
-	Stats     Stats                  `json:"stats"`
-	Renters   map[string]*RenterInfo `json:"renters"`
+	// Contracts []*core.Contract       `json:"contracts"`
+	// Stats     Stats                  `json:"stats"`
+	Renters map[string]*RenterInfo `json:"renters"`
 }
 
 func (provider *Provider) saveSnapshot() error {
@@ -106,9 +110,9 @@ func (provider *Provider) saveSnapshot() error {
 	defer provider.mu.Unlock()
 
 	s := snapshot{
-		Contracts: provider.contracts,
-		// Stats:     provider.stats,
-		Renters: provider.renters,
+	// Contracts: provider.contracts,
+	// Stats:     provider.stats,
+	// Renters: provider.renters,
 	}
 
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
@@ -117,9 +121,9 @@ func (provider *Provider) saveSnapshot() error {
 // Loads configuration and snapshot information
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
-		Homedir:   homedir,
-		contracts: make([]*core.Contract, 0),
-		renters:   make(map[string]*RenterInfo, 0),
+		Homedir: homedir,
+		// contracts: make([]*core.Contract, 0),
+		// renters: make(map[string]*RenterInfo, 0),
 	}
 
 	config := &Config{}
@@ -132,28 +136,29 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	dbPath := path.Join(homedir, "provider.db")
 	provider.db, err = provider.setup_db(dbPath)
 
-	snapshotPath := path.Join(homedir, "snapshot.json")
-	if _, err := os.Stat(snapshotPath); err == nil {
-		var s snapshot
-		err := util.LoadJson(snapshotPath, &s)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to load snapshot. Error: %s", err)
-		}
+	provider.LoadDBIntoMemory()
+	// snapshotPath := path.Join(homedir, "snapshot.json")
+	// if _, err := os.Stat(snapshotPath); err == nil {
+	// 	var s snapshot
+	// 	err := util.LoadJson(snapshotPath, &s)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("Unable to load snapshot. Error: %s", err)
+	// 	}
 
-		provider.contracts = s.Contracts
-		// provider.stats = s.Stats
-		provider.renters = s.Renters
-	}
+	// 	// provider.contracts = s.Contracts
+	// 	// provider.stats = s.Stats
+	// 	provider.renters = s.Renters
+	// }
 	// TODO: Recalculate storage reserved and used
 	// alternatively: store in snapshot and/or move to maintenance
 	// provider.StorageReserved = 0
 	// provider.StorageUsed = 0
 
 	//TODO: Use database to calculate this on load
-	for _, r := range provider.renters {
-		provider.StorageReserved += r.StorageReserved
-		provider.StorageUsed += r.StorageUsed
-	}
+	// for _, r := range provider.renters {
+	// 	provider.StorageReserved += r.StorageReserved
+	// 	provider.StorageUsed += r.StorageUsed
+	// }
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
 	if err != nil {
@@ -236,7 +241,7 @@ func (provider *Provider) GetInfo() *Info {
 		StorageReserved:  provider.StorageReserved,
 		StorageUsed:      provider.StorageUsed,
 		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
-		TotalContracts:   len(provider.contracts),
+		TotalContracts:   provider.TotalContracts,
 		TotalRenters:     len(provider.renters),
 		TotalBlocks:      provider.TotalBlocks,
 	}

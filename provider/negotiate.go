@@ -44,8 +44,8 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	renter.Contracts = append(renter.Contracts, contract)
 
 	provider.InsertContract(contract)
-	provider.GetContractsByRenter(contract.RenterId)
-	provider.contracts = append(provider.contracts, contract)
+	// provider.GetContractsByRenter(contract.RenterId)
+	// provider.contracts = append(provider.contracts, contract)
 	provider.addActivity("contract", contract.StorageSpace)
 
 	err = provider.UpdateMeta()
@@ -53,12 +53,12 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 		return nil, fmt.Errorf("Error updating metaserver: %s", err)
 	}
 
-	err = provider.saveSnapshot()
-	if err != nil {
+	// err = provider.saveSnapshot()
+	// if err != nil {
 
-		// TODO: Remove contract. I don't do this here
-		// since we need to move to an improved storage scheme anyways.
-		return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
-	}
+	// 	// TODO: Remove contract. I don't do this here
+	// 	// since we need to move to an improved storage scheme anyways.
+	// 	return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
+	// }
 	return contract, nil
 }

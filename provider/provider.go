@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"path"
 	"skybin/core"
@@ -13,8 +12,6 @@ import (
 	"skybin/util"
 	"sync"
 	"time"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 type Config struct {
@@ -29,19 +26,19 @@ type Config struct {
 }
 
 type Provider struct {
-	Config     *Config
-	Homedir    string //move this maybe
-	PrivateKey *rsa.PrivateKey
-	// contracts       []*core.Contract
-	renters map[string]*RenterInfo
-	mu      sync.Mutex
+	Homedir string //move this maybe
+	Config  *Config
 	db      *sql.DB
+	mu      sync.Mutex
 
-	StorageReserved int64 `json:"storageReserved"`
-	StorageUsed     int64 `json:"storageUsed"`
+	PrivateKey *rsa.PrivateKey
+	renters    map[string]*RenterInfo
 
-	TotalBlocks    int `json:"totalBlocks"`
-	TotalContracts int `json:"totalContracts"`
+	StorageReserved int64
+	StorageUsed     int64
+
+	TotalBlocks    int
+	TotalContracts int
 }
 
 const (
@@ -87,91 +84,93 @@ type BlockInfo struct {
 type RenterInfo struct {
 	StorageReserved int64 `json:"storageReserved"`
 	StorageUsed     int64 `json:"storageUsed"`
-
-	// TODO: Remove
-	Contracts []*core.Contract `json:"contracts"`
-	Blocks    []*BlockInfo     `json:"blocks"`
 }
 
 // Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir: homedir,
-		// contracts: make([]*core.Contract, 0),
-		// renters: make(map[string]*RenterInfo, 0),
 	}
 
 	config := &Config{}
 	err := util.LoadJson(path.Join(homedir, "config.json"), config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to load config file. error: %s", err)
 	}
 	provider.Config = config
 
 	dbPath := path.Join(homedir, "provider.db")
-	provider.db, err = provider.setup_db(dbPath)
+	provider.db, err = provider.SetupDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to initialize DB. error: %s", err)
+	}
 
-	provider.LoadDBIntoMemory()
+	err = provider.LoadDBIntoMemory()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load provider DB into mem. error: %s", err)
+	}
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to load providers private key. error: %s", err)
 	}
 
 	provider.PrivateKey = privKey
-	return provider, err
+	return provider, nil
 }
 
-// Add statistics in Time Series format for charting
-func (provider *Provider) addActivity(op string, bytes int64) {
-	t := time.Now()
-	hour := t.Truncate(time.Minute * 5)
-	day := t.Truncate(time.Hour)
-	week := t.Truncate(time.Hour * 24)
+// Insert, Delete, and Update activity feeds for each interval
+func (provider *Provider) addActivity(op string, bytes int64) error {
 
-	// if activity for this interval does not already exist create it
-	provider.InsertActivity("hour", hour)
-	provider.InsertActivity("day", day)
-	provider.InsertActivity("week", week)
+	err := provider.InsertActivity()
+	if err != nil {
+		return fmt.Errorf("Error adding new activity to DB: %s", err)
+	}
+	err = provider.DeleteActivity()
+	if err != nil {
+		return fmt.Errorf("Error cycling activity in DB: %s", err)
+	}
 
-	provider.DeleteActivity()
-
+	// TODO: Abstact and handle errors
 	if op == "upload" {
-		provider.UpdateActivity("hour", hour, "BlockUploads", 1)
-		provider.UpdateActivity("day", day, "BlockUploads", 1)
-		provider.UpdateActivity("week", week, "BlockUploads", 1)
-
-		provider.UpdateActivity("hour", hour, "BytesUploaded", bytes)
-		provider.UpdateActivity("day", day, "BytesUploaded", bytes)
-		provider.UpdateActivity("week", week, "BytesUploaded", bytes)
+		err = provider.UpdateActivity("BlockUploads", 1)
+		if err != nil {
+			return fmt.Errorf("add upload activity failed. error: %s", err)
+		}
+		err = provider.UpdateActivity("BytesUploaded", bytes)
+		if err != nil {
+			return fmt.Errorf("add upload activity failed. error: %s", err)
+		}
 
 		provider.TotalBlocks++
 		provider.StorageUsed += bytes
-	}
-	if op == "download" {
-		provider.UpdateActivity("hour", hour, "BlockDownloads", 1)
-		provider.UpdateActivity("day", day, "BlockDownloads", 1)
-		provider.UpdateActivity("week", week, "BlockDownloads", 1)
 
-		provider.UpdateActivity("hour", hour, "BytesDownloaded", bytes)
-		provider.UpdateActivity("day", day, "BytesDownloaded", bytes)
-		provider.UpdateActivity("week", week, "BytesDownloaded", bytes)
-	}
-	if op == "delete" {
-		provider.UpdateActivity("hour", hour, "BlockDeletions", 1)
-		provider.UpdateActivity("day", day, "BlockDeletions", 1)
-		provider.UpdateActivity("week", week, "BlockDeletions", 1)
+	} else if op == "download" {
+		err = provider.UpdateActivity("BlockDownloads", 1)
+		if err != nil {
+			return fmt.Errorf("add download activity failed. error: %s", err)
+		}
+		err = provider.UpdateActivity("BytesDownloaded", bytes)
+		if err != nil {
+			return fmt.Errorf("add download activity failed. error:  %s", err)
+		}
+	} else if op == "delete" {
+		provider.UpdateActivity("BlockDeletions", 1)
+		if err != nil {
+			return fmt.Errorf("add delete activity failed. error:  %s", err)
+		}
 
 		provider.TotalBlocks--
 		provider.StorageUsed -= bytes
-	}
-	if op == "contract" {
-		provider.UpdateActivity("hour", hour, "StorageReservations", 1)
-		provider.UpdateActivity("day", day, "StorageReservations", 1)
-		provider.UpdateActivity("week", week, "StorageReservations", 1)
 
+	} else if op == "contract" {
+		provider.UpdateActivity("StorageReservations", 1)
+		if err != nil {
+			return fmt.Errorf("add contract activity failed. error: %s", err)
+		}
 		provider.StorageReserved += bytes
 	}
+	return nil
 }
 
 type Info struct {
@@ -208,20 +207,19 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return util.UnmarshalPrivateKey(data)
 }
 
-// TODO: this needs an open public key endpoint
 func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to fetch authenticate with meta while fetching pubkey. error: %s", err)
 	}
 	rent, err := client.GetRenter(renterId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to retrieve renter from meta. error: %s", err)
 	}
 	key, err := util.UnmarshalPublicKey([]byte(rent.PublicKey))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse renters pubkey. error: %s", err)
 	}
 	return key, nil
 }
@@ -229,10 +227,9 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 // Currently called after forming every contract could also be moved into maintenance
 // (It will still need to be called in the postInfo method)
 func (provider *Provider) UpdateMeta() error {
-	// provider.makeStats()
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {
-		log.Fatal("Could not read public key file. Error: ", err)
+		return fmt.Errorf("Failed to parse pubKey in UpdateMeta. error: %s", err)
 	}
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
@@ -262,7 +259,7 @@ func (provider *Provider) makeStatsResp() *getStatsResp {
 		currTime = currTime.Add(time.Hour)
 		timestamps = append(timestamps, currTime.Format(time.RFC3339))
 	}
-	resp := getStatsResp{
+	resp := &getStatsResp{
 		ActivityCounter: &Activity{
 			Timestamps:          timestamps,
 			BlockUploads:        make([]int64, 24),
@@ -293,5 +290,5 @@ func (provider *Provider) makeStatsResp() *getStatsResp {
 			},
 		},
 	}
-	return &resp
+	return resp
 }

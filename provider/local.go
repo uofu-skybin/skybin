@@ -61,14 +61,17 @@ func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) 
 		msg := fmt.Sprintf("Error retrieving contract list: %s", err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
 	}
-	server.writeResp(w, http.StatusOK, contracts)
+	server.writeResp(w, http.StatusOK, &getContractsResp{Contracts: contracts})
 }
 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
-	// don't change any metrics but cycle data as needed
-	// server.provider.addActivity("update", 0)
 
-	resp, _ := server.provider.GetStatsResp()
+	resp, err := server.provider.GetStatsResp()
+	if err != nil {
+		msg := fmt.Sprintf("Failed to make stats response: %s", err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
+		return
+	}
 	server.writeResp(w, http.StatusOK, resp)
 }
 

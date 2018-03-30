@@ -33,7 +33,7 @@ def rm_file_test(ctxt):
     ctxt.renter.remove_file(file_to_remove['id'])
 
     # Check it doesn't appear in file list
-    file_list = ctxt.renter.list_files()['files']
+    file_list = ctxt.renter.list_files()
     exists = any([f for f in file_list if f['id'] == file_to_remove['id']])
     ctxt.assert_true(not exists, 'file appeared in listed files after removal')
 

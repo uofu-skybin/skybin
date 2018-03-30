@@ -24,7 +24,7 @@ def version_test(ctxt):
     f = ctxt.renter.upload_file(file2, dest_path)
     ctxt.assert_true(len(f['versions']) == 2, 'failed to create new version')
 
-    all_files = ctxt.renter.list_files()['files']
+    all_files = ctxt.renter.list_files()
     ctxt.assert_true(len(all_files) == 1, 'created new file unexpectedly')
 
     # Download should by default download the latest version
@@ -41,7 +41,7 @@ def version_test(ctxt):
 
     # Remove the first version
     ctxt.renter.remove_file(f['id'], version_num=first_version)
-    all_files = ctxt.renter.list_files()['files']
+    all_files = ctxt.renter.list_files()
     ctxt.assert_true(len(all_files) == 1, 'removing version removed entire file')
 
     # Attempting to remove the final version should fail
@@ -63,7 +63,7 @@ def version_test(ctxt):
 
     # ...And deleting the file should delete all versions
     ctxt.renter.remove_file(f['id'])
-    all_files = ctxt.renter.list_files()['files']
+    all_files = ctxt.renter.list_files()
     ctxt.assert_true(len(all_files) == 0, 'renter should not have any files')
 
 def main():

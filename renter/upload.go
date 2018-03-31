@@ -140,7 +140,7 @@ func (r *Renter) uploadVersion(sourcePath string, finfo os.FileInfo,
 	// of a file which returns an updated copy of the file object.
 	err = r.metaClient.PostFileVersion(r.Config.RenterId, existingFile.ID, newVersion)
 	if err != nil {
-		r.removeVersionBlocks(newVersion)
+		r.removeVersionContents(newVersion)
 		return nil, fmt.Errorf("Unable to update version metadata. Error: %s", err)
 	}
 	if shouldOverwrite {
@@ -149,7 +149,7 @@ func (r *Renter) uploadVersion(sourcePath string, finfo os.FileInfo,
 		if err != nil {
 			r.logger.Println("Unable to overwrite previous file version. Error:", err)
 		} else {
-			r.removeVersionBlocks(prevVersion)
+			r.removeVersionContents(prevVersion)
 			existingFile.Versions = existingFile.Versions[:len(existingFile.Versions)-1]
 		}
 	}
@@ -482,7 +482,7 @@ func (r *Renter) findUploadStorage(up *fileUpload) ([]*blockUpload, error) {
 }
 
 func (r *Renter) undoUpload(up *fileUpload) {
-	r.removeVersionBlocks(up.version)
+	r.removeVersionContents(up.version)
 }
 
 // Creates file metadata from upload metadata.

@@ -296,10 +296,11 @@ func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {
 type removeFileReq struct {
 	FileID     string `json:"fileID"`
 	VersionNum *int   `json:"versionNum"`
+	Recursive  bool   `json:"recursive"`
 }
 
 func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
-	var req downloadFileReq
+	var req removeFileReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		server.logger.Println(err)
@@ -308,7 +309,7 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.renter.RemoveFile(req.FileId, req.VersionNum)
+	err = server.renter.RemoveFile(req.FileID, req.VersionNum, req.Recursive)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,

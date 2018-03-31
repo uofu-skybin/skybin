@@ -6,7 +6,6 @@ Framework and helpers for running integration tests.
 from renter import RenterAPI
 import json
 import os
-import os.path
 import sys
 import random
 import shutil
@@ -20,6 +19,9 @@ DEFAULT_REPOS_DIR = os.path.abspath('./repos')
 
 # Default location for test files
 DEFAULT_TEST_FILE_DIR = os.path.abspath('./files')
+
+# Default size for test files if no size is specified
+DEFAULT_TEST_FILE_SIZE = 10 * 1024
 
 # Whether test logging is enabled by default
 LOG_ENABLED = True
@@ -155,8 +157,8 @@ class RenterService(Service):
     def share_file(self, file_id, user_id):
         return self._api.share_file(file_id, user_id)
 
-    def remove_file(self, file_id, version_num=None):
-        return self._api.remove_file(file_id, version_num=version_num)
+    def remove_file(self, file_id, version_num=None, recursive=None):
+        return self._api.remove_file(file_id, version_num=version_num, recursive=recursive)
 
     def list_files(self):
         return self._api.list_files()
@@ -195,7 +197,7 @@ class TestContext:
         for filename in self.test_files:
             os.remove(filename)
 
-    def create_test_file(self, size, parent_folder=None):
+    def create_test_file(self, size=DEFAULT_TEST_FILE_SIZE, parent_folder=None):
         """Create a test file. Returns the file's name."""
         parent_folder = parent_folder or self.test_file_dir
         file_name = create_file_name()
@@ -212,6 +214,17 @@ class TestContext:
         os.makedirs(folder_path)
         return folder_path
 
+    def get_test_file(self):
+        """Get an arbitrary test file from the existing set.
+        If none are present, this creates one.
+        """
+        if len(self.test_files) > 0:
+            return random.choice(self.test_files)
+        return self.create_test_file(size=DEFAULT_TEST_FILE_SIZE)
+
+    def create_file_name(self):
+        return create_file_name()
+
     def create_output_path(self):
         """Get an output path that a file can be downloaded to."""
         filename = create_file_name()
@@ -224,6 +237,13 @@ class TestContext:
         path = '{}/{}'.format(self.test_file_dir, foldername)
         return path
 
+    def relpath(self, path):
+        """Get the name of a file or folder relative to the context's test folder."""
+        p = os.path.relpath(path, self.test_file_dir)
+        if p == '.':
+            return ''
+        return p
+
     def assert_true(self, condition, message=''):
         """If condition is not true, prints message and exits."""
         if not condition:
@@ -233,7 +253,7 @@ class TestContext:
         """Prints message and exits immediately with an error."""
         print('FAIL:', message)
         self.teardown()
-        sys.exit(1)        
+        sys.exit(1)
 
     def log(self, *args):
         """Print the given arguments."""

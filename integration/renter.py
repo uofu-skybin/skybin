@@ -36,7 +36,7 @@ class RenterAPI:
             'fileId': file_id,
         }
         resp = requests.post(self.base_url + '/files/get-metadata', json=args)
-        if resp.status_code != 201:
+        if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content.decode('utf-8'))
 
@@ -81,11 +81,15 @@ class RenterAPI:
             raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))
         return json.loads(resp.content.decode('utf-8'))
 
-    def remove_file(self, file_id, version_num=None):
+    def remove_file(self, file_id, version_num=None, recursive=None):
         url = '{}/files/remove'.format(self.base_url)
-        args = {'fileID': file_id}
+        args = {
+            'fileID': file_id,
+        }
         if version_num != None:
             args['versionNum'] = version_num
+        if recursive != None:
+            args['recursive'] = recursive
         resp = requests.post(url, json=args)
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))

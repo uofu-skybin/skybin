@@ -140,6 +140,9 @@ class RenterService(Service):
     def upload_file(self, source, dest, should_overwrite=None):
         return self._api.upload_file(source, dest, should_overwrite=should_overwrite)
 
+    def get_file(self, file_id):
+        return self._api.get_file(file_id)
+
     def download_file(self, file_id, destination, version_num=None):
         return self._api.download_file(file_id, destination, version_num=version_num)
 
@@ -224,9 +227,13 @@ class TestContext:
     def assert_true(self, condition, message=''):
         """If condition is not true, prints message and exits."""
         if not condition:
-            print('FAIL:', message)
-            self.teardown()
-            sys.exit(1)
+            self.fail(message)
+
+    def fail(self, message=''):
+        """Prints message and exits immediately with an error."""
+        print('FAIL:', message)
+        self.teardown()
+        sys.exit(1)        
 
     def log(self, *args):
         """Print the given arguments."""

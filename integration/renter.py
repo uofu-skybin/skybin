@@ -31,6 +31,15 @@ class RenterAPI:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content.decode('utf-8'))
 
+    def get_file(self, file_id):
+        args = {
+            'fileId': file_id,
+        }
+        resp = requests.post(self.base_url + '/files/get-metadata', json=args)
+        if resp.status_code != 201:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))
+
     def download_file(self, file_id, destination, version_num=None):
         url = self.base_url + '/files/download'
         args = {

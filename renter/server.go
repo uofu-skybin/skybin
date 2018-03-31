@@ -24,6 +24,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
 	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
+	router.HandleFunc("/files/get-metadata", server.getFileMetadata).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
 	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
 	router.HandleFunc("/files/upload", server.uploadFile).Methods("POST")
@@ -98,6 +99,29 @@ func (server *renterServer) reserveStorage(w http.ResponseWriter, r *http.Reques
 		Contracts: contracts,
 	}
 	server.writeResp(w, http.StatusCreated, &resp)
+}
+
+type getFileReq struct {
+	FileId string `json:"fileId"`
+}
+
+func (server *renterServer) getFileMetadata(w http.ResponseWriter, r *http.Request) {
+	var req getFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+	file, err := server.renter.GetFile(req.FileId)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, file)
 }
 
 type getFilesResp struct {

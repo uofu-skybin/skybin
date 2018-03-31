@@ -184,12 +184,12 @@ class TestContext:
         self.additional_renters = []
         self.test_file_dir = test_file_dir
         self.log_enabled = log_enabled
-        self._test_files = []
+        self.test_files = []
         self._remove_test_files = remove_test_files
         self._teardown_db = teardown_db
 
     def _remove_files(self):
-        for filename in self._test_files:
+        for filename in self.test_files:
             os.remove(filename)
 
     def create_test_file(self, size, parent_folder=None):
@@ -198,7 +198,7 @@ class TestContext:
         file_name = create_file_name()
         file_path = '{}/{}'.format(parent_folder, file_name)
         create_test_file(file_path, size)
-        self._test_files.append(file_path)
+        self.test_files.append(file_path)
         return file_path
 
     def create_test_folder(self, parent_folder=None):
@@ -269,7 +269,7 @@ def init_renter(homedir, alias, metaserver_addr, api_addr):
         _, stderr = process.communicate()
         raise ValueError('renter init failed. stderr={}'.format(stderr))
 
-def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=None):
+def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*1024*1024*1024):
     """Set up a skybin provider directory"""
     args = [SKYBIN_CMD, 'provider', 'init',
             '-homedir', homedir,

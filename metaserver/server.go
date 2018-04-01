@@ -91,7 +91,8 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 
 	router.Handle("/paypal/create", authMiddleware.Handler(server.getCreatePaypalPaymentHandler())).Methods("POST")
 	router.Handle("/paypal/execute", authMiddleware.Handler(server.getExecutePaypalPaymentHandler())).Methods("POST")
-	router.Handle("/paypal/withdraw", authMiddleware.Handler(server.getPaypalWithdrawHandler())).Methods("POST")
+	router.Handle("/paypal/renter-withdraw", authMiddleware.Handler(server.getRenterPaypalWithdrawHandler())).Methods("POST")
+	router.Handle("/paypal/provider-withdraw", authMiddleware.Handler(server.getProviderPaypalWithdrawHandler())).Methods("POST")
 
 	if showDash {
 		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")

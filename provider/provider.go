@@ -310,7 +310,7 @@ type Info struct {
 	TotalRenters     int    `json:"totalRenters"`
 }
 
-func (provider *Provider) GetInfo() *Info {
+func (provider *Provider) GetPublicInfo() *Info {
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
 	return &Info{
@@ -323,6 +323,21 @@ func (provider *Provider) GetInfo() *Info {
 		TotalRenters:     len(provider.renters),
 		TotalBlocks:      provider.TotalBlocks,
 	}
+}
+
+func (provider *Provider) GetPrivateInfo() (*core.ProviderInfo, error) {
+	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	err := metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("Error authenticating with metaserver: %s", err)
+	}
+
+	info, err := metaService.GetProvider(provider.Config.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+
+	return info, nil
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -374,5 +389,20 @@ func (provider *Provider) UpdateMeta() error {
 	if err != nil {
 		return fmt.Errorf("Error updating provider: %s", err)
 	}
+	return nil
+}
+
+func (provider *Provider) Withdraw(email string, amount int) error {
+	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return err
+	}
+
+	err = client.ProviderWithdraw(provider.Config.ProviderID, email, amount)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

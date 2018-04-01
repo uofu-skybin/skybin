@@ -433,7 +433,7 @@ func (r *Renter) Withdraw(email string, amount int) error {
 		return err
 	}
 
-	err = r.metaClient.Withdraw(r.Config.RenterId, email, amount)
+	err = r.metaClient.RenterWithdraw(r.Config.RenterId, email, amount)
 	if err != nil {
 		return err
 	}

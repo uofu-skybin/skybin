@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"skybin/core"
+	"skybin/metaserver"
 	"skybin/util"
 
 	"github.com/gorilla/mux"
@@ -30,8 +31,10 @@ func NewLocalServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/config", server.getConfig).Methods("GET")
 	router.HandleFunc("/config", server.postConfig).Methods("POST")
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
+	router.HandleFunc("/private-info", server.getPrivateInfo).Methods("GET")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/stats", server.getStats).Methods("GET")
+	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
 
 	return &server
 }
@@ -42,7 +45,16 @@ func (server *localServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (server *localServer) getInfo(w http.ResponseWriter, r *http.Request) {
-	info := server.provider.GetInfo()
+	info := server.provider.GetPublicInfo()
+	server.writeResp(w, http.StatusOK, info)
+}
+
+func (server *localServer) getPrivateInfo(w http.ResponseWriter, r *http.Request) {
+	info, err := server.provider.GetPrivateInfo()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{err.Error()})
+		return
+	}
 	server.writeResp(w, http.StatusOK, info)
 }
 
@@ -92,6 +104,28 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	err = server.provider.saveSnapshot()
 	if err != nil {
 		server.logger.Println("Unable to save snapshot. Error:", err)
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+func (server *localServer) withdraw(w http.ResponseWriter, r *http.Request) {
+	var payload metaserver.ProviderPaypalWithdrawReq
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	err = server.provider.Withdraw(
+		payload.Email,
+		payload.Amount,
+	)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
 		return
 	}
 

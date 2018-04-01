@@ -1000,17 +1000,56 @@ func (client *Client) ExecutePaypalPayment(paymentID, payerID, renterID string) 
 	return nil
 }
 
-func (client *Client) Withdraw(renterID, email string, amount int) error {
+func (client *Client) RenterWithdraw(renterID, email string, amount int) error {
 	if client.token == "" {
 		return errors.New("must authorize before calling this method")
 	}
 
-	url := fmt.Sprintf("http://%s/paypal/withdraw", client.addr)
+	url := fmt.Sprintf("http://%s/paypal/renter-withdraw", client.addr)
 
-	reqBody := PaypalWithdrawReq{
+	reqBody := RenterPaypalWithdrawReq{
 		RenterID: renterID,
 		Email:    email,
 		Amount:   amount,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
+func (client *Client) ProviderWithdraw(providerID, email string, amount int) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/provider-withdraw", client.addr)
+
+	reqBody := ProviderPaypalWithdrawReq{
+		ProviderID: providerID,
+		Email:      email,
+		Amount:     amount,
 	}
 
 	b, err := json.Marshal(reqBody)

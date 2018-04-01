@@ -159,16 +159,16 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 	})
 }
 
-type PaypalWithdrawReq struct {
+type RenterPaypalWithdrawReq struct {
 	// Amount to withdraw in cents.
 	Amount   int    `json:"amount"`
 	Email    string `json:"email"`
 	RenterID string `json:"renterID"`
 }
 
-func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
+func (server *MetaServer) getRenterPaypalWithdrawHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload PaypalWithdrawReq
+		var payload RenterPaypalWithdrawReq
 		err := json.NewDecoder(r.Body).Decode(&payload)
 		if err != nil {
 			writeErr("Could not parse payload", http.StatusBadRequest, w)
@@ -248,6 +248,104 @@ func (server *MetaServer) getPaypalWithdrawHandler() http.HandlerFunc {
 		// BUG(kincaid): Possible race condition here. Add DB operation for atomically decrementing wallet balance.
 		renter.Balance -= payload.Amount * 10
 		err = server.db.UpdateRenter(renter)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+type ProviderPaypalWithdrawReq struct {
+	// Amount to withdraw in cents.
+	Amount     int    `json:"amount"`
+	Email      string `json:"email"`
+	ProviderID string `json:"providerID"`
+}
+
+func (server *MetaServer) getProviderPaypalWithdrawHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload ProviderPaypalWithdrawReq
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			writeErr("Could not parse payload", http.StatusBadRequest, w)
+			return
+		}
+
+		if payload.Email == "" {
+			writeErr("Must supply email", http.StatusBadRequest, w)
+			return
+		}
+
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if providerID, present := claims["providerID"]; !present || providerID.(string) != payload.ProviderID {
+			writeErr("cannot withdraw form other users", http.StatusUnauthorized, w)
+			return
+		}
+
+		provider, err := server.db.FindProviderByID(payload.ProviderID)
+		if err != nil {
+			writeErr(err.Error(), http.StatusNotFound, w)
+			return
+		}
+
+		c, err := paypalsdk.NewClient(
+			"AVxS4Zhi1bwj9ahQx_Rx6x99blBFPNkUkMPOGOxLVGhl3mwjzxJ1RuW_eIqyO7DWempaJLKleD267Jqo",
+			"EEWY_gYzFbIh4xduZ5t-AtuexnSBwgdzA7FmaDeUKF1qAKlgX2RoTFaTRSfD5UUVwuSXSvJrxCUog3cw",
+			paypalsdk.APIBaseSandBox,
+		)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		_, err = c.GetAccessToken()
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		// Fail if the user tries to withdraw more than they currently have.
+		if payload.Amount*10 > provider.Balance {
+			writeErr("Cannot withdraw more than balance", http.StatusBadRequest, w)
+			return
+		}
+
+		dollars := payload.Amount / 100
+		cents := payload.Amount % 100
+		amountToWithdraw := fmt.Sprintf("%d.%d", dollars, cents)
+
+		_, err = c.CreateSinglePayout(paypalsdk.Payout{
+			SenderBatchHeader: &paypalsdk.SenderBatchHeader{
+				EmailSubject: "Withdrawal from SkyBin",
+			},
+			Items: []paypalsdk.PayoutItem{
+				paypalsdk.PayoutItem{
+					RecipientType: "EMAIL",
+					Receiver:      payload.Email,
+					Amount: &paypalsdk.AmountPayout{
+						Currency: "USD",
+						Value:    amountToWithdraw,
+					},
+					Note: fmt.Sprintf("Provider ID: %s", provider.ID),
+				},
+			},
+		})
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			errorResp := err.(*paypalsdk.ErrorResponse)
+			server.logger.Printf("%+v", errorResp.Details)
+			return
+		}
+
+		// BUG(kincaid): Possible race condition here. Add DB operation for atomically decrementing wallet balance.
+		provider.Balance -= payload.Amount * 10
+		err = server.db.UpdateProvider(provider)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return

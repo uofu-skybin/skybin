@@ -354,7 +354,7 @@ func (server *renterServer) executePaypalPayment(w http.ResponseWriter, r *http.
 }
 
 func (server *renterServer) withdraw(w http.ResponseWriter, r *http.Request) {
-	var payload metaserver.PaypalWithdrawReq
+	var payload metaserver.RenterPaypalWithdrawReq
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
 		server.logger.Println(err)

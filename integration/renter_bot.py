@@ -68,7 +68,7 @@ def run_step(renter, test_files, args):
     renter_info = renter.get_info()
     files = renter.list_files()
 
-    action = random.choices(ACTIONS, weights=WEIGHTS)
+    action = random.choices(ACTIONS, weights=WEIGHTS)[0]
 
     if action == 'REMOVE' or renter_info['totalFiles'] >= args.max_files or renter_info['usedStorage'] >= args.max_used_space:
         f = random.choice(files)
@@ -134,7 +134,7 @@ def main():
                         help='number of test files to create, if files_folder does not already exist')
     parser.add_argument('--min_file_size', type=int, default=DEFAULT_MIN_FILE_SIZE,
                         help='minimum size of test files to create, if files_folder does not already exist')
-    parser.add_argument('--max_file_size', type=int, default=DEFAULT_MIN_FILE_SIZE,
+    parser.add_argument('--max_file_size', type=int, default=DEFAULT_MAX_FILE_SIZE,
                         help='maximum size of test files to create, if files_folder does not already exist')
     parser.add_argument('--op_freq', type=float, default=DEFAULT_OP_FREQ_SEC,
                         help='Frequency at which to perform actions on the network, in seconds')
@@ -168,6 +168,7 @@ def main():
         test_files = glob.glob(args.files_folder + '/*')
         test_files = [os.path.abspath(name) for name in test_files]
     else:
+        print('creating test files in ', args.files_folder)
         os.makedirs(args.files_folder)
         test_files = []
         for _ in range(args.num_test_files):
@@ -182,6 +183,7 @@ def main():
     pprint(vars(args))
     print('renter info:')
     pprint(renter.get_info())
+    print('starting action loop')
     try:
         run_bot(renter, test_files, args)
     finally:

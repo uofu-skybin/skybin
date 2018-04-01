@@ -312,7 +312,7 @@ func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.R
 	}
 
 	amountString := r.FormValue("amount")
-	amount, err := strconv.Atoi(amountString)
+	amount, err := strconv.ParseInt(amountString, 10, 64)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})

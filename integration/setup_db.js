@@ -11,3 +11,6 @@ db.files.createIndex({"id": 1}, {unique: true})
 db.files.createIndex({"name": 1, "ownerid": 1}, {unique: true})
 
 db.contracts.createIndex({"id": 1}, {unique: true})
+
+// There should only be one payment object per contract.
+db.payments.createIndex({"contract": 1}, {unique: true})

@@ -13,7 +13,7 @@ import (
 
 type CreatePaypalPaymentReq struct {
 	// Amount for the payment, in cents.
-	Amount    int    `json:"amount"`
+	Amount    int64  `json:"amount"`
 	ReturnURL string `json:"returnURL"`
 	CancelURL string `json:"cancelURL"`
 }
@@ -140,8 +140,10 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 
 		// BUG(kincaid): Possible race condition here. Add DB operation for atomically incrementing wallet balance.
 		server.logger.Println(resp.Transactions[0].Amount.Total)
-		amountInCents, err := strconv.Atoi(
+		amountInCents, err := strconv.ParseInt(
 			strings.Replace(resp.Transactions[0].Amount.Total, ".", "", 1),
+			10,
+			64,
 		)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
@@ -161,7 +163,7 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 
 type RenterPaypalWithdrawReq struct {
 	// Amount to withdraw in cents.
-	Amount   int    `json:"amount"`
+	Amount   int64  `json:"amount"`
 	Email    string `json:"email"`
 	RenterID string `json:"renterID"`
 }
@@ -259,7 +261,7 @@ func (server *MetaServer) getRenterPaypalWithdrawHandler() http.HandlerFunc {
 
 type ProviderPaypalWithdrawReq struct {
 	// Amount to withdraw in cents.
-	Amount     int    `json:"amount"`
+	Amount     int64  `json:"amount"`
 	Email      string `json:"email"`
 	ProviderID string `json:"providerID"`
 }

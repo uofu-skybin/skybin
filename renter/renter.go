@@ -135,7 +135,7 @@ type Info struct {
 	UsedStorage     int64  `json:"usedStorage"`
 	TotalContracts  int    `json:"totalContracts"`
 	TotalFiles      int    `json:"totalFiles"`
-	Balance         int    `json:"balance"`
+	Balance         int64  `json:"balance"`
 }
 
 func (r *Renter) Info() (*Info, error) {
@@ -399,7 +399,7 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 	return r.removeFile(file)
 }
 
-func (r *Renter) CreatePaypalPayment(amount int, returnURL, cancelURL string) (string, error) {
+func (r *Renter) CreatePaypalPayment(amount int64, returnURL, cancelURL string) (string, error) {
 	err := r.authorizeMeta()
 	if err != nil {
 		return "", err
@@ -427,7 +427,7 @@ func (r *Renter) ExecutePaypalPayment(paymentID, payerID string) error {
 	return nil
 }
 
-func (r *Renter) Withdraw(email string, amount int) error {
+func (r *Renter) Withdraw(email string, amount int64) error {
 	err := r.authorizeMeta()
 	if err != nil {
 		return err

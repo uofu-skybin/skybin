@@ -66,6 +66,8 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.getContractHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.putContractHandler())).Methods("PUT")
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.deleteContractHandler())).Methods("DELETE")
+	router.Handle("/renters/{renterID}/contracts/{contractID}/payment", authMiddleware.Handler(server.getContractPaymentHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/contracts/{contractID}/payment", authMiddleware.Handler(server.putContractPaymentHandler())).Methods("PUT")
 
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.getFilesHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.postFileHandler())).Methods("POST")

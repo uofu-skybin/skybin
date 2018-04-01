@@ -18,7 +18,7 @@ type ProviderInfo struct {
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int64  `json:"storageRate"`
 	// The provider's balance, in tenths of cents.
-	Balance int `json:"balance"`
+	Balance int64 `json:"balance"`
 }
 
 type RenterInfo struct {
@@ -28,7 +28,7 @@ type RenterInfo struct {
 	Files     []string `json:"files"`
 	Shared    []string `json:"shared"`
 	// The renter's balance, in tenths of cents.
-	Balance int `json:"balance"`
+	Balance int64 `json:"balance"`
 }
 
 type Contract struct {
@@ -36,10 +36,24 @@ type Contract struct {
 	RenterId          string    `json:"renterId"`
 	ProviderId        string    `json:"providerId"`
 	StorageSpace      int64     `json:"storageSpace"`
+	Price             int64     `json:"price"`
 	StartDate         time.Time `json:"startDate"`
 	EndDate           time.Time `json:"endDate"`
 	RenterSignature   string    `json:"renterSignature"`
 	ProviderSignature string    `json:"providerSignature"`
+}
+
+// PaymentInfo contains the details describing payment data for a given
+// contract.
+type PaymentInfo struct {
+	// The contract that this payment information is associated with.
+	Contract string `json:"contract"`
+	// Whether or not the renter is currently "paying down" the contract.
+	IsPaying bool `json:"isPaying"`
+	// The date of the last payment.
+	LastPaymentTime time.Time `json:"lastPaymentTime"`
+	// The remaining amount to be paid on the contract.
+	Balance int64 `json:"balance"`
 }
 
 type BlockLocation struct {

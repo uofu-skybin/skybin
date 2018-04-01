@@ -392,7 +392,7 @@ func (provider *Provider) UpdateMeta() error {
 	return nil
 }
 
-func (provider *Provider) Withdraw(email string, amount int) error {
+func (provider *Provider) Withdraw(email string, amount int64) error {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
 	if err != nil {

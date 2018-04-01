@@ -678,3 +678,73 @@ func (db *mongoDB) DeleteContract(contractID string) error {
 	}
 	return nil
 }
+
+// Payment operations
+//====================
+
+// Return a list of all payments in the database.
+func (db *mongoDB) FindAllPayments() ([]core.PaymentInfo, error) {
+	var result []core.PaymentInfo
+	err := db.findAllFromCollection("payments", &result)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = make([]core.PaymentInfo, 0)
+	}
+	return result, nil
+}
+
+// Find the payment associated with the given contract.
+func (db *mongoDB) FindPaymentByContract(contractID string) (*core.PaymentInfo, error) {
+	session := db.session.Copy()
+	defer session.Close()
+
+	c := session.DB(dbName).C("payments")
+
+	selector := bson.M{"contract": contractID}
+	var result core.PaymentInfo
+	err := c.Find(selector).One(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// Insert the given payment into the database.
+func (db *mongoDB) InsertPayment(payment *core.PaymentInfo) error {
+	err := db.insertIntoCollection("payments", payment)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Update the given payment.
+func (db *mongoDB) UpdatePayment(payment *core.PaymentInfo) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	c := session.DB(dbName).C("payments")
+	selector := bson.M{"contract": payment.Contract}
+	err := c.Update(selector, payment)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Delete the payment.
+func (db *mongoDB) DeletePayment(contractID string) error {
+	session := db.session.Copy()
+	defer session.Close()
+
+	c := session.DB(dbName).C("payments")
+	selector := bson.M{"contract": contractID}
+	err := c.Remove(selector)
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -76,6 +76,11 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			return
 		}
 
+		// TEST CODE! Make every contract cost 100 bucks for testing.
+		// contract.Price = 100 * 1000
+		// MORE TEST CODE! Make the duration of the contract 1 week.
+		// contract.EndDate = time.Now().Add(time.Hour * 24 * 7)
+
 		// Make sure the renter has enough money to pay for the contract.
 		if contract.Price > renter.Balance {
 			writeErr("cannot afford contract", http.StatusBadRequest, w)
@@ -91,11 +96,13 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			return
 		}
 
+		startTime := time.Now()
+
 		// Create a payment for the contract and insert it into the database.
 		payment := &core.PaymentInfo{
 			Contract:        contract.ID,
 			Balance:         contract.Price,
-			LastPaymentTime: time.Now(),
+			LastPaymentTime: startTime,
 			IsPaying:        true,
 		}
 		err = server.db.InsertPayment(payment)
@@ -104,7 +111,7 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			return
 		}
 
-		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
+		contract.StartDate = startTime
 		err = server.db.InsertContract(&contract)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)

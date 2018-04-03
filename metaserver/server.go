@@ -106,6 +106,8 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 		router.Handle("/{someFile}", http.FileServer(http.Dir(staticPath)))
 	}
 
+	server.startPaymentRunner()
+
 	return server
 }
 

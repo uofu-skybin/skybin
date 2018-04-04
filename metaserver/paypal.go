@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"skybin/core"
 	"skybin/util"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/logpacker/PayPal-Go-SDK"
 )
@@ -157,6 +159,21 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 			return
 		}
 
+		// Create a transaction showing the deposit.
+		transaction := &core.Transaction{
+			UserType:        "renter",
+			UserID:          renter.ID,
+			TransactionType: "deposit",
+			Amount:          amountInCents * 10,
+			Date:            time.Now(),
+			Description:     "Paypal deposit",
+		}
+		err = server.db.InsertTransaction(transaction)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -255,6 +272,21 @@ func (server *MetaServer) getRenterPaypalWithdrawHandler() http.HandlerFunc {
 			return
 		}
 
+		// Create a transaction showing the withdrawal.
+		transaction := &core.Transaction{
+			UserType:        "renter",
+			UserID:          renter.ID,
+			TransactionType: "withdrawal",
+			Amount:          payload.Amount * 10,
+			Date:            time.Now(),
+			Description:     "Withdrawal",
+		}
+		err = server.db.InsertTransaction(transaction)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -348,6 +380,21 @@ func (server *MetaServer) getProviderPaypalWithdrawHandler() http.HandlerFunc {
 		// BUG(kincaid): Possible race condition here. Add DB operation for atomically decrementing wallet balance.
 		provider.Balance -= payload.Amount * 10
 		err = server.db.UpdateProvider(provider)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		// Create a transaction showing the withdrawal.
+		transaction := &core.Transaction{
+			UserType:        "provider",
+			UserID:          provider.ID,
+			TransactionType: "withdrawal",
+			Amount:          payload.Amount * 10,
+			Date:            time.Now(),
+			Description:     "Withdrawal",
+		}
+		err = server.db.InsertTransaction(transaction)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
 			return

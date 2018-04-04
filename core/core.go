@@ -56,6 +56,24 @@ type PaymentInfo struct {
 	Balance int64 `json:"balance"`
 }
 
+// Transaction describes a transaction involving either a renter or provider.
+type Transaction struct {
+	// Whether the transaction involved a renter or provider.
+	UserType string `json:"userType"`
+	// The ID of the associated user.
+	UserID string `json:"userId"`
+	// The contract associated with the transaction.
+	ContractID string `json:"contractId"`
+	// Whether the transction was a payment, receipt, deposit, or withdrawal.
+	TransactionType string `json:"transactionType"`
+	// The amount transferred.
+	Amount int64 `json:"amount"`
+	// A short description.
+	Description string `json:"description"`
+	// The time the transction occurred.
+	Date time.Time `json:"date"`
+}
+
 type BlockLocation struct {
 	ProviderId string `json:"providerId"`
 	Addr       string `json:"address"`

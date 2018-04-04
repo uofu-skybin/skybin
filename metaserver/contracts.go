@@ -2,6 +2,7 @@ package metaserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"skybin/core"
 	"skybin/util"
@@ -115,6 +116,22 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 		err = server.db.InsertContract(&contract)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Create a transaction showing the contract.
+		transaction := &core.Transaction{
+			UserType:        "renter",
+			UserID:          renter.ID,
+			ContractID:      contract.ID,
+			TransactionType: "payment",
+			Amount:          contract.Price,
+			Date:            startTime,
+			Description:     fmt.Sprintf("Contract %s formed with %s", contract.ID, contract.ProviderId),
+		}
+		err = server.db.InsertTransaction(transaction)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 

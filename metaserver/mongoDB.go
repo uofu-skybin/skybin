@@ -748,3 +748,59 @@ func (db *mongoDB) DeletePayment(contractID string) error {
 	}
 	return nil
 }
+
+// Transaction operations
+//=======================
+
+// Return a list of all transactions in the database.
+func (db *mongoDB) FindAllTransactions() ([]core.Transaction, error) {
+	result := make([]core.Transaction, 0)
+	err := db.findAllFromCollection("transactions", &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Find the transactions associated with given renter.
+func (db *mongoDB) FindTransactionsByRenter(renterID string) ([]core.Transaction, error) {
+	session := db.session.Copy()
+	defer session.Close()
+
+	c := session.DB(dbName).C("transactions")
+
+	selector := bson.M{"usertype": "renter", "userid": renterID}
+	result := make([]core.Transaction, 0)
+	err := c.Find(selector).All(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Find the transactions associated with given provider.
+func (db *mongoDB) FindTransactionsByProvider(providerID string) ([]core.Transaction, error) {
+	session := db.session.Copy()
+	defer session.Close()
+
+	c := session.DB(dbName).C("transactions")
+
+	selector := bson.M{"usertype": "provider", "userid": providerID}
+	result := make([]core.Transaction, 0)
+	err := c.Find(selector).All(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Insert the given transaction into the database.
+func (db *mongoDB) InsertTransaction(transaction *core.Transaction) error {
+	err := db.insertIntoCollection("transactions", transaction)
+	if err != nil {
+		return err
+	}
+	return nil
+}

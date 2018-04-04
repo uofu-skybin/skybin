@@ -55,11 +55,15 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.putProviderHandler())).Methods("PUT")
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.deleteProviderHandler())).Methods("DELETE")
 
+	router.Handle("/providers/{providerID}/transactions", authMiddleware.Handler(server.getProviderTransactionsHandler())).Methods("GET")
+
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters", server.getRenterByAliasHandler()).Queries("alias", "{alias}").Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.putRenterHandler())).Methods("PUT")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.deleteRenterHandler())).Methods("DELETE")
+
+	router.Handle("/renters/{renterID}/transactions", authMiddleware.Handler(server.getRenterTransactionsHandler())).Methods("GET")
 
 	router.Handle("/renters/{renterID}/contracts", authMiddleware.Handler(server.getContractsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/contracts", authMiddleware.Handler(server.postContractHandler())).Methods("POST")

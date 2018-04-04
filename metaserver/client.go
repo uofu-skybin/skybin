@@ -1077,3 +1077,69 @@ func (client *Client) ProviderWithdraw(providerID, email string, amount int64) e
 
 	return nil
 }
+
+func (client *Client) GetRenterTransactions(renterID string) ([]core.Transaction, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/transactions", client.addr, renterID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var transactions []core.Transaction
+	err = json.NewDecoder(resp.Body).Decode(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}
+
+func (client *Client) GetProviderTransactions(providerID string) ([]core.Transaction, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/providers/%s/transactions", client.addr, providerID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var transactions []core.Transaction
+	err = json.NewDecoder(resp.Body).Decode(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}

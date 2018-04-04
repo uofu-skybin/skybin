@@ -406,3 +406,17 @@ func (provider *Provider) Withdraw(email string, amount int64) error {
 
 	return nil
 }
+
+func (provider *Provider) ListTransactions() ([]core.Transaction, error) {
+	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := client.GetProviderTransactions(provider.Config.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+	return transactions, nil
+}

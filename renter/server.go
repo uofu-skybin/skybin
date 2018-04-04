@@ -37,6 +37,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/paypal/create", server.createPaypalPayment).Methods("POST")
 	router.HandleFunc("/paypal/execute", server.executePaypalPayment).Methods("POST")
 	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
+	router.HandleFunc("/transactions", server.getTransactions).Methods("GET")
 
 	return server
 }
@@ -373,6 +374,20 @@ func (server *renterServer) withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type getTransactionsResp struct {
+	Transactions []core.Transaction `json:"transactions"`
+}
+
+func (server *renterServer) getTransactions(w http.ResponseWriter, r *http.Request) {
+	transactions, err := server.renter.ListTransactions()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &getTransactionsResp{transactions})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

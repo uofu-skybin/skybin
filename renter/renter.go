@@ -441,6 +441,19 @@ func (r *Renter) Withdraw(email string, amount int64) error {
 	return nil
 }
 
+func (r *Renter) ListTransactions() ([]core.Transaction, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := r.metaClient.GetRenterTransactions(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	return transactions, nil
+}
+
 func (r *Renter) removeFile(file *core.File) error {
 	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
 	if err != nil {

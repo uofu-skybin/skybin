@@ -1,6 +1,7 @@
 package metaserver
 
 import (
+	"fmt"
 	"skybin/core"
 	"time"
 )
@@ -95,6 +96,22 @@ func (server *MetaServer) runPayments() {
 
 		// Update the payment information.
 		err = server.db.UpdatePayment(&paymentInfo)
+		if err != nil {
+			server.logger.Println("Error when running payments:", err)
+			return
+		}
+
+		// Create a transaction showing the payment.
+		transaction := &core.Transaction{
+			UserType:        "provider",
+			UserID:          provider.ID,
+			ContractID:      item.ID,
+			TransactionType: "payment",
+			Amount:          amountToPay,
+			Date:            time.Now(),
+			Description:     fmt.Sprintf("Payment for contract %s", item.ID),
+		}
+		err = server.db.InsertTransaction(transaction)
 		if err != nil {
 			server.logger.Println("Error when running payments:", err)
 			return

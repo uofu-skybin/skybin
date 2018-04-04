@@ -35,6 +35,7 @@ func NewLocalServer(provider *Provider, logger *log.Logger) http.Handler {
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/stats", server.getStats).Methods("GET")
 	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
+	router.HandleFunc("/transactions", server.getTransactions).Methods("GET")
 
 	return &server
 }
@@ -130,6 +131,20 @@ func (server *localServer) withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type getTransactionsResp struct {
+	Transactions []core.Transaction `json:"transactions"`
+}
+
+func (server *localServer) getTransactions(w http.ResponseWriter, r *http.Request) {
+	transactions, err := server.provider.ListTransactions()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &getTransactionsResp{transactions})
 }
 
 func (server *localServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

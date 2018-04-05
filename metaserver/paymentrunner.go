@@ -16,24 +16,25 @@ func (server *MetaServer) startPaymentRunner() {
 	go func() {
 		for range ticker.C {
 			server.logger.Println("Running payments...")
-			server.runPayments()
+			err := server.runPayments()
+			if err != nil {
+				server.logger.Println("Error when running payments:", err)
+			}
 		}
 	}()
 }
 
-func (server *MetaServer) runPayments() {
+func (server *MetaServer) runPayments() error {
 	// Retrieve a list of all contracts on the server.
 	contracts, err := server.db.FindAllContracts()
 	if err != nil {
-		server.logger.Println("Error when running payments:", err)
-		return
+		return err
 	}
 
 	// Retrieve a list of all the payments on the server.
 	payments, err := server.db.FindAllPayments()
 	if err != nil {
-		server.logger.Println("Error when running payments:", err)
-		return
+		return err
 	}
 
 	// Put the payments in a map so we can retrieve them a bit faster.
@@ -77,14 +78,12 @@ func (server *MetaServer) runPayments() {
 		// TODO: Again, we should add atomic increment and decrement db methods so race conditions don't happen.
 		provider, err := server.db.FindProviderByID(item.ProviderId)
 		if err != nil {
-			server.logger.Println("Error when running payments:", err)
-			return
+			return err
 		}
 		provider.Balance += amountToPay
 		err = server.db.UpdateProvider(provider)
 		if err != nil {
-			server.logger.Println("Error when running payments:", err)
-			return
+			return err
 		}
 		paymentInfo.Balance -= amountToPay
 		paymentInfo.LastPaymentTime = time.Now()
@@ -97,8 +96,7 @@ func (server *MetaServer) runPayments() {
 		// Update the payment information.
 		err = server.db.UpdatePayment(&paymentInfo)
 		if err != nil {
-			server.logger.Println("Error when running payments:", err)
-			return
+			return err
 		}
 
 		// Create a transaction showing the payment.
@@ -113,8 +111,9 @@ func (server *MetaServer) runPayments() {
 		}
 		err = server.db.InsertTransaction(transaction)
 		if err != nil {
-			server.logger.Println("Error when running payments:", err)
-			return
+			return err
 		}
 	}
+
+	return nil
 }

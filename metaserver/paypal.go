@@ -64,7 +64,7 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 					Currency: "USD",
 					Total:    amount,
 				},
-				Description: "My Payment",
+				Description: "SkyBin deposit",
 			}},
 			RedirectURLs: &paypalsdk.RedirectURLs{
 				ReturnURL: payload.ReturnURL,

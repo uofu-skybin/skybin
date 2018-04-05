@@ -150,8 +150,10 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
+		amountInTenthsOfCents := amountInCents * 10
+
 		// The renter balance is in tenths of cents, so convert accordingly.
-		renter.Balance += amountInCents * 10
+		renter.Balance += amountInTenthsOfCents
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
@@ -163,7 +165,7 @@ func (server *MetaServer) getExecutePaypalPaymentHandler() http.HandlerFunc {
 			UserType:        "renter",
 			UserID:          renter.ID,
 			TransactionType: "deposit",
-			Amount:          amountInCents * 10,
+			Amount:          amountInTenthsOfCents,
 			Date:            time.Now(),
 			Description:     "Paypal deposit",
 		}

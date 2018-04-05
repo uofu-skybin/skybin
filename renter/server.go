@@ -316,7 +316,8 @@ func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.R
 	amount, err := strconv.ParseInt(amountString, 10, 64)
 	if err != nil {
 		server.logger.Println(err)
-		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		errMsg := fmt.Sprintf("could not parse integer from %s", amountString)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: errMsg})
 		return
 	}
 

@@ -81,7 +81,6 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(CreatePaypalPaymentResp{ID: resp.ID})
-		server.logger.Println("it worked")
 	})
 }
 

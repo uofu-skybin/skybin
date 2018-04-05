@@ -104,10 +104,10 @@ func (server *MetaServer) runPayments() error {
 			UserType:        "provider",
 			UserID:          provider.ID,
 			ContractID:      item.ID,
-			TransactionType: "payment",
+			TransactionType: "receipt",
 			Amount:          amountToPay,
 			Date:            time.Now(),
-			Description:     fmt.Sprintf("Payment for contract %s", item.ID),
+			Description:     fmt.Sprintf("Payment received for contract %s", item.ID),
 		}
 		err = server.db.InsertTransaction(transaction)
 		if err != nil {

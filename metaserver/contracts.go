@@ -78,19 +78,19 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 		}
 
 		// TEST CODE! Make every contract cost 100 bucks for testing.
-		// contract.Fee = 100 * 1000
+		// contract.StorageFee = 100 * 1000
 		// MORE TEST CODE! Make the duration of the contract 1 week.
 		// contract.EndDate = time.Now().Add(time.Hour * 24 * 7)
 
 		// Make sure the renter has enough money to pay for the contract.
-		if contract.Fee > renter.Balance {
+		if contract.StorageFee > renter.Balance {
 			writeErr("cannot afford contract", http.StatusBadRequest, w)
 			return
 		}
 
 		// Subtract the balance of the contract from the renter's account.
 		// TODO: Add atomic DB operations to increment and decrement renter balances.
-		renter.Balance -= contract.Fee
+		renter.Balance -= contract.StorageFee
 		err = server.db.UpdateRenter(renter)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
@@ -102,7 +102,7 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 		// Create a payment for the contract and insert it into the database.
 		payment := &core.PaymentInfo{
 			Contract:        contract.ID,
-			Balance:         contract.Fee,
+			Balance:         contract.StorageFee,
 			LastPaymentTime: startTime,
 			IsPaying:        true,
 		}
@@ -125,7 +125,7 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			UserID:          renter.ID,
 			ContractID:      contract.ID,
 			TransactionType: "payment",
-			Amount:          contract.Fee,
+			Amount:          contract.StorageFee,
 			Date:            startTime,
 			Description:     fmt.Sprintf("Contract %s formed with %s", contract.ID, contract.ProviderId),
 		}

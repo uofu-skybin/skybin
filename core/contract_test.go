@@ -20,6 +20,7 @@ func TestSignVerify(t *testing.T) {
 		RenterId:     "abcdefg",
 		ProviderId:   "hijklmnop",
 		StorageSpace: 1024 * 1024,
+		StorageFee:   1000000,
 	}
 	sig, err := SignContract(&c1, key)
 	if err != nil {
@@ -60,6 +61,13 @@ func TestSignVerify(t *testing.T) {
 	}
 
 	c2 = c1
+	c2.StorageFee = 99
+	err = VerifyContractSignature(&c2, sig, key.PublicKey)
+	if err == nil {
+		t.Fatal("verify should fail - contract does not match original")
+	}
+
+	c2 = c1
 	c2.StartDate = time.Now().Add(1 * time.Minute)
 	err = VerifyContractSignature(&c2, sig, key.PublicKey)
 	if err == nil {
@@ -82,6 +90,7 @@ func TestCompare(t *testing.T) {
 		EndDate:           time.Now().Add(10 * time.Second),
 		ProviderId:        "pid",
 		StorageSpace:      1 << 30,
+		StorageFee:        1000000,
 		RenterSignature:   "rsig",
 		ProviderSignature: "psig",
 	}
@@ -104,7 +113,12 @@ func TestCompare(t *testing.T) {
 		t.Fatal("contracts should be different")
 	}
 	c2 = c1
-	c1.StorageSpace = 1
+	c2.StorageSpace = 1
+	if CompareContracts(c1, c2) {
+		t.Fatal("contracts should be different")
+	}
+	c2 = c1
+	c2.StorageFee = 99
 	if CompareContracts(c1, c2) {
 		t.Fatal("contracts should be different")
 	}
@@ -138,6 +152,7 @@ func TestCompareTerms(t *testing.T) {
 		StartDate:         time.Now(),
 		EndDate:           time.Now().AddDate(0, 1, 0),
 		StorageSpace:      3734,
+		StorageFee:        99938234,
 		RenterSignature:   "askdjou",
 		ProviderSignature: "doueqnf",
 	}
@@ -147,7 +162,6 @@ func TestCompareTerms(t *testing.T) {
 		t.Fatal("identical contracts should match")
 	}
 
-	// Change signatures
 	c2 = c1
 	c2.RenterSignature = "cxmnv"
 	c2.ProviderSignature = "c,mzoj"
@@ -156,7 +170,6 @@ func TestCompareTerms(t *testing.T) {
 		t.Fatal("identical contracts with different signatures should match")
 	}
 
-	// Change renter ID
 	c2 = c1
 	c2.RenterId = "1"
 	doMatch = CompareContractTerms(&c1, &c2)
@@ -164,7 +177,6 @@ func TestCompareTerms(t *testing.T) {
 		t.Fatal("contracts should not match")
 	}
 
-	// Change provider ID
 	c2 = c1
 	c2.ProviderId = "1"
 	doMatch = CompareContractTerms(&c1, &c2)
@@ -172,7 +184,6 @@ func TestCompareTerms(t *testing.T) {
 		t.Fatal("contracts should not match")
 	}
 
-	// Change storage space
 	c2 = c1
 	c2.StorageSpace = 1
 	doMatch = CompareContractTerms(&c1, &c2)
@@ -180,7 +191,13 @@ func TestCompareTerms(t *testing.T) {
 		t.Fatal("contracts should not match")
 	}
 
-	// Change date fields
+	c2 = c1
+	c2.StorageFee = 43
+	doMatch = CompareContractTerms(&c1, &c2)
+	if doMatch {
+		t.Fatal("contracts should not match")
+	}
+
 	c2 = c1
 	c2.StartDate = time.Now().AddDate(1, 1, 1)
 	doMatch = CompareContractTerms(&c1, &c2)
@@ -202,6 +219,7 @@ func TestSerializeDeserialize(t *testing.T) {
 		RenterId:          "renter",
 		ProviderId:        "provider",
 		StorageSpace:      int64(123456789),
+		StorageFee:        392349234,
 		StartDate:         time.Now().UTC().Round(0),
 		EndDate:           time.Now().AddDate(0, 0, 30*6),
 		RenterSignature:   "dkjadsf",

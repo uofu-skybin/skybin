@@ -12,24 +12,19 @@ DEFAULT_NUM_FILES = 10
 DEFAULT_MIN_SIZE = 1024
 DEFAULT_MAX_SIZE = 10 * 1024 * 1024
 
-def multi_upload_test(ctxt, num_files=DEFAULT_NUM_FILES,
-                      min_size=DEFAULT_MIN_SIZE,
-                      max_size=DEFAULT_MAX_SIZE):
-    ctxt.log('multi upload test')
-
+def multi_upload_test(ctxt, args):
     ctxt.log('creating input files')
     input_files = []
     total_size = 0
-    for _ in range(num_files):
-        size = random.randint(min_size, max_size)
+    for _ in range(args.num_files):
+        size = random.randint(args.min_size, args.max_size)
         input_files.append(ctxt.create_test_file(size))
         total_size += size
 
     ctxt.log('reserving space')
     # Reserve space in fragments
-    frag_size = 5000000
-    bytes_to_reserve = total_size * 4
-    for _ in range(bytes_to_reserve//frag_size):
+    frag_size = args.reservation_size // 4
+    for _ in range(4):
         ctxt.renter.reserve_space(frag_size)
 
     ctxt.log('uploading files')
@@ -44,12 +39,12 @@ def multi_upload_test(ctxt, num_files=DEFAULT_NUM_FILES,
         is_match = filecmp.cmp(input_path, output_path)
         ctxt.assert_true(is_match, 'download does not match upload')
 
-    ctxt.log('ok')
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_providers', type=int, default=1,
                         help='number of providers to run')
+    parser.add_argument('--reservation_size', type=int, default=3*1024*1024*1024,
+                        help='amount of storage to reserve')
     parser.add_argument('--num_files', type=int, default=DEFAULT_NUM_FILES,
                         help='number of files to upload')
     parser.add_argument('--min_size', type=int, default=DEFAULT_MIN_SIZE,
@@ -61,12 +56,9 @@ def main():
         num_providers=args.num_providers,
     )
     try:
-        multi_upload_test(
-            ctxt,
-            num_files=args.num_files,
-            min_size=args.min_size,
-            max_size=args.max_size,
-        )
+        ctxt.log('multi upload test')
+        multi_upload_test(ctxt, args)
+        ctxt.log('ok')
     finally:
         ctxt.teardown()        
 

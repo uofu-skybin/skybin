@@ -18,6 +18,7 @@ type contractTerms struct {
 	ProviderId   string    `json:"providerId"`
 	RenterId     string    `json:"renterId"`
 	StartDate    time.Time `json:"startDate"`
+	StorageFee   int64     `json:"storageFee"`
 	StorageSpace int64     `json:"storageSpace"`
 }
 
@@ -27,8 +28,9 @@ func makeTerms(c *Contract) contractTerms {
 		ID:           c.ID,
 		ProviderId:   c.ProviderId,
 		RenterId:     c.RenterId,
-		StorageSpace: c.StorageSpace,
 		StartDate:    c.StartDate,
+		StorageFee:   c.StorageFee,
+		StorageSpace: c.StorageSpace,
 	}
 }
 
@@ -85,6 +87,7 @@ func CompareContractTerms(c1, c2 *Contract) bool {
 		c1.RenterId == c2.RenterId &&
 		c1.ProviderId == c2.ProviderId &&
 		c1.StorageSpace == c2.StorageSpace &&
+		c1.StorageFee == c2.StorageFee &&
 		c1.StartDate.Equal(c2.StartDate) &&
 		c1.EndDate.Equal(c2.EndDate)
 }

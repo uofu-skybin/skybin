@@ -524,10 +524,11 @@ func (r *Renter) removeBlock(block *core.Block) {
 		err = pvdr.RemoveBlock(r.Config.RenterId, block.ID)
 	}
 	if err != nil {
-		r.logger.Println("Unable to remove block %s from provider %s\n",
+		r.logger.Printf("Unable to remove block %s from provider %s\n",
 			block.ID, block.Location.ProviderId)
 		r.logger.Printf("Error: %s\n", err)
 		r.blocksToDelete = append(r.blocksToDelete, block)
+		return
 	}
 
 	// Reclaim the storage used by the block.

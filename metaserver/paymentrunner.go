@@ -58,7 +58,7 @@ func (server *MetaServer) runPayments() {
 		totalContractTime := item.EndDate.Sub(item.StartDate)
 		timeSinceLastPayment := time.Now().Sub(paymentInfo.LastPaymentTime)
 		portionToPay := float64(timeSinceLastPayment.Nanoseconds()) / float64(totalContractTime.Nanoseconds())
-		amountToPay := int64(portionToPay * float64(item.Fee))
+		amountToPay := int64(portionToPay * float64(item.StorageFee))
 		// server.logger.Println("Portion to pay:", portionToPay, "Amount:", amountToPay)
 
 		// If the amount to pay is 0, we probably don't have anything to pay

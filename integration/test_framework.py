@@ -52,6 +52,13 @@ def create_file_name():
     filename = ''.join([random.choice(prefixes), unique_chars, random.choice(suffixes)])
     return filename
 
+def create_folder_name():
+    """Create a randomized name for a test folder."""
+    prefixes = ['folder', 'dir', 'things']
+    unique_chars = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
+    foldername = ''.join([random.choice(prefixes), unique_chars])
+    return foldername
+
 def create_test_file(location, size):
     """Create a test file
 
@@ -206,6 +213,12 @@ class TestContext:
         """Get an output path that a file can be downloaded to."""
         filename = create_file_name()
         path = '{}/{}'.format(self.test_file_dir, filename)
+        return path
+
+    def create_folder_output_path(self):
+        """Get an output path that a folder can be downloaded to."""
+        foldername = create_folder_name()
+        path = '{}/{}'.format(self.test_file_dir, foldername)
         return path
 
     def assert_true(self, condition, message=''):

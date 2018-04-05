@@ -36,7 +36,7 @@ type Contract struct {
 	RenterId          string    `json:"renterId"`
 	ProviderId        string    `json:"providerId"`
 	StorageSpace      int64     `json:"storageSpace"`
-	Price             int64     `json:"price"`
+	Fee               int64     `json:"fee"`
 	StartDate         time.Time `json:"startDate"`
 	EndDate           time.Time `json:"endDate"`
 	RenterSignature   string    `json:"renterSignature"`

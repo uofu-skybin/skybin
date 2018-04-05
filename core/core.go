@@ -17,6 +17,8 @@ type ProviderInfo struct {
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
 	StorageRate int64  `json:"storageRate"`
+	// The provider's balance, in tenths of cents.
+	Balance int64 `json:"balance"`
 }
 
 type RenterInfo struct {
@@ -25,6 +27,8 @@ type RenterInfo struct {
 	PublicKey string   `json:"publicKey"`
 	Files     []string `json:"files"`
 	Shared    []string `json:"shared"`
+	// The renter's balance, in tenths of cents.
+	Balance int64 `json:"balance"`
 }
 
 type Contract struct {
@@ -37,6 +41,37 @@ type Contract struct {
 	EndDate           time.Time `json:"endDate"`
 	RenterSignature   string    `json:"renterSignature"`
 	ProviderSignature string    `json:"providerSignature"`
+}
+
+// PaymentInfo contains the details describing payment data for a given
+// contract.
+type PaymentInfo struct {
+	// The contract that this payment information is associated with.
+	ContractID string `json:"contract"`
+	// Whether or not the renter is currently "paying down" the contract.
+	IsPaying bool `json:"isPaying"`
+	// The date of the last payment.
+	LastPaymentTime time.Time `json:"lastPaymentTime"`
+	// The remaining amount to be paid on the contract.
+	Balance int64 `json:"balance"`
+}
+
+// Transaction describes a transaction involving either a renter or provider.
+type Transaction struct {
+	// Whether the transaction involved a renter or provider.
+	UserType string `json:"userType"`
+	// The ID of the associated user.
+	UserID string `json:"userId"`
+	// The contract associated with the transaction.
+	ContractID string `json:"contractId"`
+	// Whether the transction was a payment, receipt, deposit, or withdrawal.
+	TransactionType string `json:"transactionType"`
+	// The amount transferred, in tenths of cents.
+	Amount int64 `json:"amount"`
+	// A short description.
+	Description string `json:"description"`
+	// The time the transaction occurred.
+	Date time.Time `json:"date"`
 }
 
 type BlockLocation struct {

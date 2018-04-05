@@ -135,6 +135,7 @@ type Info struct {
 	UsedStorage     int64  `json:"usedStorage"`
 	TotalContracts  int    `json:"totalContracts"`
 	TotalFiles      int    `json:"totalFiles"`
+	Balance         int64  `json:"balance"`
 }
 
 func (r *Renter) Info() (*Info, error) {
@@ -146,6 +147,16 @@ func (r *Renter) Info() (*Info, error) {
 	for _, blob := range r.freelist {
 		free += blob.Amount
 	}
+
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	renter, err := r.metaClient.GetRenter(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Info{
 		ID:              r.Config.RenterId,
 		Alias:           r.Config.Alias,
@@ -156,6 +167,7 @@ func (r *Renter) Info() (*Info, error) {
 		FreeStorage:     free,
 		TotalContracts:  len(r.contracts),
 		TotalFiles:      len(r.files),
+		Balance:         renter.Balance,
 	}, nil
 }
 
@@ -209,8 +221,8 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 		for _, child := range children {
 			err := r.metaClient.UpdateFile(r.Config.RenterId, child)
 			if err != nil {
-				return nil, err
 				r.logger.Println("RenameFile: Error updating child's name with metaserver:", err)
+				return nil, err
 			}
 		}
 	}
@@ -385,6 +397,61 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 		return r.removeFileVersion(file, *versionNum)
 	}
 	return r.removeFile(file)
+}
+
+func (r *Renter) CreatePaypalPayment(amount int64, returnURL, cancelURL string) (string, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return "", err
+	}
+
+	id, err := r.metaClient.CreatePaypalPayment(amount, returnURL, cancelURL)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
+func (r *Renter) ExecutePaypalPayment(paymentID, payerID string) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.ExecutePaypalPayment(paymentID, payerID, r.Config.RenterId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Renter) Withdraw(email string, amount int64) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.RenterWithdraw(r.Config.RenterId, email, amount)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Renter) ListTransactions() ([]core.Transaction, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := r.metaClient.GetRenterTransactions(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	return transactions, nil
 }
 
 func (r *Renter) removeFile(file *core.File) error {

@@ -18,6 +18,13 @@ class RenterAPI:
         resp = requests.post(self.base_url + '/reserve-storage', json={'amount': amount})
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))['contracts']
+
+    def list_contracts(self):
+        resp = requests.get(self.base_url + '/contracts')
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))['contracts']
 
     def upload_file(self, source, dest, should_overwrite=None):
         args = {

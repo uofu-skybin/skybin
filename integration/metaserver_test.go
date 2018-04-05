@@ -310,7 +310,7 @@ func TestGetContracts(t *testing.T) {
 		compared := false
 		for _, item := range result {
 			if item.ID == contract.ID {
-				if diff := deep.Equal(contract, item); diff != nil {
+				if diff := deep.Equal(&contract, item); diff != nil {
 					t.Fatal(diff)
 				}
 				compared = true

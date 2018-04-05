@@ -139,6 +139,9 @@ class RenterService(Service):
     def reserve_space(self, amount):
         return self._api.reserve_space(amount)
 
+    def list_contracts(self):
+        return self._api.list_contracts()
+
     def upload_file(self, source, dest, should_overwrite=None):
         return self._api.upload_file(source, dest, should_overwrite=should_overwrite)
 

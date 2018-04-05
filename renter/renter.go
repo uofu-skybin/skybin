@@ -170,6 +170,18 @@ func (r *Renter) Info() (*Info, error) {
 	}, nil
 }
 
+func (r *Renter) ListContracts() ([]*core.Contract, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	contracts, err := r.metaClient.GetRenterContracts(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	return contracts, nil
+}
+
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	if r.getFileByName(name) != nil {
 		return nil, fmt.Errorf("%s already exists.", name)

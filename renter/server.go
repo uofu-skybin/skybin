@@ -24,6 +24,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
 	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
+	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/files/get-metadata", server.getFileMetadata).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
 	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
@@ -99,6 +100,24 @@ func (server *renterServer) reserveStorage(w http.ResponseWriter, r *http.Reques
 		Contracts: contracts,
 	}
 	server.writeResp(w, http.StatusCreated, &resp)
+}
+
+type getContractsResp struct {
+	Contracts []*core.Contract `json:"contracts"`
+}
+
+func (server *renterServer) getContracts(w http.ResponseWriter, r *http.Request) {
+	contracts, err := server.renter.ListContracts()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: fmt.Sprintf("Unable to list contracts. Error :%v", err)})
+		return
+	}
+	resp := getContractsResp{
+		Contracts: contracts,
+	}
+	server.writeResp(w, http.StatusOK, &resp)
 }
 
 type getFileReq struct {

@@ -66,11 +66,11 @@ type Transaction struct {
 	ContractID string `json:"contractId"`
 	// Whether the transction was a payment, receipt, deposit, or withdrawal.
 	TransactionType string `json:"transactionType"`
-	// The amount transferred.
+	// The amount transferred, in tenths of cents.
 	Amount int64 `json:"amount"`
 	// A short description.
 	Description string `json:"description"`
-	// The time the transction occurred.
+	// The time the transaction occurred.
 	Date time.Time `json:"date"`
 }
 

@@ -39,7 +39,7 @@ func (server *MetaServer) runPayments() {
 	// Put the payments in a map so we can retrieve them a bit faster.
 	contractToPayment := make(map[string]core.PaymentInfo)
 	for _, item := range payments {
-		contractToPayment[item.Contract] = item
+		contractToPayment[item.ContractID] = item
 	}
 
 	// For each contract...

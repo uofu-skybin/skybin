@@ -101,7 +101,7 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 
 		// Create a payment for the contract and insert it into the database.
 		payment := &core.PaymentInfo{
-			Contract:        contract.ID,
+			ContractID:      contract.ID,
 			Balance:         contract.StorageFee,
 			LastPaymentTime: startTime,
 			IsPaying:        true,
@@ -306,7 +306,7 @@ func (server *MetaServer) putContractPaymentHandler() http.HandlerFunc {
 
 		// Make sure the only field the user is modifying is the "isPaying" field.
 		if payload.Balance != payment.Balance ||
-			payload.Contract != payment.Contract ||
+			payload.ContractID != payment.ContractID ||
 			payload.LastPaymentTime != payment.LastPaymentTime {
 			writeErr("Can only modify isPaying field", http.StatusBadRequest, w)
 			return

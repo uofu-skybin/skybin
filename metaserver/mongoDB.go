@@ -727,7 +727,7 @@ func (db *mongoDB) UpdatePayment(payment *core.PaymentInfo) error {
 	defer session.Close()
 
 	c := session.DB(dbName).C("payments")
-	selector := bson.M{"contract": payment.Contract}
+	selector := bson.M{"contractid": payment.ContractID}
 	err := c.Update(selector, payment)
 	if err != nil {
 		return err

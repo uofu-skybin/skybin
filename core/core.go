@@ -47,7 +47,7 @@ type Contract struct {
 // contract.
 type PaymentInfo struct {
 	// The contract that this payment information is associated with.
-	Contract string `json:"contract"`
+	ContractID string `json:"contract"`
 	// Whether or not the renter is currently "paying down" the contract.
 	IsPaying bool `json:"isPaying"`
 	// The date of the last payment.

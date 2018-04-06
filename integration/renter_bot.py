@@ -70,13 +70,17 @@ def run_step(renter, test_files, args):
 
     action = random.choices(ACTIONS, weights=WEIGHTS)[0]
 
-    if action == 'REMOVE' or renter_info['totalFiles'] >= args.max_files or renter_info['usedStorage'] >= args.max_used_space:
+    if (action == 'REMOVE' or
+        renter_info['totalFiles'] >= args.max_files or
+        renter_info['usedStorage'] >= args.max_used_space) and len(files) > 0:
+
         f = random.choice(files)
         renter.remove_file(f['id'])
         return
 
     can_reserve_more_space = args.max_reserved_space - renter_info['reservedStorage'] > MIN_RESERVATION_SIZE
-    if (action == 'RESERVE' or renter_info['freeStorage'] < args.max_file_size * 2) and can_reserve_more_space:
+    if (action == 'RESERVE' or
+        renter_info['freeStorage'] < args.max_file_size * 2) and can_reserve_more_space:
         max_amt = min(MAX_RESERVED_SPACE_SIZE, args.max_reserved_space - renter_info['reservedStorage'])
         amt = random.randint(MIN_RESERVATION_SIZE, max_amt)
         renter.reserve_space(amt)

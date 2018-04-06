@@ -88,7 +88,7 @@ def test_some_offline_some_online(ctxt):
 
         # Should succeed, even with some providers offline
         f = ctxt.renter.upload_file(root_folder, ctxt.relpath(root_folder))
-        ctxt.renter.remove_file(f['id'])
+        ctxt.renter.remove_file(f['id'], recursive=True)
 
         for provider in offline_providers:
             provider.restart()
@@ -100,8 +100,8 @@ def test_some_offline_some_online(ctxt):
     
 def adverse_upload_test(ctxt, args):
     ctxt.renter.reserve_space(args.reservation_size)
-    test_all_offline_file(ctxt)
-    test_all_offline_folder(ctxt)
+    # test_all_offline_file(ctxt)
+    # test_all_offline_folder(ctxt)
     test_some_offline_some_online(ctxt)
 
 def main():
@@ -113,7 +113,6 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
-        remove_test_files=False,
     )
     try:
         ctxt.log('adverse upload test')

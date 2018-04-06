@@ -112,13 +112,23 @@ class Service:
     Members:
       process: the running service process
       address: the service network address (host:port)
+      env:     the subprocess' environment dict
       homedir: directory for the service's files (or None)
     """
 
-    def __init__(self, process, address, homedir=None):
+    def __init__(self, process, address, env=None, homedir=None):
         self.process = process
         self.address = address
         self.homedir = homedir
+        self.env = env
+
+    def disconnect(self):
+        self.process.kill()
+
+    def restart(self):
+        self.process.kill()
+        env = self.env or os.environ.copy()
+        self.process = subprocess.Popen(self.process.args, env=env, stderr=subprocess.PIPE)
 
     def teardown(self, remove_files=True):
         self.process.kill()
@@ -360,7 +370,7 @@ def create_provider(metaserver_addr, repo_dir,
     args = [SKYBIN_CMD, 'provider', 'daemon', '--disable-local-api']
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
 
-    return Service(process=process, address=api_addr, homedir=homedir)
+    return Service(process=process, address=api_addr, homedir=homedir, env=env)
 
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,

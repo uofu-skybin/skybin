@@ -227,12 +227,12 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 	hour := t.Truncate(provider.stats.Hour.Interval)
 	day := t.Truncate(provider.stats.Day.Interval)
 	week := t.Truncate(provider.stats.Week.Interval)
-	// timestamp := t.Truncate(provider.stats.Day.Interval)
+
 	provider.InsertActivity("hour", hour)
 	provider.InsertActivity("day", day)
 	provider.InsertActivity("week", week)
 
-	// provider.DeleteActivity()
+	provider.DeleteActivity()
 
 	// metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
 	// metrics := [["hour", provider.stats.Day.Interval]]

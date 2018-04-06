@@ -73,7 +73,6 @@ func (p *Provider) InsertActivity(period string, timestamp time.Time) error {
 	return nil
 }
 
-// TODO: Evaluate whether or not this needs the period field
 func (p *Provider) UpdateActivity(period string, timestamp time.Time, op string, value int64) error {
 	query := fmt.Sprintf("UPDATE activity SET %s = %s + ? WHERE Timestamp = ? and Period = ?", op, op)
 
@@ -87,9 +86,10 @@ func (p *Provider) UpdateActivity(period string, timestamp time.Time, op string,
 	return nil
 }
 
+// TODO Rename
 func (provider *Provider) makeStats() *getStatsResp {
 	var timestamps []time.Time
-	t := time.Now()
+	t := time.Now().Truncate(provider.stats.Day.Interval)
 	currTime := t.Add(-1 * provider.stats.Week.Interval)
 	for currTime != t {
 		currTime = currTime.Add(provider.stats.Day.Interval)
@@ -181,7 +181,7 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 
 // Drop old activity
 func (p *Provider) DeleteActivity() error {
-	stmt, err := p.db.Prepare("DELETE from activity WHERE Period=Hour and Timestamp < ?")
+	stmt, err := p.db.Prepare("DELETE from activity WHERE Period='hour' and Timestamp < ?")
 	t := time.Now().Add(-1 * time.Hour)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
@@ -189,7 +189,7 @@ func (p *Provider) DeleteActivity() error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("DELETE from activity WHERE Period=Day and Timestamp < ?")
+	stmt, err = p.db.Prepare("DELETE from activity WHERE Period='day' and Timestamp < ?")
 	t = time.Now().Add(-1 * time.Hour * 24)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
@@ -197,7 +197,7 @@ func (p *Provider) DeleteActivity() error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare("DELETE from activity WHERE Period=Week and Timestamp < ?")
+	stmt, err = p.db.Prepare("DELETE from activity WHERE Period='week' and Timestamp < ?")
 	t = time.Now().Add(-1 * time.Hour * 24 * 7)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {

@@ -91,7 +91,6 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) 
 
 	resp, err := client.client.Do(req)
 	if err != nil {
-		resp.Body.Close()
 		return err
 	}
 	defer resp.Body.Close()

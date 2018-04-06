@@ -1,9 +1,10 @@
 
 """
-Test that a file can be downloaded even when 
+Test that a file can be downloaded even when
 data blocks are unaccessible.
 """
 
+import argparse
 import os
 import random
 import filecmp
@@ -12,15 +13,14 @@ from test_framework import setup_test
 MIN_FILE_SIZE = 1
 MAX_FILE_SIZE = 10*1024*1024
 
-def file_recovery_test(ctxt):
-    ctxt.log('loss test')
+def file_recovery_test(ctxt, args):
 
     ctxt.log('creating input file')
     file_size = random.randint(MIN_FILE_SIZE, MAX_FILE_SIZE)
     input_path = ctxt.create_test_file(file_size)
 
     ctxt.log('reserving space')
-    ctxt.renter.reserve_space(2*MAX_FILE_SIZE)
+    ctxt.renter.reserve_space(args.reservation_size)
 
     ctxt.log('uploading file')
     file_info = ctxt.renter.upload_file(input_path, input_path)
@@ -55,14 +55,20 @@ def file_recovery_test(ctxt):
     is_match = filecmp.cmp(input_path, output_path)
     ctxt.assert_true(is_match, 'download does not match upload after removing several blocks')
 
-    ctxt.log('ok')
-
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num_providers', type=int, default=3,
+                        help='number of providers to run')
+    parser.add_argument('--reservation_size', type=int, default=3*1024*1024*1024,
+                        help='amount of storage to reserve')
+    args = parser.parse_args()
     ctxt = setup_test(
-        num_providers=3
+        num_providers=args.num_providers
     )
     try:
-        file_recovery_test(ctxt)
+        ctxt.log('file recovery test')
+        file_recovery_test(ctxt, args)
+        ctxt.log('ok')
     finally:
         ctxt.teardown()
 

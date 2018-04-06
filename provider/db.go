@@ -248,12 +248,12 @@ func (p *Provider) InsertContract(contract *core.Contract) error {
 }
 
 // Currently unused, but probably relevant for canceling contracts
-func (p *Provider) DeleteContractkById(renterId string) error {
-	stmt, err := p.db.Prepare(`DELETE from contracts where RenterId=?`)
+func (p *Provider) DeleteContractByBlock(blockId string) error {
+	stmt, err := p.db.Prepare(`DELETE from contracts where BlockId=?`)
 	if err != nil {
 		return err
 	}
-	_, err = stmt.Exec(renterId)
+	_, err = stmt.Exec(blockId)
 	if err != nil {
 		return err
 	}

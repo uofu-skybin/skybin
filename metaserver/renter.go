@@ -72,7 +72,6 @@ type PublicRenterResp struct {
 }
 
 func (server *MetaServer) getRenterHandler() http.HandlerFunc {
-	// BUG(kincaid): Validate that the person requesting the data is the specified renter.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 		renter, err := server.db.FindRenterByID(params["id"])

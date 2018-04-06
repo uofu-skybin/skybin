@@ -915,3 +915,231 @@ func (client *Client) DeleteContract(renterID string, contractID string) error {
 
 	return nil
 }
+
+func (client *Client) CreatePaypalPayment(amount int64, returnURL, cancelURL string) (string, error) {
+	if client.token == "" {
+		return "", errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/create", client.addr)
+
+	reqBody := CreatePaypalPaymentReq{
+		Amount:    amount,
+		ReturnURL: returnURL,
+		CancelURL: cancelURL,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return "", decodeError(resp.Body)
+	}
+
+	var paymentResp CreatePaypalPaymentResp
+	err = json.NewDecoder(resp.Body).Decode(&paymentResp)
+	if err != nil {
+		return "", err
+	}
+
+	return paymentResp.ID, nil
+}
+
+func (client *Client) ExecutePaypalPayment(paymentID, payerID, renterID string) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/execute", client.addr)
+
+	reqBody := PaypalExecuteReq{
+		PaymentID: paymentID,
+		PayerID:   payerID,
+		RenterID:  renterID,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
+func (client *Client) RenterWithdraw(renterID, email string, amount int64) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/renter-withdraw", client.addr)
+
+	reqBody := RenterPaypalWithdrawReq{
+		RenterID: renterID,
+		Email:    email,
+		Amount:   amount,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
+func (client *Client) ProviderWithdraw(providerID, email string, amount int64) error {
+	if client.token == "" {
+		return errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/paypal/provider-withdraw", client.addr)
+
+	reqBody := ProviderPaypalWithdrawReq{
+		ProviderID: providerID,
+		Email:      email,
+		Amount:     amount,
+	}
+
+	b, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return decodeError(resp.Body)
+	}
+
+	return nil
+}
+
+func (client *Client) GetRenterTransactions(renterID string) ([]core.Transaction, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/renters/%s/transactions", client.addr, renterID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var transactions []core.Transaction
+	err = json.NewDecoder(resp.Body).Decode(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}
+
+func (client *Client) GetProviderTransactions(providerID string) ([]core.Transaction, error) {
+	if client.token == "" {
+		return nil, errors.New("must authorize before calling this method")
+	}
+
+	url := fmt.Sprintf("http://%s/providers/%s/transactions", client.addr, providerID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token := fmt.Sprintf("Bearer %s", client.token)
+	req.Header.Add("Authorization", token)
+
+	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, decodeError(resp.Body)
+	}
+
+	var transactions []core.Transaction
+	err = json.NewDecoder(resp.Body).Decode(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}

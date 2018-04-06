@@ -90,22 +90,7 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 }
 
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
-	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
-	if err != nil {
-		server.logger.Println("Unable to marshal public key. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{"Unable to marshal public key"})
-		return
-	}
-
-	info := core.ProviderInfo{
-		ID:          server.provider.Config.ProviderID,
-		PublicKey:   string(pubKeyBytes),
-		Addr:        server.provider.Config.PublicApiAddr,
-		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
-		StorageRate: server.provider.Config.StorageRate,
-	}
-
+	info := server.provider.GetPublicInfo()
 	server.writeResp(w, http.StatusOK, &info)
 }
 

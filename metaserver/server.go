@@ -55,17 +55,23 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.putProviderHandler())).Methods("PUT")
 	router.Handle("/providers/{id}", authMiddleware.Handler(server.deleteProviderHandler())).Methods("DELETE")
 
+	router.Handle("/providers/{providerID}/transactions", authMiddleware.Handler(server.getProviderTransactionsHandler())).Methods("GET")
+
 	router.Handle("/renters", server.postRenterHandler()).Methods("POST")
 	router.Handle("/renters", server.getRenterByAliasHandler()).Queries("alias", "{alias}").Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.getRenterHandler())).Methods("GET")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.putRenterHandler())).Methods("PUT")
 	router.Handle("/renters/{id}", authMiddleware.Handler(server.deleteRenterHandler())).Methods("DELETE")
 
+	router.Handle("/renters/{renterID}/transactions", authMiddleware.Handler(server.getRenterTransactionsHandler())).Methods("GET")
+
 	router.Handle("/renters/{renterID}/contracts", authMiddleware.Handler(server.getContractsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/contracts", authMiddleware.Handler(server.postContractHandler())).Methods("POST")
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.getContractHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.putContractHandler())).Methods("PUT")
 	router.Handle("/renters/{renterID}/contracts/{contractID}", authMiddleware.Handler(server.deleteContractHandler())).Methods("DELETE")
+	router.Handle("/renters/{renterID}/contracts/{contractID}/payment", authMiddleware.Handler(server.getContractPaymentHandler())).Methods("GET")
+	router.Handle("/renters/{renterID}/contracts/{contractID}/payment", authMiddleware.Handler(server.putContractPaymentHandler())).Methods("PUT")
 
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.getFilesHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/files", authMiddleware.Handler(server.postFileHandler())).Methods("POST")
@@ -89,6 +95,11 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions", authMiddleware.Handler(server.getFileVersionsHandler())).Methods("GET")
 	router.Handle("/renters/{renterID}/shared/{fileID}/versions/{version}", authMiddleware.Handler(server.getFileVersionHandler())).Methods("GET")
 
+	router.Handle("/paypal/create", authMiddleware.Handler(server.getCreatePaypalPaymentHandler())).Methods("POST")
+	router.Handle("/paypal/execute", authMiddleware.Handler(server.getExecutePaypalPaymentHandler())).Methods("POST")
+	router.Handle("/paypal/renter-withdraw", authMiddleware.Handler(server.getRenterPaypalWithdrawHandler())).Methods("POST")
+	router.Handle("/paypal/provider-withdraw", authMiddleware.Handler(server.getProviderPaypalWithdrawHandler())).Methods("POST")
+
 	if showDash {
 		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")
 
@@ -98,6 +109,8 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 		}
 		router.Handle("/{someFile}", http.FileServer(http.Dir(staticPath)))
 	}
+
+	server.startPaymentRunner()
 
 	return server
 }

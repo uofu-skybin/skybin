@@ -2,9 +2,11 @@ package metaserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"skybin/core"
 	"skybin/util"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -64,7 +66,7 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 		}
 
 		// Make sure the renter exists.
-		_, err = server.db.FindRenterByID(params["renterID"])
+		renter, err := server.db.FindRenterByID(params["renterID"])
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
@@ -75,10 +77,61 @@ func (server *MetaServer) postContractHandler() http.HandlerFunc {
 			return
 		}
 
-		// BUG(kincaid): DB will throw error if file already exists. Might want to check explicitly.
+		// TEST CODE! Make every contract cost 100 bucks for testing.
+		// contract.StorageFee = 100 * 1000
+		// MORE TEST CODE! Make the duration of the contract 1 week.
+		// contract.EndDate = time.Now().Add(time.Hour * 24 * 7)
+
+		// Make sure the renter has enough money to pay for the contract.
+		if contract.StorageFee > renter.Balance {
+			writeErr("cannot afford contract", http.StatusBadRequest, w)
+			return
+		}
+
+		// Subtract the balance of the contract from the renter's account.
+		// TODO: Add atomic DB operations to increment and decrement renter balances.
+		renter.Balance -= contract.StorageFee
+		err = server.db.UpdateRenter(renter)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		startTime := time.Now()
+
+		// Create a payment for the contract and insert it into the database.
+		payment := &core.PaymentInfo{
+			ContractID:      contract.ID,
+			Balance:         contract.StorageFee,
+			LastPaymentTime: startTime,
+			IsPaying:        true,
+		}
+		err = server.db.InsertPayment(payment)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		contract.StartDate = startTime
 		err = server.db.InsertContract(&contract)
 		if err != nil {
 			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		// Create a transaction showing the contract.
+		transaction := &core.Transaction{
+			UserType:        "renter",
+			UserID:          renter.ID,
+			ContractID:      contract.ID,
+			TransactionType: "payment",
+			Amount:          contract.StorageFee,
+			Date:            startTime,
+			Description:     fmt.Sprintf("Contract %s formed with %s", contract.ID, contract.ProviderId),
+		}
+		err = server.db.InsertTransaction(transaction)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
 
@@ -180,6 +233,92 @@ func (server *MetaServer) deleteContractHandler() http.HandlerFunc {
 			writeErr(err.Error(), http.StatusBadRequest, w)
 			return
 		}
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+func (server *MetaServer) getContractPaymentHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+
+		contract, err := server.db.FindContractByID(params["contractID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusNotFound, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != contract.RenterId {
+			writeErr("cannot retrieve other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
+		// Retrieve the contract's payment information.
+		payment, err := server.db.FindPaymentByContract(contract.ID)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		json.NewEncoder(w).Encode(payment)
+	})
+}
+
+func (server *MetaServer) putContractPaymentHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+
+		var payload core.PaymentInfo
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		if err != nil {
+			writeErr("Could not decode payload", http.StatusBadRequest, w)
+			return
+		}
+
+		contract, err := server.db.FindContractByID(params["contractID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusNotFound, w)
+			return
+		}
+
+		// Make sure the person making the request is the renter who owns the files.
+		claims, err := util.GetTokenClaimsFromRequest(r)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+		if renterID, present := claims["renterID"]; !present || renterID.(string) != contract.RenterId {
+			writeErr("cannot retrieve other users' contracts", http.StatusUnauthorized, w)
+			return
+		}
+
+		// Retrieve the contract's payment information.
+		payment, err := server.db.FindPaymentByContract(contract.ID)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
+		// Make sure the only field the user is modifying is the "isPaying" field.
+		if payload.Balance != payment.Balance ||
+			payload.ContractID != payment.ContractID ||
+			payload.LastPaymentTime != payment.LastPaymentTime {
+			writeErr("Can only modify isPaying field", http.StatusBadRequest, w)
+			return
+		}
+
+		// Update the payment.
+		err = server.db.UpdatePayment(&payload)
+		if err != nil {
+			writeAndLogInternalError(err, w, server.logger)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 }

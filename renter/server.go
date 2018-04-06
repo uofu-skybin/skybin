@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"skybin/core"
 	"skybin/metaserver"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -35,6 +36,10 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
 	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
+	router.HandleFunc("/paypal/create", server.createPaypalPayment).Methods("POST")
+	router.HandleFunc("/paypal/execute", server.executePaypalPayment).Methods("POST")
+	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
+	router.HandleFunc("/transactions", server.getTransactions).Methods("GET")
 
 	return server
 }
@@ -170,7 +175,7 @@ func (server *renterServer) getSharedFiles(w http.ResponseWriter, r *http.Reques
 type uploadFileReq struct {
 	SourcePath      string `json:"sourcePath"`
 	DestPath        string `json:"destPath"`
-	ShouldOverwrite bool   `json:"shouldOverwrite"`
+	ShouldOverwrite bool   `json:"shouldOverwrite,omitempty"`
 }
 
 func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +202,7 @@ func (server *renterServer) uploadFile(w http.ResponseWriter, r *http.Request) {
 type downloadFileReq struct {
 	FileId     string `json:"fileId"`
 	DestPath   string `json:"destPath"`
-	VersionNum *int   `json:"versionNum"`
+	VersionNum *int   `json:"versionNum,omitempty"`
 }
 
 func (server *renterServer) downloadFile(w http.ResponseWriter, r *http.Request) {
@@ -337,6 +342,97 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type depositResp struct {
+	ID string `json:"id"`
+}
+
+func (server *renterServer) createPaypalPayment(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	amountString := r.FormValue("amount")
+	amount, err := strconv.ParseInt(amountString, 10, 64)
+	if err != nil {
+		server.logger.Println(err)
+		errMsg := fmt.Sprintf("could not parse integer from %s", amountString)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: errMsg})
+		return
+	}
+
+	returnURL := r.FormValue("returnURL")
+	cancelURL := r.FormValue("cancelURL")
+
+	paymentID, err := server.renter.CreatePaypalPayment(amount, returnURL, cancelURL)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &depositResp{ID: paymentID})
+}
+
+func (server *renterServer) executePaypalPayment(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	err = server.renter.ExecutePaypalPayment(
+		r.FormValue("paymentID"),
+		r.FormValue("payerID"),
+	)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+func (server *renterServer) withdraw(w http.ResponseWriter, r *http.Request) {
+	var payload metaserver.RenterPaypalWithdrawReq
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	err = server.renter.Withdraw(
+		payload.Email,
+		payload.Amount,
+	)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type getTransactionsResp struct {
+	Transactions []core.Transaction `json:"transactions"`
+}
+
+func (server *renterServer) getTransactions(w http.ResponseWriter, r *http.Request) {
+	transactions, err := server.renter.ListTransactions()
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &getTransactionsResp{transactions})
 }
 
 func (server *renterServer) writeResp(w http.ResponseWriter, status int, body interface{}) {

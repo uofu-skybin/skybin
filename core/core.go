@@ -16,6 +16,8 @@ type ProviderInfo struct {
 	PublicKey   string `json:"publicKey"`
 	Addr        string `json:"address"`
 	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
+	// Rate charged for storage, in tenths-of-cents/gb/month
+	// where 1 gb is 1e9 bytes
 	StorageRate int64  `json:"storageRate"`
 	// The provider's balance, in tenths of cents.
 	Balance int64 `json:"balance"`
@@ -82,28 +84,22 @@ type BlockLocation struct {
 
 type Block struct {
 	ID string `json:"id"`
-
 	// Offset of the block in the file, relative to the file's other blocks.
 	// For the first block, this is zero.
 	Num int `json:"num"`
-
 	// Size of the block in bytes
 	Size int64 `json:"size"`
-
 	// sha256 hash of the block
 	Sha256Hash string `json:"sha256hash"`
-
 	// Location of the provider where the block is stored
 	Location BlockLocation `json:"location"`
 }
 
 // Permission provides access to a file to a non-owning user
 type Permission struct {
-
 	// The renter who this permission grants access to
 	RenterId    string `json:"renterId"`
 	RenterAlias string `json:"renterAlias"`
-
 	// The file's encryption information encrypted with the user's public key
 	AesKey string `json:"aesKey"`
 	AesIV  string `json:"aesIV"`

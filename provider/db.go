@@ -25,7 +25,9 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 		StartDate TEXT, 
 		EndDate TEXT, 
 		RenterSignature TEXT, 
-		ProviderSignature TEXT)`)
+		ProviderSignature TEXT,
+		StorageFee INTEGER)
+		`)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to prepare contracts table. error: %s", err)
 	}
@@ -248,8 +250,8 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 func (p *Provider) InsertContract(contract *core.Contract) error {
 	stmt, err := p.db.Prepare(`INSERT INTO contracts 
 		(ContractId, RenterId, ProviderId, StorageSpace, 
-		StartDate, EndDate, RenterSignature, ProviderSignature) 
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		StartDate, EndDate, RenterSignature, ProviderSignature, StorageFee) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -262,6 +264,7 @@ func (p *Provider) InsertContract(contract *core.Contract) error {
 		contract.EndDate.Format(time.RFC3339),
 		contract.RenterSignature,
 		contract.ProviderSignature,
+		contract.StorageFee,
 	)
 	if err != nil {
 		return err
@@ -270,12 +273,12 @@ func (p *Provider) InsertContract(contract *core.Contract) error {
 }
 
 // Currently unused, but probably relevant for canceling contracts
-func (p *Provider) DeleteContractByBlock(blockId string) error {
-	stmt, err := p.db.Prepare(`DELETE from contracts where BlockId=?`)
+func (p *Provider) DeleteContractById(contractId string) error {
+	stmt, err := p.db.Prepare(`DELETE from contracts where ContractId=?`)
 	if err != nil {
 		return err
 	}
-	_, err = stmt.Exec(blockId)
+	_, err = stmt.Exec(contractId)
 	if err != nil {
 		return err
 	}
@@ -284,7 +287,7 @@ func (p *Provider) DeleteContractByBlock(blockId string) error {
 
 func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, error) {
 	query := fmt.Sprintf(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
-		RenterSignature, ProviderSignature, StartDate, EndDate 
+		RenterSignature, ProviderSignature, StorageFee, StartDate, EndDate 
 		FROM contracts where RenterId='%s'`, renterId)
 	rows, err := p.db.Query(query)
 	if err != nil {
@@ -297,7 +300,7 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 		// scan does not parse these directly into time.Time correctly
 		var startDate string
 		var endDate string
-		err = rows.Scan(&c.ID, &c.RenterId, &c.ProviderId, &c.StorageSpace, &c.RenterSignature, &c.ProviderSignature, &startDate, &endDate)
+		err = rows.Scan(&c.ID, &c.RenterId, &c.ProviderId, &c.StorageSpace, &c.RenterSignature, &c.ProviderSignature, &c.StorageFee, &startDate, &endDate)
 		if err != nil {
 			return nil, err
 		}
@@ -310,7 +313,7 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 
 func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
 	rows, err := p.db.Query(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
-		RenterSignature, ProviderSignature, StartDate, EndDate FROM contracts`)
+		RenterSignature, ProviderSignature, StorageFee, StartDate, EndDate FROM contracts`)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +324,7 @@ func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
 		// scan does not parse these directly into time.Time correctly
 		var startDate string
 		var endDate string
-		err = rows.Scan(&c.ID, &c.RenterId, &c.ProviderId, &c.StorageSpace, &c.RenterSignature, &c.ProviderSignature, &startDate, &endDate)
+		err = rows.Scan(&c.ID, &c.RenterId, &c.ProviderId, &c.StorageSpace, &c.RenterSignature, &c.ProviderSignature, &c.StorageFee, &startDate, &endDate)
 		if err != nil {
 			return nil, err
 		}

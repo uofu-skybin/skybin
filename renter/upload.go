@@ -13,7 +13,6 @@ import (
 	"github.com/klauspost/reedsolomon"
 	"io"
 	"io/ioutil"
-	mathrand "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,14 +20,12 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-	"sync"
 	"time"
 )
 
 // fileUpload stores the state for an upload as it passes through
 // the stages of the upload pipeline.
 type fileUpload struct {
-
 	// Initial input
 	sourcePath string
 	finfo      os.FileInfo
@@ -52,6 +49,10 @@ type fileUpload struct {
 	// Metadata phase result
 	blocks  []core.Block
 	version *core.Version
+
+	// Closed when the upload is complete
+	doneCh chan struct{}
+	err    error
 }
 
 func (up *fileUpload) cleanup() {
@@ -69,19 +70,40 @@ func (up *fileUpload) cleanup() {
 	}
 }
 
+type blockUpload struct {
+	block *core.Block
+	blob  *storageBlob
+
+	// Data to upload
+	data   io.ReaderAt
+	offset int64
+	size   int64
+
+	// Closed when the upload is complete
+	doneCh chan struct{}
+	err    error
+}
+
+func (bu *blockUpload) reader() io.Reader {
+	return io.NewSectionReader(bu.data, bu.offset, bu.size)
+}
+
+const (
+
+	// We limit the number of concurrent uploads to ensure
+	// we don't open too many temp files at once and to
+	// maximize throughput for large folder uploads.
+	maxConcurrentUploads = 12
+)
+
 type folderUpload struct {
 	destPath string
 	isRoot   bool
 }
 
-type blockUpload struct {
-	block *core.Block
-	blob  *storageBlob
-	data  io.Reader
-	done  bool
-	err   error
-}
-
+// Uploads a new file or folder from source path to dest path. shouldOverwrite
+// dictates whether an existing file with the same name should be overwritten
+// or whether a new version should be added.
 func (r *Renter) Upload(sourcePath string, destPath string, shouldOverwrite bool) (*core.File, error) {
 	destPath = util.CleanPath(destPath)
 	finfo, err := os.Stat(sourcePath)
@@ -99,7 +121,7 @@ func (r *Renter) Upload(sourcePath string, destPath string, shouldOverwrite bool
 	if finfo.IsDir() {
 		return r.uploadDir(sourcePath, destPath)
 	}
-	if r.storageAvailable() <= finfo.Size() {
+	if r.storageManager.AvailableStorage() <= finfo.Size() {
 		return nil, errors.New("Not enough storage")
 	}
 	if existingFile != nil {
@@ -108,7 +130,7 @@ func (r *Renter) Upload(sourcePath string, destPath string, shouldOverwrite bool
 	return r.uploadFile(sourcePath, finfo, destPath)
 }
 
-// Upload a new version of an existing file from sourcePath.
+// Uploads a new version of an existing file from sourcePath.
 // finfo should be the file info for the source file. shouldOverwrite
 // gives whether to overwrite the latest version of the existing file
 // or create a new version.
@@ -124,6 +146,7 @@ func (r *Renter) uploadVersion(sourcePath string, finfo os.FileInfo,
 		destPath:   existingFile.Name,
 		aesKey:     aesKey,
 		aesIV:      aesIV,
+		doneCh:     make(chan struct{}),
 	}
 	defer up.cleanup()
 	err = r.doUploads([]*fileUpload{&up})
@@ -176,8 +199,8 @@ func (r *Renter) uploadFile(sourcePath string, finfo os.FileInfo, destPath strin
 		sourcePath: sourcePath,
 		finfo:      finfo,
 		destPath:   destPath,
+		doneCh:     make(chan struct{}),
 	}
-	defer up.cleanup()
 	err := r.doUploads([]*fileUpload{&up})
 	if err != nil {
 		return nil, err
@@ -223,11 +246,8 @@ func (r *Renter) uploadDir(sourcePath string, destPath string) (*core.File, erro
 				sourcePath: path,
 				finfo:      info,
 				destPath:   fullPath,
+				doneCh:     make(chan struct{}),
 			}
-			// It is extremely important that this be called
-			// in order to close and remove temporary files created
-			// in the upload process.
-			defer up.cleanup()
 			files = append(files, up)
 		}
 		return err
@@ -237,7 +257,7 @@ func (r *Renter) uploadDir(sourcePath string, destPath string) (*core.File, erro
 	}
 
 	// Pre-check that enough storage is available to upload all files.
-	if r.storageAvailable() <= totalSize {
+	if r.storageManager.AvailableStorage() <= totalSize {
 		return nil, errors.New("Not enough storage")
 	}
 
@@ -301,7 +321,7 @@ func (r *Renter) doUploadDir(fileUploads []*fileUpload, folderUploads []folderUp
 		for _, f := range savedFiles {
 			err := r.removeFile(f)
 			if err != nil {
-				r.logger.Println("Error removing file during dir upload failure. Error: ", err)
+				r.logger.Println("Error removing file during dir upload failure. Error:", err)
 			}
 		}
 	}
@@ -318,167 +338,237 @@ func (r *Renter) doUploadDir(fileUploads []*fileUpload, folderUploads []folderUp
 	return rootFolder, nil
 }
 
-// Prepares and performs a collection of uploads, including preparing source files,
-// finding storage, and uploading file blocks to providers. This routine is all or
-// nothing; either all blocks of all files are successfully uploaded, or none are.
-// Does not save file metadata.
-func (r *Renter) doUploads(fileUploads []*fileUpload) error {
-	type prepTask struct {
-		up  *fileUpload
-		err error
+func (r *Renter) doUploads(uploads []*fileUpload) error {
+	for _, upload := range uploads {
+		r.uploadQ <- upload
 	}
-
-	var prepTasks []*prepTask
-	doneTasks := make(chan *prepTask)
-	for _, up := range fileUploads {
-		prepTasks = append(prepTasks, &prepTask{up: up})
+	for _, upload := range uploads {
+		<-upload.doneCh
 	}
-	for _, t := range prepTasks {
-		go func(t *prepTask) {
-			t.err = prepareUpload(t.up, r.Config)
-			doneTasks <- t
-		}(t)
-	}
-
-	// Queues for block uploads indexed by provider ID
-	uploadQueues := map[string]chan *blockUpload{}
-	var allBlockUploads []*blockUpload
-	var err error
-	var wg sync.WaitGroup
-
-	for _, _ = range fileUploads {
-		t := <-doneTasks
-		if t.err != nil {
-			r.logger.Printf("Error preparing file %s for upload. Error: %s\n",
-				t.up.sourcePath, t.err)
-			if err == nil {
-				err = t.err
-			}
-		}
-		if err != nil {
-			continue
-		}
-		var blockUploads []*blockUpload
-		blockUploads, err = r.findUploadStorage(t.up)
-		if err != nil {
-			r.logger.Printf("Unable to find enough storage for file %s. Error: %s\n",
-				t.up.sourcePath, err)
-			continue
-		}
-
-		// Save the uploads for this file to our list for all files.
-		allBlockUploads = append(allBlockUploads, blockUploads...)
-
-		// Upload the blocks for this file by funnelling them to
-		// the appropriate upload worker thread.
-		for _, blockUp := range blockUploads {
-			q, exists := uploadQueues[blockUp.blob.ProviderId]
-			if !exists {
-				q = make(chan *blockUpload, 16)
-				uploadQueues[blockUp.blob.ProviderId] = q
-				wg.Add(1)
-				go func(providerAddr string) {
-					defer wg.Done()
-					r.uploadWorker(providerAddr, q)
-				}(blockUp.blob.Addr)
-			}
-			q <- blockUp
-		}
-
-	}
-	// Shut down upload workers and wait for them to finish
-	for _, q := range uploadQueues {
-		close(q)
-	}
-	wg.Wait()
-
-	freeBlobs := func() {
-		for _, bUp := range allBlockUploads {
-			if bUp.done {
-				r.removeBlock(bUp.block)
-			}
+	failedUploads := []*fileUpload{}
+	successfulUploads := []*fileUpload{}
+	for _, upload := range uploads {
+		if upload.err != nil {
+			r.logger.Printf("Error performing upload to destpath %s: %s\n",
+				upload.destPath, upload.err)
+			failedUploads = append(failedUploads, upload)
+		} else {
+			successfulUploads = append(successfulUploads, upload)
 		}
 	}
-
-	// Check if a an error occurred during a prep task.
-	if err != nil {
-		freeBlobs()
-		return err
-	}
-
-	// Check if an error occurred during a block upload.
-	for _, bUp := range allBlockUploads {
-		if bUp.err != nil {
-			freeBlobs()
-			return bUp.err
+	if len(failedUploads) > 0 {
+		for _, upload := range successfulUploads {
+			r.undoUpload(upload)
 		}
+		return failedUploads[0].err
 	}
 	return nil
 }
 
-func (r *Renter) uploadWorker(providerAddr string, blockQ chan *blockUpload) {
-	client := provider.NewClient(providerAddr, &http.Client{})
-	err := client.AuthorizeRenter(r.privKey, r.Config.RenterId)
-	for upload := range blockQ {
+var (
+	resetProviderConns *blockUpload = nil
+)
+
+// Main upload thread for the renter. Takes all upload requests, performs
+// them, and notifies the waiting request thread when the upload is complete.
+// Individual blocks are uploaded in a dedicated per-provider goroutine,
+// and a block schedule goroutine multiplexes the block uploads to these goroutines.
+func (r *Renter) uploadThread() {
+	inputQ := make(chan *fileUpload)
+	finishedUploads := make(chan *fileUpload)
+	blockQ := make(chan *blockUpload)
+	activeUploads := 0
+
+	for i := 0; i < maxConcurrentUploads; i++ {
+		go r.fileUploadWorker(inputQ, finishedUploads, blockQ)
+	}
+	go r.blockUploadScheduleThread(blockQ)
+
+L:
+	for {
+		select {
+		case upload, ok := <-r.uploadQ:
+			if !ok {
+				break L
+			}
+			inputQ <- upload
+			activeUploads++
+		case <-finishedUploads:
+			activeUploads--
+			if activeUploads == 0 {
+				select {
+				case upload, ok := <-r.uploadQ:
+					if !ok {
+						break L
+					}
+					inputQ <- upload
+					activeUploads++
+				default:
+
+					// Shut down open connections with providers
+					blockQ <- resetProviderConns
+				}
+			}
+		}
+		if activeUploads >= maxConcurrentUploads {
+			<-finishedUploads
+			activeUploads--
+		}
+	}
+	for activeUploads > 0 {
+		<-finishedUploads
+		activeUploads--
+	}
+	close(inputQ)
+	close(blockQ)
+}
+
+func (r *Renter) fileUploadWorker(inputQ, finishedUploads chan *fileUpload, blockQ chan *blockUpload) {
+	for upload := range inputQ {
+		r.performUpload(upload, blockQ)
+		finishedUploads <- upload
+	}
+}
+
+func (r *Renter) performUpload(upload *fileUpload, blockQ chan *blockUpload) {
+	err := prepareUpload(upload, r.Config)
+	if err != nil {
+		upload.err = err
+		return
+	}
+
+	pendingUploads := []*blockUpload{}
+	for blockNum := 0; blockNum < len(upload.blocks); blockNum++ {
+		block := &upload.blocks[blockNum]
+		bu := &blockUpload{
+			block:  block,
+			size:   upload.blockSize,
+		}
+		if blockNum < upload.numDataBlocks {
+			bu.data = upload.eTemp
+			bu.offset = upload.blockSize * int64(blockNum)
+		} else {
+			bu.data = upload.parityFiles[blockNum-upload.numDataBlocks]
+			bu.offset = 0
+		}
+		pendingUploads = append(pendingUploads, bu)
+	}
+
+	finishedUploads := []*blockUpload{}
+	blobsToReturn := []*storageBlob{}
+	for len(pendingUploads) > 0 {
+		blobs, err := r.storageManager.FindStorage(len(pendingUploads), upload.blockSize)
 		if err != nil {
 			upload.err = err
+			break
+		}
+		for i := 0; i < len(pendingUploads); i++ {
+			bu := pendingUploads[i]
+			blob := blobs[i]
+			block := bu.block
+
+			bu.blob = blob
+			bu.err = nil
+			bu.doneCh = make(chan struct{})
+
+			block.Location = core.BlockLocation{
+				ProviderId: blob.ProviderId,
+				Addr:       blob.Addr,
+				ContractId: blob.ContractId,
+			}
+		}
+		successes, failures := doBlockUploads(pendingUploads, blockQ)
+		finishedUploads = append(finishedUploads, successes...)
+		offlinePvdrs := []string{}
+		for _, failure := range failures {
+			r.logger.Printf("Error uploading block %s for file %s to provider %s: %s\n",
+				failure.block.ID, upload.destPath, failure.blob.ProviderId, failure.err)
+			blobsToReturn = append(blobsToReturn, failure.blob)
+			offlinePvdrs = append(offlinePvdrs, failure.blob.ProviderId)
+		}
+		if len(offlinePvdrs) > 0 {
+			r.storageManager.MarkProvidersOffline(offlinePvdrs, time.Now().Add(time.Minute))
+		}
+		pendingUploads = failures
+	}
+	if len(pendingUploads) > 0 {
+		// The upload failed.
+		for _, bu := range finishedUploads {
+			blobsToReturn = append(blobsToReturn, bu.blob)
+		}
+		if upload.err == nil {
+			upload.err = fmt.Errorf("Error uploading file. Failed to upload file blocks.")
+		}
+	}
+	if len(blobsToReturn) > 0 {
+		r.storageManager.AddBlobs(blobsToReturn)
+	}
+	upload.cleanup()
+	close(upload.doneCh)
+}
+
+func doBlockUploads(blockUploads []*blockUpload, blockQ chan *blockUpload) (successes, failures []*blockUpload) {
+	// Queue the blocks for upload
+	for _, blockUpload := range blockUploads {
+		blockQ <- blockUpload
+	}
+	// Wait for the uploads to complete
+	for _, blockUpload := range blockUploads {
+		<-blockUpload.doneCh
+	}
+	for _, bu := range blockUploads {
+		if bu.err == nil {
+			successes = append(successes, bu)
+		} else {
+			failures = append(failures, bu)
+		}
+	}
+	return
+}
+
+func (r *Renter) blockUploadScheduleThread(blockQ chan *blockUpload) {
+	uploadQueues := map[string]chan *blockUpload{}
+	for upload := range blockQ {
+		if upload == resetProviderConns {
+			for _, q := range uploadQueues {
+				close(q)
+			}
+			uploadQueues = map[string]chan *blockUpload{}
 			continue
 		}
+		q, exists := uploadQueues[upload.blob.ProviderId]
+		if !exists {
+			q = make(chan *blockUpload)
+			uploadQueues[upload.blob.ProviderId] = q
+			go r.blockUploadThread(upload.blob.Addr, q)
+		}
+		q <- upload
+	}
+	for _, q := range uploadQueues {
+		close(q)
+	}
+}
+
+func (r *Renter) blockUploadThread(providerAddr string, blockQ chan *blockUpload) {
+	client := provider.NewClient(providerAddr, &http.Client{})
+	authErr := client.AuthorizeRenter(r.privKey, r.Config.RenterId)
+	for upload := range blockQ {
 		if upload.block.Location.Addr != providerAddr {
 			msg := "uploadWorker: received block for wrong provider"
 			r.logger.Println(msg)
 			panic(msg)
 		}
-		err = client.PutBlock(r.Config.RenterId, upload.block.ID, upload.data)
-		if err != nil {
-			upload.err = err
+		if authErr != nil {
+			upload.err = authErr
+			close(upload.doneCh)
 			continue
 		}
-		upload.done = true
-	}
-}
-
-// This is the final preparation phase for an upload before transferring
-// the source blocks to storage providers. It finds storage for the
-// upload's blocks, updates the block metadata, and prepares the blockUpload
-// structures necessary to complete the uploads.
-func (r *Renter) findUploadStorage(up *fileUpload) ([]*blockUpload, error) {
-	totalBlocks := up.numDataBlocks + up.numParityBlocks
-	blobs, err := r.findStorage(totalBlocks, up.blockSize)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update block locations
-	for i := 0; i < len(up.blocks); i++ {
-		up.blocks[i].Location = core.BlockLocation{
-			ProviderId: blobs[i].ProviderId,
-			Addr:       blobs[i].Addr,
-			ContractId: blobs[i].ContractId,
+		err := client.PutBlock(r.Config.RenterId, upload.block.ID, upload.reader())
+		if err != nil {
+			upload.err = err
 		}
+		close(upload.doneCh)
 	}
-
-	blockReaders := []io.Reader{}
-	for blockNum := 0; blockNum < up.numDataBlocks; blockNum++ {
-		r := io.NewSectionReader(up.eTemp, up.blockSize*int64(blockNum), up.blockSize)
-		blockReaders = append(blockReaders, r)
-	}
-	for _, parityFile := range up.parityFiles {
-		r := io.NewSectionReader(parityFile, 0, up.blockSize)
-		blockReaders = append(blockReaders, r)
-	}
-
-	var blockUploads []*blockUpload
-	for i := 0; i < len(up.blocks); i++ {
-		blockUploads = append(blockUploads, &blockUpload{
-			block: &up.blocks[i],
-			blob:  blobs[i],
-			data:  blockReaders[i],
-			done:  false,
-		})
-	}
-
-	return blockUploads, nil
 }
 
 func (r *Renter) undoUpload(up *fileUpload) {
@@ -739,63 +829,4 @@ func prepareMetadata(up *fileUpload) error {
 	up.version = version
 
 	return nil
-}
-
-func (r *Renter) findStorage(nblocks int, blockSize int64) ([]*storageBlob, error) {
-	type candidate struct {
-		*storageBlob
-		idx int // Index of the blob in the freelist
-	}
-
-	var candidates []candidate
-	for idx, blob := range r.freelist {
-		if blob.Amount >= blockSize {
-			candidates = append(candidates,
-				candidate{storageBlob: blob, idx: idx})
-		}
-	}
-
-	// Randomize the order of candidate inspection
-	for i := len(candidates) - 1; i >= 0; i-- {
-		j := mathrand.Intn(i + 1)
-		candidates[i], candidates[j] = candidates[j], candidates[i]
-	}
-
-	var blobs []*storageBlob
-	for i := 0; len(blobs) < nblocks && len(candidates) > 0; {
-		candidate := candidates[i]
-
-		// Check if the provider is online
-		client := provider.NewClient(candidate.Addr, &http.Client{})
-		_, err := client.GetInfo()
-		if err != nil {
-			candidates = append(candidates[:i], candidates[i+1:]...)
-			continue
-		}
-
-		blob := &storageBlob{
-			ProviderId: candidate.ProviderId,
-			Amount:     blockSize,
-			Addr:       candidate.Addr,
-			ContractId: candidate.ContractId,
-		}
-		blobs = append(blobs, blob)
-
-		candidate.Amount -= blob.Amount
-		if candidate.Amount < blockSize {
-			candidates = append(candidates[:i], candidates[i+1:]...)
-		}
-		if candidate.Amount < kMinBlobSize {
-			r.freelist = append(r.freelist[:candidate.idx], r.freelist[candidate.idx+1:]...)
-		}
-
-		i = (i + 1) % len(candidates)
-	}
-	if len(blobs) < nblocks {
-		for _, blob := range blobs {
-			r.addBlob(blob)
-		}
-		return nil, errors.New("Cannot find enough storage.")
-	}
-	return blobs, nil
 }

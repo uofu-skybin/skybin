@@ -43,14 +43,6 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 		reserved += n
 	}
 
-	// Save contracts locally
-	r.contracts = append(r.contracts, contracts...)
-	r.freelist = append(r.freelist, blobs...)
-	err = r.saveSnapshot()
-	if err != nil {
-		return nil, err
-	}
-
 	// Save contracts with metaserver.
 	// TODO: Use batch save endpoint.
 	err = r.authorizeMeta()
@@ -63,6 +55,9 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 			return nil, err
 		}
 	}
+
+	// Record the newly available storage locally
+	r.storageManager.AddBlobs(blobs)
 
 	return contracts, nil
 }

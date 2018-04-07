@@ -16,7 +16,6 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-
 	"log"
 	"time"
 
@@ -32,10 +31,8 @@ type Renter struct {
 	files     []*core.File
 	contracts []*core.Contract
 
-	// All free storage blobs available for file uploads.
-	// Each storage contract should have at most one associated
-	// blob in this list.
-	freelist []*storageBlob
+	// The last time we pulled down a list of our files from the metaserver.
+	lastFilesUpdate time.Time
 
 	// Metaserver client. The metaserver should always have an up-to-date
 	// view of every file and contract we store locally. However, the
@@ -43,8 +40,7 @@ type Renter struct {
 	// view of everything the metaserver stores on our behalf.
 	metaClient *metaserver.Client
 
-	// The last time we pulled down a list of our files from the metaserver.
-	lastFilesUpdate time.Time
+	storageManager *storageManager
 
 	// Blocks which need to be removed but could not be immediately
 	// deleted because the provider storing them was offline.
@@ -52,7 +48,8 @@ type Renter struct {
 
 	// Queue for batches of downloads to be performed by the download thread.
 	downloadQ chan []*fileDownload
-	logger *log.Logger
+	uploadQ   chan *fileUpload
+	logger    *log.Logger
 }
 
 // snapshot stores a renter's serialized state
@@ -72,13 +69,14 @@ type storageBlob struct {
 }
 
 func LoadFromDisk(homedir string) (*Renter, error) {
+
 	renter := &Renter{
 		Homedir:        homedir,
 		files:          make([]*core.File, 0),
 		contracts:      make([]*core.Contract, 0),
-		freelist:       make([]*storageBlob, 0),
 		blocksToDelete: make([]*core.Block, 0),
 		downloadQ:      make(chan []*fileDownload),
+		uploadQ:        make(chan *fileUpload),
 		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
@@ -91,6 +89,12 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 
 	renter.metaClient = metaserver.NewClient(config.MetaAddr, &http.Client{})
 
+	updateStorage := func() ([]*storageBlob, error) {
+		// TODO: implement
+		return nil, errors.New("")
+	}
+	renter.storageManager = newStorageManager([]*storageBlob{}, updateStorage, time.Hour, realClock{})
+
 	snapshotPath := path.Join(homedir, "snapshot.json")
 	if _, err := os.Stat(snapshotPath); err == nil {
 		var s snapshot
@@ -100,8 +104,9 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		}
 		renter.files = s.Files
 		renter.contracts = s.Contracts
-		renter.freelist = s.FreeStorage
 		renter.blocksToDelete = s.BlocksToDelete
+
+		renter.storageManager.AddBlobs(s.FreeStorage)
 	}
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "renterid"))
@@ -115,10 +120,12 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 
 func (r *Renter) StartThreads() {
 	go r.downloadThread()
+	go r.uploadThread()
 }
 
 func (r *Renter) ShutdownThreads() {
 	close(r.downloadQ)
+	close(r.uploadQ)
 }
 
 func (r *Renter) SetLogger(logger *log.Logger) {
@@ -127,9 +134,11 @@ func (r *Renter) SetLogger(logger *log.Logger) {
 
 func (r *Renter) saveSnapshot() error {
 	s := snapshot{
-		Files:          r.files,
-		Contracts:      r.contracts,
-		FreeStorage:    r.freelist,
+		Files:     r.files,
+		Contracts: r.contracts,
+
+		// TODO: remove this from snapshot
+		FreeStorage: r.storageManager.freelist,
 		BlocksToDelete: r.blocksToDelete,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
@@ -154,11 +163,6 @@ func (r *Renter) Info() (*Info, error) {
 	for _, contract := range r.contracts {
 		reserved += contract.StorageSpace
 	}
-	var free int64 = 0
-	for _, blob := range r.freelist {
-		free += blob.Amount
-	}
-
 	err := r.authorizeMeta()
 	if err != nil {
 		return nil, err
@@ -167,15 +171,15 @@ func (r *Renter) Info() (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	freeStorage := r.storageManager.AvailableStorage()
 	return &Info{
 		ID:              r.Config.RenterId,
 		Alias:           r.Config.Alias,
 		ApiAddr:         r.Config.ApiAddr,
 		HomeDir:         r.Homedir,
 		ReservedStorage: reserved,
-		UsedStorage:     reserved - free,
-		FreeStorage:     free,
+		UsedStorage:     reserved - freeStorage,
+		FreeStorage:     freeStorage,
 		TotalContracts:  len(r.contracts),
 		TotalFiles:      len(r.files),
 		Balance:         renter.Balance,
@@ -541,7 +545,7 @@ func (r *Renter) removeFile(file *core.File) error {
 	return nil
 }
 
-func (r *Renter) removeFileContents(file *core.File)  {
+func (r *Renter) removeFileContents(file *core.File) {
 	for i := 0; i < len(file.Versions); i++ {
 		r.removeVersionContents(&file.Versions[i])
 	}
@@ -578,7 +582,7 @@ func (r *Renter) removeBlock(block *core.Block) {
 		Amount:     block.Size,
 		ContractId: block.Location.ContractId,
 	}
-	r.addBlob(blob)
+	r.storageManager.AddBlob(blob)
 }
 
 func (r *Renter) CreatePaypalPayment(amount int64, returnURL, cancelURL string) (string, error) {
@@ -636,19 +640,6 @@ func (r *Renter) ListTransactions() ([]core.Transaction, error) {
 	return transactions, nil
 }
 
-// Add a storage blob back to the free list.
-func (r *Renter) addBlob(blob *storageBlob) {
-	for _, blob2 := range r.freelist {
-		if blob.ContractId == blob2.ContractId {
-
-			// Merge blobs
-			blob2.Amount += blob.Amount
-			return
-		}
-	}
-	r.freelist = append(r.freelist, blob)
-}
-
 func (r *Renter) saveFile(f *core.File) error {
 	err := r.authorizeMeta()
 	if err != nil {
@@ -682,14 +673,6 @@ func (r *Renter) getFileByName(name string) *core.File {
 		}
 	}
 	return nil
-}
-
-func (r *Renter) storageAvailable() int64 {
-	var total int64 = 0
-	for _, blob := range r.freelist {
-		total += blob.Amount
-	}
-	return total
 }
 
 // Authorize with the metaclient, if necessary

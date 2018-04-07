@@ -89,12 +89,29 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 
 }
 
+// This info object is different than the info object for local provider which serves
+// as a means to populate the provider dashboard
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
-	info := server.provider.GetPublicInfo()
+	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
+	if err != nil {
+		server.logger.Println("Unable to marshal public key. Error: ", err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{"Unable to marshal public key"})
+		return
+	}
+
+	info := core.ProviderInfo{
+		ID:          server.provider.Config.ProviderID,
+		PublicKey:   string(pubKeyBytes),
+		Addr:        server.provider.Config.PublicApiAddr,
+		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
+		StorageRate: server.provider.Config.StorageRate,
+	}
+
 	server.writeResp(w, http.StatusOK, &info)
 }
 
-// TODO: Fill out stub
+// TODO: stub
 func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) {
 	return
 }

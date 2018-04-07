@@ -65,6 +65,28 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("Failed to create activity table. error: %s", err)
 	}
 
+	// Add blockid index
+	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS blockid_idx ON blocks (BlockId)`)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to prepare Index for BlockId. error: %s", err)
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create Index for BlockId. error: %s", err)
+	}
+
+	// Add contractid index
+	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS contractid_idx ON contracts (ContractId)`)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to prepare Index for ContractId. error: %s", err)
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create Index for ContractId. error: %s", err)
+	}
+
 	return db, nil
 }
 

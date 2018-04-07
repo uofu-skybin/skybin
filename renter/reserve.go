@@ -11,6 +11,27 @@ import (
 	"time"
 )
 
+// Provider interface stub.
+type pvdrClient interface {
+	GetInfo() (*core.ProviderInfo, error)
+	ReserveStorage(contract *core.Contract) (*core.Contract, error)
+}
+
+type res struct {
+	contract *core.Contract
+	pinfo *core.ProviderInfo
+}
+
+type storageEstimate struct {
+	TotalCost int64 `json:"totalCost"`
+	Contracts []*core.Contract `json:"contracts"`
+	Providers []*core.ProviderInfo `json:"providers"`
+}
+
+func createStorageEstimate(amount int64, pvdrs []pvdrClient) (*storageEstimate, error) {
+
+}
+
 func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	if amount < kMinContractSize {
 		return nil, fmt.Errorf("Must reserve at least %d bytes.", kMinContractSize)
@@ -20,6 +41,9 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot fetch providers. Error: %v", err)
 	}
+
+	// Filter providers who don't have enough space
+	// Then, shuffle them randomly
 
 	var reserved int64 = 0
 	var contracts []*core.Contract
@@ -55,6 +79,7 @@ func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
 			return nil, err
 		}
 	}
+	r.contracts = append(r.contracts, contracts...)
 
 	// Record the newly available storage locally
 	r.storageManager.AddBlobs(blobs)
@@ -146,3 +171,5 @@ func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Cont
 
 	return signedContract, nil
 }
+
+

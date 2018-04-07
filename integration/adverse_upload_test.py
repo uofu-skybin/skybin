@@ -79,12 +79,14 @@ def test_some_offline_some_online(ctxt):
         ctxt.create_test_folder(parent_folder=root_folder)
 
     starting_storage = ctxt.renter.get_info()['freeStorage']
-    
+
     for _ in range(10):
-        num_offline = random.randint(1, len(ctxt.providers))
+        num_offline = random.randint(1, len(ctxt.providers) - 1)
         offline_providers = random.sample(ctxt.providers, num_offline)
         for provider in offline_providers:
             provider.disconnect()
+
+        ctxt.log('attempting upload with', num_offline, '/', len(ctxt.providers), 'providers offline')
 
         # Should succeed, even with some providers offline
         f = ctxt.renter.upload_file(root_folder, ctxt.relpath(root_folder))
@@ -97,11 +99,11 @@ def test_some_offline_some_online(ctxt):
     # Ensure storage didn't change over the course of the uploads
     ending_storage = ctxt.renter.get_info()['freeStorage']
     ctxt.assert_true(ending_storage == starting_storage)
-    
+
 def adverse_upload_test(ctxt, args):
     ctxt.renter.reserve_space(args.reservation_size)
-    # test_all_offline_file(ctxt)
-    # test_all_offline_folder(ctxt)
+    test_all_offline_file(ctxt)
+    test_all_offline_folder(ctxt)
     test_some_offline_some_online(ctxt)
 
 def main():

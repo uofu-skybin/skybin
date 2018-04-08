@@ -5,7 +5,7 @@ Test sharing a single file.
 
 import argparse
 import filecmp
-from test_framework import setup_test, create_renter
+from test_framework import setup_test
 
 DEFAULT_FILE_SIZE = 1024 * 1024
 

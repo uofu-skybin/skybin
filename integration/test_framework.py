@@ -35,7 +35,7 @@ def rand_port():
     return random.randint(32 * 1024, 64 * 1024)
 
 def create_renter_alias():
-    return 'renter_' + ''.join(str(random.randint(1, 9)) for _ in range(6))
+    return 'test_renter_' + ''.join(str(random.randint(1, 9)) for _ in range(6))
 
 def update_config_file(path, **kwargs):
     """Update a json config file"""

@@ -35,7 +35,7 @@ def folder_test(ctxt):
     import pprint
     pprint.pprint(download_info)
     ctxt.assert_true(len(download_info['files']) == 3)
-    all_files = ctxt.renter.list_files()['files']
+    all_files = ctxt.renter.list_files()
     all_names = set([f['name'] for f in all_files])
     all_ids = set([f['id'] for f in all_files])
     reported_names = set(f['name'] for f in download_info['files'])

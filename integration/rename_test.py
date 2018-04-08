@@ -27,7 +27,7 @@ def rename_test(ctxt):
     ctxt.renter.create_folder('folder2/subfolder/subfolder')
     ctxt.renter.upload_file(input_file, 'folder2/file')
     ctxt.renter.rename_file(folder2['id'], 'folder2_new')
-    file_names = [f['name'] for f in ctxt.renter.list_files()['files']]
+    file_names = [f['name'] for f in ctxt.renter.list_files()
     ctxt.assert_true('folder2_new' in file_names)
     ctxt.assert_true('folder2_new/subfolder' in file_names)
     ctxt.assert_true('folder2_new/subfolder/subfolder' in file_names)
@@ -37,7 +37,7 @@ def rename_test(ctxt):
     folder3 = ctxt.renter.create_folder('folder3')
     folder4 = ctxt.renter.create_folder('folder34')
     ctxt.renter.rename_file(folder3['id'], 'folder5')
-    file_names = [f['name'] for f in ctxt.renter.list_files()['files']]
+    file_names = [f['name'] for f in ctxt.renter.list_files()
     ctxt.assert_true('folder34' in file_names)
 
     # Renaming an invalid file ID should fail

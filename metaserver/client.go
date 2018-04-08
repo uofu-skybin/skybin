@@ -856,7 +856,7 @@ func (client *Client) GetContract(renterID string, contractID string) (*core.Con
 	return &contract, nil
 }
 
-func (client *Client) GetRenterContracts(renterID string) ([]core.Contract, error) {
+func (client *Client) GetRenterContracts(renterID string) ([]*core.Contract, error) {
 	if client.token == "" {
 		return nil, errors.New("must authorize before calling this method")
 	}
@@ -880,7 +880,7 @@ func (client *Client) GetRenterContracts(renterID string) ([]core.Contract, erro
 		return nil, decodeError(resp.Body)
 	}
 
-	var contracts []core.Contract
+	var contracts []*core.Contract
 	err = json.NewDecoder(resp.Body).Decode(&contracts)
 	if err != nil {
 		return nil, err

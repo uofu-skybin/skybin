@@ -200,11 +200,14 @@ func (client *Client) ListFiles() ([]*core.File, error) {
 	return respMsg.Files, nil
 }
 
-func (client *Client) Remove(fileId string) error {
+func (client *Client) Remove(fileId string, recursive *bool) error {
 	url := fmt.Sprintf("http://%s/files/remove", client.addr)
 
 	req := removeFileReq{
 		FileID: fileId,
+	}
+	if recursive != nil {
+		req.Recursive = *recursive
 	}
 	data, _ := json.Marshal(&req)
 	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(data))

@@ -5,13 +5,21 @@ import "log"
 var rmCmd = Cmd{
 	Name:        "rm",
 	Description: "Remove a file from skybin",
-	Usage:       "rm <filename>",
+	Usage:       "rm <filename> [-r]",
 	Run:         runRm,
 }
 
 func runRm(args ...string) {
 	if len(args) < 1 {
 		log.Fatal("Must give filename")
+	}
+
+	recursive := false
+	for _, arg := range args {
+		if arg == "-r" {
+			recursive = true
+			break
+		}
 	}
 
 	filename := args[0]
@@ -34,7 +42,7 @@ func runRm(args ...string) {
 		}
 	}
 
-	err = client.Remove(fileId)
+	err = client.Remove(fileId, &recursive)
 	if err != nil {
 		log.Fatal(err)
 	}

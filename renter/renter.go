@@ -16,7 +16,6 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-
 	"log"
 	"time"
 
@@ -32,10 +31,8 @@ type Renter struct {
 	files     []*core.File
 	contracts []*core.Contract
 
-	// All free storage blobs available for file uploads.
-	// Each storage contract should have at most one associated
-	// blob in this list.
-	freelist []*storageBlob
+	// The last time we pulled down a list of our files from the metaserver.
+	lastFilesUpdate time.Time
 
 	// Metaserver client. The metaserver should always have an up-to-date
 	// view of every file and contract we store locally. However, the
@@ -43,14 +40,16 @@ type Renter struct {
 	// view of everything the metaserver stores on our behalf.
 	metaClient *metaserver.Client
 
-	// The last time we pulled down a list of our files from the metaserver.
-	lastFilesUpdate time.Time
+	storageManager *storageManager
 
 	// Blocks which need to be removed but could not be immediately
 	// deleted because the provider storing them was offline.
 	blocksToDelete []*core.Block
 
-	logger *log.Logger
+	// Queue for batches of downloads to be performed by the download thread.
+	downloadQ chan []*fileDownload
+	uploadQ   chan *fileUpload
+	logger    *log.Logger
 }
 
 // snapshot stores a renter's serialized state
@@ -70,12 +69,14 @@ type storageBlob struct {
 }
 
 func LoadFromDisk(homedir string) (*Renter, error) {
+
 	renter := &Renter{
 		Homedir:        homedir,
 		files:          make([]*core.File, 0),
 		contracts:      make([]*core.Contract, 0),
-		freelist:       make([]*storageBlob, 0),
 		blocksToDelete: make([]*core.Block, 0),
+		downloadQ:      make(chan []*fileDownload),
+		uploadQ:        make(chan *fileUpload),
 		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
@@ -88,6 +89,12 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 
 	renter.metaClient = metaserver.NewClient(config.MetaAddr, &http.Client{})
 
+	updateStorage := func() ([]*storageBlob, error) {
+		// TODO: implement
+		return nil, errors.New("")
+	}
+	renter.storageManager = newStorageManager([]*storageBlob{}, updateStorage, time.Hour, realClock{})
+
 	snapshotPath := path.Join(homedir, "snapshot.json")
 	if _, err := os.Stat(snapshotPath); err == nil {
 		var s snapshot
@@ -97,8 +104,9 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		}
 		renter.files = s.Files
 		renter.contracts = s.Contracts
-		renter.freelist = s.FreeStorage
 		renter.blocksToDelete = s.BlocksToDelete
+
+		renter.storageManager.AddBlobs(s.FreeStorage)
 	}
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "renterid"))
@@ -110,15 +118,27 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
+func (r *Renter) StartThreads() {
+	go r.downloadThread()
+	go r.uploadThread()
+}
+
+func (r *Renter) ShutdownThreads() {
+	close(r.downloadQ)
+	close(r.uploadQ)
+}
+
 func (r *Renter) SetLogger(logger *log.Logger) {
 	r.logger = logger
 }
 
 func (r *Renter) saveSnapshot() error {
 	s := snapshot{
-		Files:          r.files,
-		Contracts:      r.contracts,
-		FreeStorage:    r.freelist,
+		Files:     r.files,
+		Contracts: r.contracts,
+
+		// TODO: remove this from snapshot
+		FreeStorage: r.storageManager.freelist,
 		BlocksToDelete: r.blocksToDelete,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
@@ -143,11 +163,6 @@ func (r *Renter) Info() (*Info, error) {
 	for _, contract := range r.contracts {
 		reserved += contract.StorageSpace
 	}
-	var free int64 = 0
-	for _, blob := range r.freelist {
-		free += blob.Amount
-	}
-
 	err := r.authorizeMeta()
 	if err != nil {
 		return nil, err
@@ -156,19 +171,31 @@ func (r *Renter) Info() (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	freeStorage := r.storageManager.AvailableStorage()
 	return &Info{
 		ID:              r.Config.RenterId,
 		Alias:           r.Config.Alias,
 		ApiAddr:         r.Config.ApiAddr,
 		HomeDir:         r.Homedir,
 		ReservedStorage: reserved,
-		UsedStorage:     reserved - free,
-		FreeStorage:     free,
+		UsedStorage:     reserved - freeStorage,
+		FreeStorage:     freeStorage,
 		TotalContracts:  len(r.contracts),
 		TotalFiles:      len(r.files),
 		Balance:         renter.Balance,
 	}, nil
+}
+
+func (r *Renter) ListContracts() ([]*core.Contract, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	contracts, err := r.metaClient.GetRenterContracts(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	return contracts, nil
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
@@ -375,7 +402,50 @@ func (r *Renter) ShareFile(fileId string, renterAlias string) error {
 	return nil
 }
 
-func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
+// Decrypts and returns f's AES key and AES IV.
+func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byte, err error) {
+	var keyToDecrypt string
+	var ivToDecrypt string
+
+	// If we own the file, use the AES key directly. Otherwise, retrieve them from the relevent permission
+	if f.OwnerID == r.Config.RenterId {
+		keyToDecrypt = f.AesKey
+		ivToDecrypt = f.AesIV
+	} else {
+		for _, permission := range f.AccessList {
+			if permission.RenterId == r.Config.RenterId {
+				keyToDecrypt = permission.AesKey
+				ivToDecrypt = permission.AesIV
+			}
+		}
+	}
+
+	if keyToDecrypt == "" || ivToDecrypt == "" {
+		return nil, nil, errors.New("could not find permission in access list")
+	}
+
+	keyBytes, err := base64.URLEncoding.DecodeString(keyToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ivBytes, err := base64.URLEncoding.DecodeString(ivToDecrypt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	aesKey, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, keyBytes, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes key. Error: %v", err)
+	}
+	aesIV, err = rsa.DecryptOAEP(sha256.New(), rand.Reader, r.privKey, ivBytes, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
+	}
+	return aesKey, aesIV, nil
+}
+
+func (r *Renter) RemoveFile(fileId string, versionNum *int, recursive bool) error {
 	file, err := r.GetFile(fileId)
 	if err != nil {
 		return err
@@ -384,19 +454,135 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int) error {
 		return errors.New("Cannot give versionNum when removing a folder")
 	}
 	if versionNum != nil && len(file.Versions) == 1 {
-		return errors.New("Cannot remove only version of file")
-	}
-	if file.IsDir && len(r.findChildren(file)) > 0 {
-		return errors.New("Cannot remove non-empty folder")
+		return errors.New("Cannot remove the only version of a file")
 	}
 	err = r.authorizeMeta()
 	if err != nil {
 		return err
 	}
+	if file.IsDir {
+		return r.removeDir(file, recursive)
+	}
 	if versionNum != nil {
 		return r.removeFileVersion(file, *versionNum)
 	}
 	return r.removeFile(file)
+}
+
+func (r *Renter) removeDir(dir *core.File, recursive bool) error {
+	children := r.findChildren(dir)
+	if len(children) > 0 && !recursive {
+		return errors.New("Cannot remove non-empty folder without recursive option")
+
+	}
+	// Delete the file metadata. This will delete the children's metadata as well.
+	err := r.metaClient.DeleteFile(r.Config.RenterId, dir.ID)
+	if err != nil {
+		return fmt.Errorf("Unable to delete folder metadata. Error: %s", err)
+	}
+	for _, child := range children {
+		if !child.IsDir {
+			r.removeFileContents(child)
+		}
+	}
+	// Update the local file cache
+	err = r.pullFiles()
+	if err != nil {
+		r.logger.Println("Unable to pull updates files from metaserver after removing folder.")
+		r.logger.Println("Error: ", err)
+	}
+	return nil
+}
+
+func (r *Renter) removeFileVersion(file *core.File, versionNum int) error {
+	var version *core.Version
+	var versionIdx int
+	for ; versionIdx < len(file.Versions); versionIdx++ {
+		if file.Versions[versionIdx].Num == versionNum {
+			version = &file.Versions[versionIdx]
+			break
+		}
+	}
+	if version == nil {
+		return fmt.Errorf("Cannot find version %d", versionNum)
+	}
+	err := r.metaClient.DeleteFileVersion(r.Config.RenterId, file.ID, versionNum)
+	if err != nil {
+		return fmt.Errorf("Unable to delete version metadata. Error: %s", err)
+	}
+	r.removeVersionContents(version)
+	file.Versions = append(file.Versions[:versionIdx], file.Versions[versionIdx+1:]...)
+	err = r.saveSnapshot()
+	if err != nil {
+		r.logger.Println("Error saving snapshot:", err)
+	}
+	return nil
+}
+
+func (r *Renter) removeFile(file *core.File) error {
+	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
+	if err != nil {
+		return err
+	}
+	r.removeFileContents(file)
+
+	// Delete locally
+	fileIdx := -1
+	for idx, file2 := range r.files {
+		if file2.ID == file.ID {
+			fileIdx = idx
+			break
+		}
+	}
+	if fileIdx != -1 {
+		r.files = append(r.files[:fileIdx], r.files[fileIdx+1:]...)
+		err = r.saveSnapshot()
+		if err != nil {
+			r.logger.Println("Error saving snapshot:", err)
+		}
+	}
+
+	return nil
+}
+
+func (r *Renter) removeFileContents(file *core.File) {
+	for i := 0; i < len(file.Versions); i++ {
+		r.removeVersionContents(&file.Versions[i])
+	}
+}
+
+// Deletes the blocks for a file version from the providers
+// where they are stored, reclaiming the freed storage space.
+func (r *Renter) removeVersionContents(version *core.Version) {
+	for _, block := range version.Blocks {
+		r.removeBlock(&block)
+	}
+}
+
+// Removes a block from the provider where it is stored, reclaiming
+// the block's storage for the freelist.
+func (r *Renter) removeBlock(block *core.Block) {
+	pvdr := provider.NewClient(block.Location.Addr, &http.Client{})
+	err := pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
+	if err == nil {
+		err = pvdr.RemoveBlock(r.Config.RenterId, block.ID)
+	}
+	if err != nil {
+		r.logger.Printf("Unable to remove block %s from provider %s\n",
+			block.ID, block.Location.ProviderId)
+		r.logger.Printf("Error: %s\n", err)
+		r.blocksToDelete = append(r.blocksToDelete, block)
+		return
+	}
+
+	// Reclaim the storage used by the block.
+	blob := &storageBlob{
+		ProviderId: block.Location.ProviderId,
+		Addr:       block.Location.Addr,
+		Amount:     block.Size,
+		ContractId: block.Location.ContractId,
+	}
+	r.storageManager.AddBlob(blob)
 }
 
 func (r *Renter) CreatePaypalPayment(amount int64, returnURL, cancelURL string) (string, error) {
@@ -454,106 +640,6 @@ func (r *Renter) ListTransactions() ([]core.Transaction, error) {
 	return transactions, nil
 }
 
-func (r *Renter) removeFile(file *core.File) error {
-	err := r.metaClient.DeleteFile(r.Config.RenterId, file.ID)
-	if err != nil {
-		return err
-	}
-	for _, version := range file.Versions {
-		r.removeVersionBlocks(&version)
-	}
-
-	// Delete locally
-	fileIdx := -1
-	for idx, file2 := range r.files {
-		if file2.ID == file.ID {
-			fileIdx = idx
-			break
-		}
-	}
-	if fileIdx != -1 {
-		r.files = append(r.files[:fileIdx], r.files[fileIdx+1:]...)
-		err = r.saveSnapshot()
-		if err != nil {
-			r.logger.Println("Error saving snapshot:", err)
-		}
-	}
-
-	return nil
-}
-
-func (r *Renter) removeFileVersion(file *core.File, versionNum int) error {
-	var version *core.Version
-	var versionIdx int
-	for ; versionIdx < len(file.Versions); versionIdx++ {
-		if file.Versions[versionIdx].Num == versionNum {
-			version = &file.Versions[versionIdx]
-			break
-		}
-	}
-	if version == nil {
-		return fmt.Errorf("Cannot find version %d", versionNum)
-	}
-	err := r.metaClient.DeleteFileVersion(r.Config.RenterId, file.ID, versionNum)
-	if err != nil {
-		return fmt.Errorf("Unable to delete version metadata. Error: %s", err)
-	}
-	r.removeVersionBlocks(version)
-	file.Versions = append(file.Versions[:versionIdx], file.Versions[versionIdx+1:]...)
-	err = r.saveSnapshot()
-	if err != nil {
-		r.logger.Println("Error saving snapshot:", err)
-	}
-	return nil
-}
-
-// Deletes the blocks for a file version from the providers
-// where they are stored, reclaiming the freed storage space.
-func (r *Renter) removeVersionBlocks(version *core.Version) {
-	for _, block := range version.Blocks {
-		r.removeBlock(&block)
-	}
-}
-
-// Removes a block from the provider where it is stored, reclaiming
-// the block's storage for the freelist.
-func (r *Renter) removeBlock(block *core.Block) {
-	pvdr := provider.NewClient(block.Location.Addr, &http.Client{})
-	err := pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
-	if err == nil {
-		err = pvdr.RemoveBlock(r.Config.RenterId, block.ID)
-	}
-	if err != nil {
-		r.logger.Printf("Unable to remove block %s from provider %s\n",
-			block.ID, block.Location.ProviderId)
-		r.logger.Printf("Error: %s\n", err)
-		r.blocksToDelete = append(r.blocksToDelete, block)
-		return
-	}
-
-	// Reclaim the storage used by the block.
-	blob := &storageBlob{
-		ProviderId: block.Location.ProviderId,
-		Addr:       block.Location.Addr,
-		Amount:     block.Size,
-		ContractId: block.Location.ContractId,
-	}
-	r.addBlob(blob)
-}
-
-// Add a storage blob back to the free list.
-func (r *Renter) addBlob(blob *storageBlob) {
-	for _, blob2 := range r.freelist {
-		if blob.ContractId == blob2.ContractId {
-
-			// Merge blobs
-			blob2.Amount += blob.Amount
-			return
-		}
-	}
-	r.freelist = append(r.freelist, blob)
-}
-
 func (r *Renter) saveFile(f *core.File) error {
 	err := r.authorizeMeta()
 	if err != nil {
@@ -587,14 +673,6 @@ func (r *Renter) getFileByName(name string) *core.File {
 		}
 	}
 	return nil
-}
-
-func (r *Renter) storageAvailable() int64 {
-	var total int64 = 0
-	for _, blob := range r.freelist {
-		total += blob.Amount
-	}
-	return total
 }
 
 // Authorize with the metaclient, if necessary

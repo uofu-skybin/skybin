@@ -93,7 +93,7 @@ class TestNet:
     def run_step(self):
         renter = random.choice(self.renters)
         renter_info = renter.get_info()
-        files = renter.list_files()['files']
+        files = renter.list_files()
 
         # If the renter doesn't have any storage yet,
         # reserve a large initial chunk in order to

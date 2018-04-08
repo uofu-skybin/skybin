@@ -9,167 +9,198 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"time"
+	"crypto/rsa"
+	"math"
 )
 
-// Provider interface stub.
-type pvdrClient interface {
+type storageEstimate struct {
+	// Total space the estimate reserves in bytes
+	TotalSpace int64 `json:"totalSpace"`
+	// Total price in tenths of cents
+	TotalPrice int64 `json:"totalPrice"`
+	// Tentative contracts. Terms are set but signatures are empty
+	Contracts []*core.Contract `json:"contracts"`
+	// Providers the contracts are with. Contracts[i] is with Providers[i]
+	Providers []*core.ProviderInfo `json:"providers"`
+}
+
+type pvdrDialFn func(*core.ProviderInfo) pvdrIface
+
+func dialProvider(pvdr *core.ProviderInfo) pvdrIface {
+	return provider.NewClient(pvdr.Addr, &http.Client{})
+}
+
+type pvdrIface interface {
 	GetInfo() (*core.ProviderInfo, error)
 	ReserveStorage(contract *core.Contract) (*core.Contract, error)
 }
 
-type res struct {
-	contract *core.Contract
-	pinfo *core.ProviderInfo
-}
-
-type storageEstimate struct {
-	TotalCost int64 `json:"totalCost"`
-	Contracts []*core.Contract `json:"contracts"`
-	Providers []*core.ProviderInfo `json:"providers"`
-}
-
-func createStorageEstimate(amount int64, pvdrs []pvdrClient) (*storageEstimate, error) {
-
-}
-
-func (r *Renter) ReserveStorage(amount int64) ([]*core.Contract, error) {
-	if amount < kMinContractSize {
+func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
+	if totalSpace < kMinContractSize {
 		return nil, fmt.Errorf("Must reserve at least %d bytes.", kMinContractSize)
 	}
-
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
 	providers, err := r.metaClient.GetProviders()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot fetch providers. Error: %v", err)
 	}
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("Cannot find any storage providers.")
+	}
+	estimate, err := createStorageEstimate(totalSpace, r.Config, providers, dialProvider)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to find enough storage space.")
+	}
+	err = confirmStorageEstimate(estimate, r.privKey, dialProvider)
+	if err != nil {
+		return nil, err
+	}
 
-	// Filter providers who don't have enough space
-	// Then, shuffle them randomly
-
-	var reserved int64 = 0
-	var contracts []*core.Contract
-	var blobs []*storageBlob
-	for reserved < amount {
-		n := amount - reserved
-		if n > r.Config.MaxContractSize {
-			n = r.Config.MaxContractSize
-		}
-		contract, pinfo, err := r.reserveN(n, providers)
+	// Save the contracts
+	for _, contract := range estimate.Contracts {
+		err = r.metaClient.PostContract(r.Config.RenterId, contract)
 		if err != nil {
-			return nil, fmt.Errorf("Cannot find enough storage. Error: %v", err)
+			return nil, err
 		}
-		contracts = append(contracts, contract)
+	}
+	r.contracts = append(r.contracts, estimate.Contracts...)
+
+	// Record the new storage blobs
+	blobs := []*storageBlob{}
+	for i := 0; i < len(estimate.Contracts); i++ {
+		contract := estimate.Contracts[i]
+		pinfo := estimate.Providers[i]
 		blobs = append(blobs, &storageBlob{
 			ProviderId: pinfo.ID,
 			Addr:       pinfo.Addr,
 			Amount:     contract.StorageSpace,
 			ContractId: contract.ID,
 		})
-		reserved += n
 	}
-
-	// Save contracts with metaserver.
-	// TODO: Use batch save endpoint.
-	err = r.authorizeMeta()
-	if err != nil {
-		return nil, err
-	}
-	for _, contract := range contracts {
-		err = r.metaClient.PostContract(r.Config.RenterId, contract)
-		if err != nil {
-			return nil, err
-		}
-	}
-	r.contracts = append(r.contracts, contracts...)
-
-	// Record the newly available storage locally
 	r.storageManager.AddBlobs(blobs)
-
-	return contracts, nil
+	return estimate.Contracts, nil
 }
 
-func (r *Renter) reserveN(n int64, providers []core.ProviderInfo) (*core.Contract, *core.ProviderInfo, error) {
-	const randiters = 1024
+func createStorageEstimate(totalSpace int64, config *Config,
+	providers []core.ProviderInfo,
+	dialFn pvdrDialFn) (*storageEstimate, error) {
+
+	estimate := &storageEstimate{}
+	startDate := time.Now().UTC().Round(0)
+	endDate := time.Now().AddDate(0, 0, config.DefaultContractDurationDays)
+	badPvdrs := make([]bool, len(providers))
+	spaceLeft := make([]int64, len(providers))
 	visited := make([]bool, len(providers))
-	nvisited := 0
-	for i := 0; i < randiters && nvisited < len(providers); i++ {
-		idx := rand.Intn(len(providers))
-		if visited[idx] {
-			continue
+	pvdrsLeft := len(providers)
+
+	for estimate.TotalSpace < totalSpace && pvdrsLeft > 0 {
+		space := totalSpace - estimate.TotalSpace
+		if space > config.MaxContractSize {
+			space = config.MaxContractSize
 		}
-		visited[idx] = true
-		nvisited++
-		pinfo := providers[idx]
-		if pinfo.SpaceAvail < n {
-			continue
+		for pvdrsLeft > 0 {
+			idx := rand.Intn(len(providers))
+			if badPvdrs[idx] {
+				continue
+			}
+			pinfo := &providers[idx]
+			if pinfo.SpaceAvail < space {
+				badPvdrs[idx] = true
+				pvdrsLeft--
+				continue
+			}
+			if !visited[idx] {
+				// We haven't visited this provider yet.
+				// Pull a refreshed copy of the provider's info.
+				// This does two things:
+				//   1) It ensures the provider is online
+				//   2) It ensures we have up-to-date information on the provider's space and fees
+				client := dialFn(pinfo)
+				var err error
+				pinfo, err = client.GetInfo()
+				if err != nil {
+					badPvdrs[idx] = true
+					pvdrsLeft--
+					continue
+				}
+				spaceLeft[idx] = pinfo.SpaceAvail
+				providers[idx] = *pinfo
+				visited[idx] = true
+			}
+			if spaceLeft[idx] < space {
+				badPvdrs[idx] = true
+				pvdrsLeft--
+				continue
+			}
+			spaceLeft[idx] -= space
+			fee := calcStorageFee(space, int64(config.DefaultContractDurationDays), pinfo.StorageRate)
+			cid, err := genId()
+			if err != nil {
+				return nil, err
+			}
+			proposal := &core.Contract{
+				ID:           cid,
+				StartDate:    startDate,
+				EndDate:      endDate,
+				RenterId:     config.RenterId,
+				ProviderId:   pinfo.ID,
+				StorageSpace: space,
+				StorageFee:   fee,
+			}
+			estimate.Contracts = append(estimate.Contracts, proposal)
+			estimate.Providers = append(estimate.Providers, pinfo)
+			estimate.TotalSpace += space
+			estimate.TotalPrice += fee
+			break
 		}
-		contract, err := r.formContract(n, &pinfo)
+	}
+	if estimate.TotalSpace != totalSpace {
+		return nil, errors.New("Unable to find enough storage space.")
+	}
+	return estimate, nil
+}
+
+func calcStorageFee(spaceBytes, durationDays, rateGbMonth int64) int64 {
+	spaceGb := float64(spaceBytes) / float64(1e9)
+	durationMonths := float64(durationDays) / float64(30)
+	z := int64(math.Ceil(spaceGb * durationMonths))
+	return z * rateGbMonth
+}
+
+func confirmStorageEstimate(estimate *storageEstimate, signingKey *rsa.PrivateKey, dialFn pvdrDialFn) error {
+	for i := 0; i < len(estimate.Contracts); i++ {
+		contract := estimate.Contracts[i]
+		pinfo := estimate.Providers[i]
+		pvdrKey, err := util.UnmarshalPublicKey([]byte(pinfo.PublicKey))
 		if err != nil {
-			continue
+			return errors.New("Unable to unmarshal provider's key")
 		}
-		return contract, &pinfo, nil
+		signature, err := core.SignContract(contract, signingKey)
+		if err != nil {
+			return fmt.Errorf("Unable to sign contract. Error: %s", err)
+		}
+		contract.RenterSignature = signature
+
+		client := dialFn(pinfo)
+		signedContract, err := client.ReserveStorage(contract)
+		if err != nil {
+			return err
+		}
+		if len(signedContract.ProviderSignature) == 0 {
+			return errors.New("Provider did not agree to contract")
+		}
+		err = core.VerifyContractSignature(signedContract, signedContract.ProviderSignature, *pvdrKey)
+		if err != nil {
+			return errors.New("Provider's signature does not match contract")
+		}
+		contract.ProviderSignature = signedContract.ProviderSignature
+		if !core.CompareContracts(*contract, *signedContract) {
+			return errors.New("Provider's terms don't match original contract")
+		}
 	}
-	return nil, nil, errors.New("Cannot find provider")
+	return nil
 }
-
-func (r *Renter) formContract(space int64, pinfo *core.ProviderInfo) (*core.Contract, error) {
-	client := provider.NewClient(pinfo.Addr, &http.Client{})
-
-	// Get an updated version of the provider's information and double-check
-	// that they have enough space.
-	pinfo, err := client.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-	if pinfo.SpaceAvail < space {
-		return nil, errors.New("Provider doesn't have enough space")
-	}
-
-	// Check that the provider's key is valid.
-	pvdrKey, err := util.UnmarshalPublicKey([]byte(pinfo.PublicKey))
-	if err != nil {
-		return nil, errors.New("Unable to unmarshal provider's key")
-	}
-
-	// Create proposal
-	cid, err := genId()
-	if err != nil {
-		return nil, err
-	}
-	proposal := core.Contract{
-		ID:           cid,
-		StartDate:    time.Now().UTC().Round(0),
-		EndDate:      time.Now().AddDate(0, 0, r.Config.DefaultContractDurationDays),
-		RenterId:     r.Config.RenterId,
-		ProviderId:   pinfo.ID,
-		StorageSpace: space,
-	}
-	signature, err := core.SignContract(&proposal, r.privKey)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to sign contract. Error: %s", err)
-	}
-	proposal.RenterSignature = signature
-
-	// Send to provider
-	signedContract, err := client.ReserveStorage(&proposal)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(signedContract.ProviderSignature) == 0 {
-		return nil, errors.New("Provider did not agree to contract")
-	}
-
-	err = core.VerifyContractSignature(signedContract, signedContract.ProviderSignature, *pvdrKey)
-	if err != nil {
-		return nil, errors.New("Provider's signature does not match contract")
-	}
-
-	proposal.ProviderSignature = signedContract.ProviderSignature
-	if !core.CompareContracts(proposal, *signedContract) {
-		return nil, errors.New("Provider's terms don't match original contract")
-	}
-
-	return signedContract, nil
-}
-
 

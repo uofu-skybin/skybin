@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -16,7 +17,6 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
-	"log"
 	"time"
 )
 
@@ -40,7 +40,7 @@ type Renter struct {
 	privKey *rsa.PrivateKey
 
 	// An in-memory cache of the renter's file metadata.
-	files     []*core.File
+	files []*core.File
 
 	// The last time we pulled down a list of our files from the metaserver.
 	lastFilesUpdate time.Time
@@ -143,11 +143,11 @@ func (r *Renter) SetLogger(logger *log.Logger) {
 
 func (r *Renter) saveSnapshot() error {
 	s := snapshot{
-		Files:     r.files,
+		Files: r.files,
 		//Contracts: r.contracts,
 
 		// TODO: remove this from snapshot
-		FreeStorage: r.storageManager.freelist,
+		FreeStorage:    r.storageManager.freelist,
 		BlocksToDelete: r.blocksToDelete,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
@@ -185,18 +185,6 @@ func (r *Renter) Info() (*Info, error) {
 	}, nil
 }
 
-func (r *Renter) ListContracts() ([]*core.Contract, error) {
-	err := r.authorizeMeta()
-	if err != nil {
-		return nil, err
-	}
-	contracts, err := r.metaClient.GetRenterContracts(r.Config.RenterId)
-	if err != nil {
-		return nil, err
-	}
-	return contracts, nil
-}
-
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	if r.getFileByName(name) != nil {
 		return nil, fmt.Errorf("%s already exists.", name)
@@ -214,52 +202,6 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 		Versions:   []core.Version{},
 	}
 	err = r.saveFile(file)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
-}
-
-func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
-	file, err := r.GetFile(fileId)
-	if err != nil {
-		return nil, err
-	}
-	if r.getFileByName(name) != nil {
-		return nil, fmt.Errorf("%s already exists.", name)
-	}
-
-	err = r.authorizeMeta()
-	if err != nil {
-		return nil, err
-	}
-
-	// If it's a folder, rename it's children.
-	if file.IsDir {
-		children := r.findChildren(file)
-		for _, child := range children {
-			suffix := strings.TrimPrefix(child.Name, file.Name)
-			child.Name = name + suffix
-		}
-
-		// TODO(kincaid): We need to make these renames atomic.
-		// Perhaps move the rename logic to the metaserver to ensure consistency.
-		for _, child := range children {
-			err := r.metaClient.UpdateFile(r.Config.RenterId, child)
-			if err != nil {
-				r.logger.Println("RenameFile: Error updating child's name with metaserver:", err)
-				return nil, err
-			}
-		}
-	}
-
-	file.Name = name
-	err = r.metaClient.UpdateFile(r.Config.RenterId, file)
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.saveSnapshot()
 	if err != nil {
 		return nil, err
 	}
@@ -292,27 +234,6 @@ func (r *Renter) pullFiles() error {
 	return r.saveSnapshot()
 }
 
-func (r *Renter) ListSharedFiles() ([]*core.File, error) {
-	err := r.authorizeMeta()
-	if err != nil {
-		return nil, err
-	}
-
-	files, err := r.metaClient.GetSharedFiles(r.Config.RenterId)
-	if err != nil {
-		return nil, err
-	}
-
-	// Do this to match ListFile's signature, for now.
-	returnList := make([]*core.File, len(files))
-	for i, f := range files {
-		newFile := f
-		returnList[i] = &newFile
-	}
-
-	return returnList, nil
-}
-
 func (r *Renter) GetFile(fileId string) (*core.File, error) {
 
 	// Check if it exists locally
@@ -336,6 +257,27 @@ func (r *Renter) GetFile(fileId string) (*core.File, error) {
 	r.files = append(r.files, file)
 
 	return file, nil
+}
+
+func (r *Renter) ListSharedFiles() ([]*core.File, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+
+	files, err := r.metaClient.GetSharedFiles(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Do this to match ListFile's signature, for now.
+	returnList := make([]*core.File, len(files))
+	for i, f := range files {
+		newFile := f
+		returnList[i] = &newFile
+	}
+
+	return returnList, nil
 }
 
 func (r *Renter) ShareFile(fileId string, renterAlias string) error {
@@ -435,6 +377,52 @@ func (r *Renter) decryptEncryptionKeys(f *core.File) (aesKey []byte, aesIV []byt
 		return nil, nil, fmt.Errorf("Unable to decrypt aes IV. Error: %v", err)
 	}
 	return aesKey, aesIV, nil
+}
+
+func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
+	file, err := r.GetFile(fileId)
+	if err != nil {
+		return nil, err
+	}
+	if r.getFileByName(name) != nil {
+		return nil, fmt.Errorf("%s already exists.", name)
+	}
+
+	err = r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+
+	// If it's a folder, rename it's children.
+	if file.IsDir {
+		children := r.findChildren(file)
+		for _, child := range children {
+			suffix := strings.TrimPrefix(child.Name, file.Name)
+			child.Name = name + suffix
+		}
+
+		// TODO(kincaid): We need to make these renames atomic.
+		// Perhaps move the rename logic to the metaserver to ensure consistency.
+		for _, child := range children {
+			err := r.metaClient.UpdateFile(r.Config.RenterId, child)
+			if err != nil {
+				r.logger.Println("RenameFile: Error updating child's name with metaserver:", err)
+				return nil, err
+			}
+		}
+	}
+
+	file.Name = name
+	err = r.metaClient.UpdateFile(r.Config.RenterId, file)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.saveSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
 
 func (r *Renter) RemoveFile(fileId string, versionNum *int, recursive bool) error {
@@ -632,6 +620,18 @@ func (r *Renter) ListTransactions() ([]core.Transaction, error) {
 	return transactions, nil
 }
 
+func (r *Renter) ListContracts() ([]*core.Contract, error) {
+	err := r.authorizeMeta()
+	if err != nil {
+		return nil, err
+	}
+	contracts, err := r.metaClient.GetRenterContracts(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	return contracts, nil
+}
+
 func (r *Renter) saveFile(f *core.File) error {
 	err := r.authorizeMeta()
 	if err != nil {
@@ -685,4 +685,3 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 	return util.UnmarshalPrivateKey(data)
 }
-

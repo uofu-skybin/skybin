@@ -1,0 +1,1219 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: SkyBin Metaserver
+  description: "API for SkyBin metadata server"
+  license:
+    name: MIT
+    
+paths:
+  /providers:
+    get:
+      summary: "List registered providers."
+      tags:
+        - providers
+      responses:
+        200:
+          description: "Successfully retrieved registered providers"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Provider"
+                  
+    post:
+      summary: "Register a new provider."
+      tags:
+        - providers
+      requestBody:
+        description: "Information about the provider to register"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Provider"
+      responses:
+        201:
+          description: "The provider was successfully registered"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+                
+  /providers/{id}:
+    get:
+      summary: "Retrieve information about a specific provider"
+      tags:
+        - providers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Provider's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Provider information was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+                
+    put:
+      summary: "Update the specified provider's information"
+      tags:
+        - providers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Provider's ID"
+          schema:
+            type: string
+      requestBody:
+        description: "New provider information"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Provider"
+      responses:
+        200:
+          description: "Provider information was successfully updated"
+    
+    delete:
+      summary: "Delete the specified provider"
+      tags:
+        - providers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Provider's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Provider was successfully deleted"
+          
+  /providers/{id}/transactions:
+    get:
+      summary: "Retrieve transactions associated with the specified provider"
+      tags:
+        - providers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Provider's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Transactions information was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+  /renters:
+    get:
+      summary: "List renters or look renter up by alias."
+      tags:
+        - renters
+      parameters:
+        - name: alias
+          in: query
+          required: false
+          description: "A specific renter's alias"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Information about the specified renter"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Renter"
+                  
+    post:
+      summary: "Register a new renter."
+      tags:
+        - renters
+      requestBody:
+        description: "Information about the renter to register"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Renter"
+      responses:
+        200:
+          description: "The renter was successfully registered"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Renter"
+                
+  /renters/{id}:
+    get:
+      summary: "Retrieve information about a specific renter"
+      tags:
+        - renters
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Renter information was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Renter"
+                
+    put:
+      summary: "Update the specified renter's information"
+      tags:
+        - renters
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      requestBody:
+        description: "New renter information"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Renter"
+      responses:
+        200:
+          description: "Renter information was successfully updated"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Renter"
+    
+    delete:
+      summary: "Delete the specified renter"
+      tags:
+        - renters
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Renter was successfully deleted"
+          
+  /renters/{id}/transactions:
+    get:
+      summary: "Retrieve transactions associated with the specified renter"
+      tags:
+        - renters
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Transactions information was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+          
+  /renters/{id}/contracts:
+    get:
+      summary: "Retrieve list of the specified renter's contracts"
+      tags:
+        - contracts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Contracts were successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+    post:
+      summary: "Create a new contract"
+      tags:
+        - contracts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      requestBody:
+        description: "The contract to create"
+        required: true
+        content:
+          application/json:
+            schema:
+                $ref: "#/components/schemas/Contract" 
+      responses:
+        200:
+          description: "Contract was successfully created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+                
+  /renters/{id}/contracts/{contractId}:
+    get:
+      summary: "Retrieve information about the specified contract"
+      tags:
+        - contracts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: contractId
+          required: true
+          description: "Contract ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Contract was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+    
+    put:
+      summary: Update the specified contract"
+      tags:
+        - contracts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: contractId
+          required: true
+          description: "Contract ID"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Contract"
+      responses:
+        200:
+          description: "Contract was successfully updated"
+          
+    delete:
+      summary: "Delete the specified contract"
+      tags:
+        - contracts
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: contractId
+          required: true
+          description: "Contract ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Contract was successfully deleted"
+  
+  /renters/{id}/contracts/{contractId}/payment:
+    get:
+      summary: "Get payment information about the specified contract"
+      tags:
+        - payments
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: contractId
+          required: true
+          description: "Contract ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Payment information was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentInfo"
+                
+    put:
+      summary: "Update the payment information for the specified contract"
+      tags:
+        - payments
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: contractId
+          required: true
+          description: "Contract ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Payment information was successfully updated"
+          
+  /renters/{id}/files:
+    get:
+      summary: "Get the list of files belonging to the specified renter"
+      tags:
+        - files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File list was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/File"
+                  
+    post:
+      summary: "Create a new file in the specified renter's directory"
+      tags:
+        - files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/File"
+      responses:
+        201:
+          description: "The file was successfully created"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/File"
+                  
+  /renters/{id}/files/{fileId}:
+    get:
+      summary: "Get information about the specified file"
+      tags:
+        - files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+                
+    put:
+      summary: "Update the specified file"
+      tags:
+        - files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/File"
+      responses:
+        200:
+          description: "File was successfully updated"
+          
+    delete:
+      summary: "Delete the specified file"
+      tags:
+        - files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File was successfully deleted"
+          
+  /renters/{id}/files/{fileId}/versions:
+    get:
+      summary: "Retrieve all versions of the specified file"
+      tags:
+        - file versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File versions were successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Version"
+                
+    post:
+      summary: "Create a new version of the specified file"
+      tags:
+        - file versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Version"
+      responses:
+        201:
+          description: "The version was successfully created"
+          
+  /renters/{id}/files/{fileId}/versions/{version}:
+    get:
+      summary: "Get information about the specified file version"
+      tags:
+        - file versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          description: "File version number"
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Version was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+                
+    put:
+      summary: "Update the specified version"
+      tags:
+        - file versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          description: "File version number"
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Version"
+      responses:
+        200:
+          description: "Version was successfully updated"
+          
+    delete:
+      summary: "Delete the specified version"
+      tags:
+        - file versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          description: "File version number"
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Version was successfully deleted"
+            
+  /renters/{id}/files/{fileId}/permissions:
+    get:
+      summary: "Retrieve permissions associated with the specified file"
+      tags:
+        - file permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File permissions were successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Permission"
+                
+    post:
+      summary: "Create a new permission associated with the specified file"
+      tags:
+        - file permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Permission"
+      responses:
+        201:
+          description: "The permission was successfully created"
+          
+  /renters/{id}/files/{fileId}/permissions/{userId}:
+    get:
+      summary: "Get information about the specified permission"
+      tags:
+        - file permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          description: "ID of user who the file is shared with"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Permission was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permission"
+                
+    put:
+      summary: "Update the specified permission"
+      tags:
+        - file permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          description: "ID of user who the file is shared with"
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Permission"
+      responses:
+        200:
+          description: "Permission was successfully updated"
+          
+    delete:
+      summary: "Delete the specified permission"
+      tags:
+        - file permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          description: "ID of user who the file is shared with"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Permission was successfully deleted"
+          
+  /renters/{id}/shared:
+    get:
+      summary: "Get the list of files shared with the specified renter"
+      tags:
+        - shared files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File list was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/File"
+                  
+  /renters/{id}/shared/{fileId}:
+    get:
+      summary: "Get information about the specified shared file"
+      tags:
+        - shared files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+                
+    delete:
+      summary: "Remove the shared file from the specified renter's directory"
+      tags:
+        - shared files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File was successfully removed"
+          
+  /renters/{id}/shared/{fileId}/versions:
+    get:
+      summary: "Retrieve all versions of the shared file"
+      tags:
+        - shared files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "File versions were successfully retrieved"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Version"
+                  
+  /renters/{id}/shared/{fileId}/versions/{version}:
+    get:
+      summary: "Get information about the specified file version"
+      tags:
+        - shared files
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Renter's ID"
+          schema:
+            type: string
+        - in: path
+          name: fileId
+          required: true
+          description: "File's ID"
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          description: "File version number"
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Version was successfully retrieved"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+                
+  /paypal/create:
+    post:
+      summary: "Create a paypal transaction to deposit money in a renter's account"
+      tags:
+        - paypal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+                returnURL:
+                  type: string
+                cancelURL:
+                  type: string
+      responses:
+        201:
+          description: "Payment was successfully created."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        
+  /paypal/execute:
+    post:
+      summary: "Execute the given deposit transaction"
+      tags:
+        - paypal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymenId:
+                  type: string
+                payerId:
+                  type: string
+                renterId:
+                  type: string
+      responses:
+        200:
+          description: "Payment was successfully executed."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    
+  /paypal/renter-withdraw:
+    post:
+      summary: "Withdraw money from the specified renter's account"
+      tags:
+        - paypal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+                email:
+                  type: string
+                renterId:
+                  type: string
+      responses:
+        200:
+          description: "Withdraw successfull."
+                    
+  /paypal/provider-withdraw:
+    post:
+      summary: "Withdraw money from the specified provider's account"
+      tags:
+        - paypal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+                email:
+                  type: string
+                providerId:
+                  type: string
+      responses:
+        200:
+          description: "Withdraw successfull."
+
+components:
+  schemas:
+    Provider:
+      properties:
+        id:
+          type: string
+        publicKey:
+          type: string
+        addr:
+          type: string
+        spaceAvail:
+          type: integer
+          format: int64
+        storageRate:
+          type: integer
+          format: int64
+        balance:
+          type: integer
+          format: int64
+    Renter:
+      properties:
+        id:
+          type: string
+        alias:
+          type: string
+        publicKey:
+          type: string
+        files:
+          type: array
+          items:
+            type: string
+        shared:
+          type: array
+          items:
+            type: string
+        balance:
+          type: integer
+          format: int64
+    Contract:
+      properties:
+        id:
+          type: string
+        renterId:
+          type: string
+        providerId:
+          type: string
+        storageSpace:
+          type: integer
+          format: int64
+        fee:
+          type: integer
+          format: int64
+        startDate:
+          type: string
+        endDate:
+          type: string
+        renterSignature:
+          type: string
+        providerSignature:
+          type: string
+    PaymentInfo:
+      properties:
+        contract:
+          type: string
+        isPaying:
+          type: boolean
+        lastPaymentTime:
+          type: string
+        balance:
+          type: integer
+          format: int64
+    File:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        isDir:
+          type: boolean
+        accessList:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+        aesKey:
+          type: string
+        aesIV:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Version"
+    Permission:
+      properties:
+        renterId:
+          type: string
+        renterAlias:
+          type: string
+        aesKey:
+          type: string
+        aesIV:
+          type: string
+    Version:
+      properties:
+        num:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        modTime:
+          type: string
+        uploadTime:
+          type: string
+        uploadSize:
+          type: integer
+          format: int64
+        paddingBytes:
+          type: integer
+          format: int64
+        numDataBlocks:
+          type: integer
+        numParityBlocks:
+          type: integer
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Block"
+    Block:
+      properties:
+        id:
+          type: string
+        num:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        sha256hash:
+          type: string
+        location:
+          $ref: "#/components/schemas/BlockLocation"
+    BlockLocation:
+      properties:
+        providerId:
+          type: string
+        addr:
+          type: string
+        contractId:
+          type: string
+    Transaction:
+      properties:
+        userType:
+          type: string
+        userId:
+          type: string
+        contractId:
+          type: string
+        transactionType:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        description:
+          type: string
+        date:
+          type: string
+        

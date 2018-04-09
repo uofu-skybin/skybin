@@ -20,12 +20,26 @@ import (
 	"time"
 )
 
+// Info is information about a renter
+type Info struct {
+	ID              string `json:"id"`
+	Alias           string `json:"alias"`
+	ApiAddr         string `json:"apiAddress"`
+	HomeDir         string `json:"homedir"`
+	ReservedStorage int64  `json:"reservedStorage"`
+	FreeStorage     int64  `json:"freeStorage"`
+	UsedStorage     int64  `json:"usedStorage"`
+	TotalContracts  int    `json:"totalContracts"`
+	TotalFiles      int    `json:"totalFiles"`
+	Balance         int64  `json:"balance"`
+}
+
 type Renter struct {
 	Config  *Config
 	Homedir string
 	privKey *rsa.PrivateKey
 
-	// An in-memory cache of the renter's file and contract metadata.
+	// An in-memory cache of the renter's file metadata.
 	files     []*core.File
 
 	// The last time we pulled down a list of our files from the metaserver.
@@ -137,20 +151,6 @@ func (r *Renter) saveSnapshot() error {
 		BlocksToDelete: r.blocksToDelete,
 	}
 	return util.SaveJson(path.Join(r.Homedir, "snapshot.json"), &s)
-}
-
-// Info is information about a renter
-type Info struct {
-	ID              string `json:"id"`
-	Alias           string `json:"alias"`
-	ApiAddr         string `json:"apiAddress"`
-	HomeDir         string `json:"homedir"`
-	ReservedStorage int64  `json:"reservedStorage"`
-	FreeStorage     int64  `json:"freeStorage"`
-	UsedStorage     int64  `json:"usedStorage"`
-	TotalContracts  int    `json:"totalContracts"`
-	TotalFiles      int    `json:"totalFiles"`
-	Balance         int64  `json:"balance"`
 }
 
 func (r *Renter) Info() (*Info, error) {

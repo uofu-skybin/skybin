@@ -411,7 +411,7 @@ func (client *Client) GetFile(renterID string, fileID string) (*core.File, error
 	return &file, nil
 }
 
-func (client *Client) GetFiles(renterID string) ([]core.File, error) {
+func (client *Client) GetFiles(renterID string) ([]*core.File, error) {
 	if client.token == "" {
 		return nil, errors.New("must authorize before calling this method")
 	}
@@ -435,7 +435,7 @@ func (client *Client) GetFiles(renterID string) ([]core.File, error) {
 		return nil, decodeError(resp.Body)
 	}
 
-	var files []core.File
+	var files []*core.File
 	err = json.NewDecoder(resp.Body).Decode(&files)
 	if err != nil {
 		return nil, err

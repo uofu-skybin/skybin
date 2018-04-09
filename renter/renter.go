@@ -289,15 +289,8 @@ func (r *Renter) pullFiles() error {
 	if err != nil {
 		return err
 	}
-
-	// Ugly conversion of []File to []*File
-	r.files = []*core.File{}
-	for i := 0; i < len(files); i++ {
-		r.files = append(r.files, &files[i])
-	}
-
+	r.files = files
 	r.lastFilesUpdate = time.Now()
-
 	return r.saveSnapshot()
 }
 

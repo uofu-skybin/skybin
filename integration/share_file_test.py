@@ -5,7 +5,7 @@ Test sharing a single file.
 
 import argparse
 import filecmp
-from test_framework import setup_test, create_renter
+from test_framework import setup_test
 
 DEFAULT_FILE_SIZE = 1024 * 1024
 
@@ -21,7 +21,7 @@ def share_test(ctxt, file_size=DEFAULT_FILE_SIZE):
     ctxt.renter.share_file(file_info['id'], renter_alias)
 
     # Check that the operation updated the file's permissions
-    file_info = [f for f in ctxt.renter.list_files()['files'] if f['id'] == file_info['id']][0]
+    file_info = [f for f in ctxt.renter.list_files() if f['id'] == file_info['id']][0]
     ctxt.assert_true(len(file_info['accessList']) == 1)
     ctxt.assert_true(file_info['accessList'][0]['renterAlias'] == renter_alias)
 
@@ -47,7 +47,6 @@ def main():
         share_test(ctxt, file_size=args.file_size)
         ctxt.log('ok')
     finally:
-        # return
         ctxt.teardown()
 
 if __name__ == "__main__":

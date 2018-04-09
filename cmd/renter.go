@@ -251,10 +251,15 @@ func runRenterDaemon(args ...string) {
 	logger := log.New(logfile, "", log.LstdFlags)
 
 	r.SetLogger(logger)
-	server := renter.NewServer(r, logger)
+	r.StartThreads()
 
 	log.Println("starting renter server at", addr)
-	log.Fatal(http.ListenAndServe(addr, server))
+	server := renter.NewServer(r, logger)
+	err = http.ListenAndServe(addr, server)
+	r.ShutdownThreads()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 var renterInfoCmd = Cmd{

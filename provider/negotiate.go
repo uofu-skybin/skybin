@@ -6,10 +6,11 @@ import (
 	"skybin/core"
 )
 
+// Helper to negotiate contracts
 func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Contract, error) {
 	renterKey, err := provider.getRenterPublicKey(contract.RenterId)
 	if err != nil {
-		return nil, errors.New("Metadata server does not have an associated renter ID")
+		return nil, fmt.Errorf("Failed to get Renters pubkey from metaserver. error: %s", err)
 	}
 
 	// Verify renters signature
@@ -27,36 +28,35 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	// Sign contract
 	provSig, err := core.SignContract(contract, provider.PrivateKey)
 	if err != nil {
-		return nil, errors.New("Error signing contract")
+		return nil, fmt.Errorf("Failed to sign contract. error: %s", err)
 	}
 	contract.ProviderSignature = provSig
 
-	// Add storage space to the renter
+	// if renter isn't in set, add a new entry
 	renter, exists := provider.renters[contract.RenterId]
 	if !exists {
-		renter = &RenterInfo{
-			Contracts: []*core.Contract{},
-			Blocks:    []*BlockInfo{},
-		}
+		renter = &RenterInfo{}
 		provider.renters[contract.RenterId] = renter
 	}
+	// Add storage space to the renter
 	renter.StorageReserved += contract.StorageSpace
-	renter.Contracts = append(renter.Contracts, contract)
 
-	provider.contracts = append(provider.contracts, contract)
-	provider.addActivity("contract", contract.StorageSpace)
+	err = provider.db.InsertContract(contract)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to insert contract into DB. error: %s", err)
+	}
 
+	// activity updates are non-fatal errors
+	err = provider.addActivity("contract", contract.StorageSpace)
+	if err != nil {
+		fmt.Println("Failed to update activity for contract: ", err)
+	}
+
+	// this could potentially be non-fatal too
 	err = provider.UpdateMeta()
 	if err != nil {
 		return nil, fmt.Errorf("Error updating metaserver: %s", err)
 	}
 
-	err = provider.saveSnapshot()
-	if err != nil {
-
-		// TODO: Remove contract. I don't do this here
-		// since we need to move to an improved storage scheme anyways.
-		return nil, fmt.Errorf("Unable to save contract. Error: %s", err)
-	}
 	return contract, nil
 }

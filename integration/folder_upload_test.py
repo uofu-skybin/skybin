@@ -32,12 +32,17 @@ def create_test_folders(ctxt, args):
 
 def folder_upload_test(ctxt, args):
     ctxt.renter.reserve_space(args.reservation_size)
+
+    ctxt.log('creating test folders')
     source_folders = create_test_folders(ctxt, args)
+
+    ctxt.log('uploading folders')
     skybin_folders = []
     for i, folder in enumerate(source_folders):
         f = ctxt.renter.upload_file(folder, 'folder' + str(i))
         skybin_folders.append(f)
 
+    ctxt.log('downloading folders')
     for source_folder, skybin_folder in zip(source_folders, skybin_folders):
         output_path = ctxt.create_folder_output_path()
         ctxt.renter.download_file(skybin_folder['id'], output_path)
@@ -50,7 +55,7 @@ def main():
     parser.add_argument('--num_providers', type=int, default=1,
                         help='number of providers to run')
     parser.add_argument('--reservation_size', type=int, default=3*1024*1024*1024,
-                        help='amount of storage to reserve')    
+                        help='amount of storage to reserve')
     parser.add_argument('--num_folders', type=int, default=1,
                         help='number of top-level folders to upload')
     parser.add_argument('--num_sub_folders', type=int, default=1,

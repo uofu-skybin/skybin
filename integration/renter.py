@@ -18,6 +18,13 @@ class RenterAPI:
         resp = requests.post(self.base_url + '/reserve-storage', json={'amount': amount})
         if resp.status_code != 201:
             raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))['contracts']
+
+    def list_contracts(self):
+        resp = requests.get(self.base_url + '/contracts')
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))['contracts']
 
     def upload_file(self, source, dest, should_overwrite=None):
         args = {
@@ -28,6 +35,15 @@ class RenterAPI:
             args['shouldOverwrite'] = should_overwrite
         resp = requests.post(self.base_url + '/files/upload', json=args)
         if resp.status_code != 201:
+            raise ValueError(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))
+
+    def get_file(self, file_id):
+        args = {
+            'fileId': file_id,
+        }
+        resp = requests.post(self.base_url + '/files/get-metadata', json=args)
+        if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
         return json.loads(resp.content.decode('utf-8'))
 
@@ -72,11 +88,15 @@ class RenterAPI:
             raise ValueError(str(resp.status_code) + ' ' + resp.content.decode('utf-8'))
         return json.loads(resp.content.decode('utf-8'))
 
-    def remove_file(self, file_id, version_num=None):
+    def remove_file(self, file_id, version_num=None, recursive=None):
         url = '{}/files/remove'.format(self.base_url)
-        args = {'fileID': file_id}
+        args = {
+            'fileID': file_id,
+        }
         if version_num != None:
             args['versionNum'] = version_num
+        if recursive != None:
+            args['recursive'] = recursive
         resp = requests.post(url, json=args)
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
@@ -85,7 +105,7 @@ class RenterAPI:
         resp = requests.get(self.base_url + '/files')
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
-        return json.loads(resp.content.decode('utf-8'))
+        return json.loads(resp.content.decode('utf-8'))['files']
 
     def list_shared_files(self):
         resp = requests.get(self.base_url + '/files/shared')

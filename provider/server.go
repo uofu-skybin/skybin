@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"skybin/authorization"
@@ -18,6 +19,7 @@ type providerServer struct {
 	authorizer authorization.Authorizer
 }
 
+// Create a new public API server for given Provider
 func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 
 	router := mux.NewRouter()
@@ -87,6 +89,8 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 
 }
 
+// This info object is different than the info object for local provider which serves
+// as a means to populate the provider dashboard
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
 	if err != nil {
@@ -101,25 +105,29 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		PublicKey:   string(pubKeyBytes),
 		Addr:        server.provider.Config.PublicApiAddr,
 		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
-		StorageRate: 1,
+		StorageRate: server.provider.Config.StorageRate,
 	}
 
 	server.writeResp(w, http.StatusOK, &info)
 }
 
-// TODO: Fill out stub
+// TODO: stub
 func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
 type getRenterResp struct {
-	renter *RenterInfo `json:"renter-info"`
+	StorageReserved int64            `json:"storageReserved"`
+	StorageUsed     int64            `json:"storageUsed"`
+	Contracts       []*core.Contract `json:"contracts"`
+	Blocks          []*BlockInfo     `json:"blocks"`
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
 	renterID, exists := mux.Vars(r)["renterID"]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Requested Renter ID does not exist on provider"})
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{Error: "Requested Renter ID does not exist on provider"})
 		return
 	}
 
@@ -132,25 +140,43 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 
 	// Check to confirm that the authentication token matches that of the querying renter
 	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
-		server.writeResp(w, http.StatusForbidden, errorResp{Error: "Authentication token does not match renterID"})
+		server.writeResp(w, http.StatusForbidden,
+			errorResp{Error: "Authentication token does not match renterID"})
 		return
 	}
 
-	renter, exists := server.provider.renters[renterID]
+	// TODO: this might not be necessary at this point
+	_, exists = server.provider.renters[renterID]
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			errorResp{Error: "Provider has no record for this renter"})
 		return
 	}
+	contracts, err := server.provider.db.GetContractsByRenter(renterID)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to get contracts from DB for renter %s. Error: %s", renterID, err)
+		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
+	}
+	blocks, err := server.provider.db.GetBlocksByRenter(renterID)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to get blocks from DB for renter %s. Error: %s", renterID, err)
+		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
+	}
+	resp := &getRenterResp{
+		StorageReserved: server.provider.renters[renterID].StorageReserved,
+		StorageUsed:     server.provider.renters[renterID].StorageUsed,
+		Contracts:       contracts,
+		Blocks:          blocks,
+	}
 
-	server.writeResp(w, http.StatusOK, getRenterResp{renter: renter})
+	server.writeResp(w, http.StatusOK, resp)
 }
 
 func (server *providerServer) writeResp(w http.ResponseWriter, status int, body interface{}) {
 	w.WriteHeader(status)
 	data, err := json.MarshalIndent(body, "", "    ")
 	if err != nil {
-		server.logger.Fatalf("error: cannot to encode response. error: %s", err)
+		server.logger.Fatalf("error: cannot encode response. error: %s", err)
 	}
 	_, err = w.Write(data)
 	if err != nil {

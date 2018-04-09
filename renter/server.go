@@ -25,6 +25,8 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
 	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
+	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
+	router.HandleFunc("/files/get-metadata", server.getFileMetadata).Methods("POST")
 	router.HandleFunc("/files", server.getFiles).Methods("GET")
 	router.HandleFunc("/files/shared", server.getSharedFiles).Methods("GET")
 	router.HandleFunc("/files/upload", server.uploadFile).Methods("POST")
@@ -103,6 +105,47 @@ func (server *renterServer) reserveStorage(w http.ResponseWriter, r *http.Reques
 		Contracts: contracts,
 	}
 	server.writeResp(w, http.StatusCreated, &resp)
+}
+
+type getContractsResp struct {
+	Contracts []*core.Contract `json:"contracts"`
+}
+
+func (server *renterServer) getContracts(w http.ResponseWriter, r *http.Request) {
+	contracts, err := server.renter.ListContracts()
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: fmt.Sprintf("Unable to list contracts. Error :%v", err)})
+		return
+	}
+	resp := getContractsResp{
+		Contracts: contracts,
+	}
+	server.writeResp(w, http.StatusOK, &resp)
+}
+
+type getFileReq struct {
+	FileId string `json:"fileId"`
+}
+
+func (server *renterServer) getFileMetadata(w http.ResponseWriter, r *http.Request) {
+	var req getFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+	file, err := server.renter.GetFile(req.FileId)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, file)
 }
 
 type getFilesResp struct {
@@ -276,11 +319,12 @@ func (server *renterServer) copyFile(w http.ResponseWriter, r *http.Request) {
 
 type removeFileReq struct {
 	FileID     string `json:"fileID"`
-	VersionNum *int   `json:"versionNum,omitempty"`
+	VersionNum *int   `json:"versionNum"`
+	Recursive  bool   `json:"recursive"`
 }
 
 func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
-	var req downloadFileReq
+	var req removeFileReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		server.logger.Println(err)
@@ -289,7 +333,7 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = server.renter.RemoveFile(req.FileId, req.VersionNum)
+	err = server.renter.RemoveFile(req.FileID, req.VersionNum, req.Recursive)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,

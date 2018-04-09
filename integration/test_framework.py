@@ -6,7 +6,6 @@ Framework and helpers for running integration tests.
 from renter import RenterAPI
 import json
 import os
-import os.path
 import sys
 import random
 import shutil
@@ -21,6 +20,9 @@ DEFAULT_REPOS_DIR = os.path.abspath('./repos')
 # Default location for test files
 DEFAULT_TEST_FILE_DIR = os.path.abspath('./files')
 
+# Default size for test files if no size is specified
+DEFAULT_TEST_FILE_SIZE = 10 * 1024
+
 # Whether test logging is enabled by default
 LOG_ENABLED = True
 
@@ -33,7 +35,7 @@ def rand_port():
     return random.randint(32 * 1024, 64 * 1024)
 
 def create_renter_alias():
-    return 'renter_' + ''.join(str(random.randint(1, 9)) for _ in range(6))
+    return 'test_renter_' + ''.join(str(random.randint(1, 9)) for _ in range(6))
 
 def update_config_file(path, **kwargs):
     """Update a json config file"""
@@ -110,13 +112,23 @@ class Service:
     Members:
       process: the running service process
       address: the service network address (host:port)
+      env:     the subprocess' environment dict
       homedir: directory for the service's files (or None)
     """
 
-    def __init__(self, process, address, homedir=None):
+    def __init__(self, process, address, env=None, homedir=None):
         self.process = process
         self.address = address
         self.homedir = homedir
+        self.env = env
+
+    def disconnect(self):
+        self.process.kill()
+
+    def restart(self):
+        self.process.kill()
+        env = self.env or os.environ.copy()
+        self.process = subprocess.Popen(self.process.args, env=env, stderr=subprocess.PIPE)
 
     def teardown(self, remove_files=True):
         self.process.kill()
@@ -137,8 +149,14 @@ class RenterService(Service):
     def reserve_space(self, amount):
         return self._api.reserve_space(amount)
 
+    def list_contracts(self):
+        return self._api.list_contracts()
+
     def upload_file(self, source, dest, should_overwrite=None):
         return self._api.upload_file(source, dest, should_overwrite=should_overwrite)
+
+    def get_file(self, file_id):
+        return self._api.get_file(file_id)
 
     def download_file(self, file_id, destination, version_num=None):
         return self._api.download_file(file_id, destination, version_num=version_num)
@@ -152,8 +170,8 @@ class RenterService(Service):
     def share_file(self, file_id, user_id):
         return self._api.share_file(file_id, user_id)
 
-    def remove_file(self, file_id, version_num=None):
-        return self._api.remove_file(file_id, version_num=version_num)
+    def remove_file(self, file_id, version_num=None, recursive=None):
+        return self._api.remove_file(file_id, version_num=version_num, recursive=recursive)
 
     def list_files(self):
         return self._api.list_files()
@@ -184,21 +202,21 @@ class TestContext:
         self.additional_renters = []
         self.test_file_dir = test_file_dir
         self.log_enabled = log_enabled
-        self._test_files = []
+        self.test_files = []
         self._remove_test_files = remove_test_files
         self._teardown_db = teardown_db
 
     def _remove_files(self):
-        for filename in self._test_files:
+        for filename in self.test_files:
             os.remove(filename)
 
-    def create_test_file(self, size, parent_folder=None):
+    def create_test_file(self, size=DEFAULT_TEST_FILE_SIZE, parent_folder=None):
         """Create a test file. Returns the file's name."""
         parent_folder = parent_folder or self.test_file_dir
         file_name = create_file_name()
         file_path = '{}/{}'.format(parent_folder, file_name)
         create_test_file(file_path, size)
-        self._test_files.append(file_path)
+        self.test_files.append(file_path)
         return file_path
 
     def create_test_folder(self, parent_folder=None):
@@ -208,6 +226,17 @@ class TestContext:
         folder_path = '{}/{}'.format(parent_folder, folder_name)
         os.makedirs(folder_path)
         return folder_path
+
+    def get_test_file(self):
+        """Get an arbitrary test file from the existing set.
+        If none are present, this creates one.
+        """
+        if len(self.test_files) > 0:
+            return random.choice(self.test_files)
+        return self.create_test_file(size=DEFAULT_TEST_FILE_SIZE)
+
+    def create_file_name(self):
+        return create_file_name()
 
     def create_output_path(self):
         """Get an output path that a file can be downloaded to."""
@@ -221,12 +250,23 @@ class TestContext:
         path = '{}/{}'.format(self.test_file_dir, foldername)
         return path
 
+    def relpath(self, path):
+        """Get the name of a file or folder relative to the context's test folder."""
+        p = os.path.relpath(path, self.test_file_dir)
+        if p == '.':
+            return ''
+        return p
+
     def assert_true(self, condition, message=''):
         """If condition is not true, prints message and exits."""
         if not condition:
-            print('FAIL:', message)
-            self.teardown()
-            sys.exit(1)
+            self.fail(message)
+
+    def fail(self, message=''):
+        """Prints message and exits immediately with an error."""
+        print('FAIL:', message)
+        self.teardown()
+        sys.exit(1)
 
     def log(self, *args):
         """Print the given arguments."""
@@ -269,7 +309,7 @@ def init_renter(homedir, alias, metaserver_addr, api_addr):
         _, stderr = process.communicate()
         raise ValueError('renter init failed. stderr={}'.format(stderr))
 
-def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=None):
+def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*1024*1024*1024):
     """Set up a skybin provider directory"""
     args = [SKYBIN_CMD, 'provider', 'init',
             '-homedir', homedir,
@@ -330,7 +370,7 @@ def create_provider(metaserver_addr, repo_dir,
     args = [SKYBIN_CMD, 'provider', 'daemon', '--disable-local-api']
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
 
-    return Service(process=process, address=api_addr, homedir=homedir)
+    return Service(process=process, address=api_addr, homedir=homedir, env=env)
 
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,

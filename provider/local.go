@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"log"
 	"net/http"
@@ -67,16 +68,24 @@ type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 
+// This is currently not being used anywhere in the frontend
 func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) {
-	server.writeResp(w, http.StatusOK,
-		getContractsResp{Contracts: server.provider.contracts})
+	contracts, err := server.provider.db.GetAllContracts()
+	if err != nil {
+		msg := fmt.Sprintf("Error retrieving contract list: %s", err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
+	}
+	server.writeResp(w, http.StatusOK, &getContractsResp{Contracts: contracts})
 }
 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
-	// don't change any metrics but cycle data as needed
-	server.provider.addActivity("update", 0)
 
-	resp := server.provider.makeStatsResp()
+	resp, err := server.provider.db.GetStatsResp()
+	if err != nil {
+		msg := fmt.Sprintf("Failed to make stats response: %s", err)
+		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
+		return
+	}
 	server.writeResp(w, http.StatusOK, resp)
 }
 
@@ -94,7 +103,7 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	// Maybe allow this to be mutated (whether or not we display in UI)
 	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
 
-	//TODO: if local or public addr changed reset provider???
+	// TODO: if local or public addr changed reset provider???
 	// This is best addressed in the frontend
 
 	err = server.provider.UpdateMeta()
@@ -106,12 +115,6 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
 	if err != nil {
 		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving config file"})
-		return
-	}
-
-	err = server.provider.saveSnapshot()
-	if err != nil {
-		server.logger.Println("Unable to save snapshot. Error:", err)
 		return
 	}
 

@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"skybin/core"
-
+	"skybin/constants"
 	"crypto/rsa"
 	"skybin/util"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -32,21 +33,33 @@ func (server *MetaServer) postRenterHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var renter core.RenterInfo
 		err := json.NewDecoder(r.Body).Decode(&renter)
-
 		if err != nil {
 			writeErr("unable to parse payload", http.StatusBadRequest, w)
 			return
+		}
+
+		// Copy the renter's info to ensure the requester didn't
+		// fill any fields they shouldn't have! (e.g. renter.Balance)
+		renter = core.RenterInfo{
+			PublicKey: renter.PublicKey,
+			Alias:     renter.Alias,
+		}
+
+		if constants.BuildMode == constants.BuildModeTest {
+			if strings.HasPrefix(renter.Alias, "test") {
+				renter.Balance = constants.DefaultTestRenterBalance
+			}
 		}
 
 		// Make sure the user supplied a public key and alias for the renter.
 		if renter.PublicKey == "" {
 			writeErr("must specify RSA public key", http.StatusBadRequest, w)
 			return
-		} else if renter.Alias == "" {
+		}
+		if renter.Alias == "" {
 			writeErr("must specify alias", http.StatusBadRequest, w)
 			return
 		}
-
 		_, err = util.UnmarshalPublicKey([]byte(renter.PublicKey))
 		if err != nil {
 			writeErr("invalid RSA public key", http.StatusBadRequest, w)

@@ -95,7 +95,7 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Insert into Database
-	err = server.provider.InsertBlock(renterID, blockID, n)
+	err = server.provider.db.InsertBlock(renterID, blockID, n)
 	if err != nil {
 		os.Remove(path)
 		msg := fmt.Sprintf("Failed to insert block into DB. error: %s", err)
@@ -214,7 +214,7 @@ func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = server.provider.DeleteBlockById(blockID)
+	err = server.provider.db.DeleteBlockById(blockID)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to remove %s/%s from DB. error: %s", renterID, blockID, err)
 		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})

@@ -2,7 +2,6 @@ package provider
 
 import (
 	"crypto/rsa"
-	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"skybin/metaserver"
 	"skybin/util"
 	"sync"
-	"time"
 )
 
 type Config struct {
@@ -28,7 +26,7 @@ type Config struct {
 type Provider struct {
 	Homedir string //move this maybe
 	Config  *Config
-	db      *sql.DB
+	db      *ProviderDB
 	mu      sync.Mutex
 
 	PrivateKey *rsa.PrivateKey
@@ -100,7 +98,7 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	provider.Config = config
 
 	dbPath := path.Join(homedir, "provider.db")
-	provider.db, err = provider.SetupDB(dbPath)
+	provider.db, err = SetupDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize DB. error: %s", err)
 	}
@@ -122,22 +120,22 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 // Insert, Delete, and Update activity feeds for each interval
 func (provider *Provider) addActivity(op string, bytes int64) error {
 
-	err := provider.InsertActivity()
+	err := provider.db.InsertActivity()
 	if err != nil {
 		return fmt.Errorf("Error adding new activity to DB: %s", err)
 	}
-	err = provider.DeleteActivity()
+	err = provider.db.DeleteActivity()
 	if err != nil {
 		return fmt.Errorf("Error cycling activity in DB: %s", err)
 	}
 
 	// TODO: Abstact and handle errors
 	if op == "upload" {
-		err = provider.UpdateActivity("BlockUploads", 1)
+		err = provider.db.UpdateActivity("BlockUploads", 1)
 		if err != nil {
 			return fmt.Errorf("add upload activity failed. error: %s", err)
 		}
-		err = provider.UpdateActivity("BytesUploaded", bytes)
+		err = provider.db.UpdateActivity("BytesUploaded", bytes)
 		if err != nil {
 			return fmt.Errorf("add upload activity failed. error: %s", err)
 		}
@@ -146,16 +144,16 @@ func (provider *Provider) addActivity(op string, bytes int64) error {
 		provider.StorageUsed += bytes
 
 	} else if op == "download" {
-		err = provider.UpdateActivity("BlockDownloads", 1)
+		err = provider.db.UpdateActivity("BlockDownloads", 1)
 		if err != nil {
 			return fmt.Errorf("add download activity failed. error: %s", err)
 		}
-		err = provider.UpdateActivity("BytesDownloaded", bytes)
+		err = provider.db.UpdateActivity("BytesDownloaded", bytes)
 		if err != nil {
 			return fmt.Errorf("add download activity failed. error:  %s", err)
 		}
 	} else if op == "delete" {
-		provider.UpdateActivity("BlockDeletions", 1)
+		provider.db.UpdateActivity("BlockDeletions", 1)
 		if err != nil {
 			return fmt.Errorf("add delete activity failed. error:  %s", err)
 		}
@@ -164,7 +162,7 @@ func (provider *Provider) addActivity(op string, bytes int64) error {
 		provider.StorageUsed -= bytes
 
 	} else if op == "contract" {
-		provider.UpdateActivity("StorageReservations", 1)
+		provider.db.UpdateActivity("StorageReservations", 1)
 		if err != nil {
 			return fmt.Errorf("add contract activity failed. error: %s", err)
 		}
@@ -265,48 +263,6 @@ func (provider *Provider) UpdateMeta() error {
 	return nil
 }
 
-// Initializes an empty stats response
-func (provider *Provider) makeStatsResp() *getStatsResp {
-	var timestamps []string
-	t := time.Now().Truncate(time.Hour)
-	currTime := t.Add(-1 * time.Hour * 24)
-	for currTime != t {
-		currTime = currTime.Add(time.Hour)
-		timestamps = append(timestamps, currTime.Format(time.RFC3339))
-	}
-	resp := &getStatsResp{
-		ActivityCounter: &Activity{
-			Timestamps:          timestamps,
-			BlockUploads:        make([]int64, 24),
-			BlockDownloads:      make([]int64, 24),
-			BlockDeletions:      make([]int64, 24),
-			BytesUploaded:       make([]int64, 24),
-			BytesDownloaded:     make([]int64, 24),
-			StorageReservations: make([]int64, 24),
-		},
-		RecentSummary: &Recents{
-			Hour: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-			Day: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-			Week: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-		},
-	}
-	return resp
-}
 func (provider *Provider) Withdraw(email string, amount int64) error {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)

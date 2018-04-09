@@ -152,12 +152,12 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 			errorResp{Error: "Provider has no record for this renter"})
 		return
 	}
-	contracts, err := server.provider.GetContractsByRenter(renterID)
+	contracts, err := server.provider.db.GetContractsByRenter(renterID)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get contracts from DB for renter %s. Error: %s", renterID, err)
 		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
 	}
-	blocks, err := server.provider.GetBlocksByRenter(renterID)
+	blocks, err := server.provider.db.GetBlocksByRenter(renterID)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to get blocks from DB for renter %s. Error: %s", renterID, err)
 		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})

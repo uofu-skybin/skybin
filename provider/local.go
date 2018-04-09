@@ -68,8 +68,9 @@ type getContractsResp struct {
 	Contracts []*core.Contract `json:"contracts"`
 }
 
+// This is currently not being used anywhere in the frontend
 func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) {
-	contracts, err := server.provider.GetAllContracts()
+	contracts, err := server.provider.db.GetAllContracts()
 	if err != nil {
 		msg := fmt.Sprintf("Error retrieving contract list: %s", err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})
@@ -79,7 +80,7 @@ func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) 
 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
 
-	resp, err := server.provider.GetStatsResp()
+	resp, err := server.provider.db.GetStatsResp()
 	if err != nil {
 		msg := fmt.Sprintf("Failed to make stats response: %s", err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})

@@ -41,7 +41,7 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	// Add storage space to the renter
 	renter.StorageReserved += contract.StorageSpace
 
-	err = provider.InsertContract(contract)
+	err = provider.db.InsertContract(contract)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to insert contract into DB. error: %s", err)
 	}

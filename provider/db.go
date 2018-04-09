@@ -9,7 +9,13 @@ import (
 	_ "github.com/mattn/go-sqlite3" //sqlite library
 )
 
-func (p *Provider) SetupDB(path string) (*sql.DB, error) {
+// Inherit from sql.DB so we can add associated methods
+type ProviderDB struct {
+	*sql.DB
+}
+
+// Initialize DB
+func SetupDB(path string) (*ProviderDB, error) {
 	// Open DB
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -67,39 +73,54 @@ func (p *Provider) SetupDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("Failed to create activity table. error: %s", err)
 	}
 
-	// Add blockid index
-	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS blockid_idx ON blocks (BlockId)`)
+	// Add blockid index on blocks
+	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS blockid_blocks ON blocks (BlockId)`)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to prepare Index for BlockId. error: %s", err)
+		return nil, fmt.Errorf("Failed to prepare Index for BlockId on Blocks table. error: %s", err)
 	}
 	_, err = stmt.Exec()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create Index for BlockId. error: %s", err)
+		return nil, fmt.Errorf("Failed to create Index for BlockId on Blocks table. error: %s", err)
 	}
 
-	// Add contractid index
-	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS contractid_idx ON contracts (ContractId)`)
+	// Add renterid index on blocks
+	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS renterid_blocks ON blocks (RenterId)`)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to prepare Index for ContractId. error: %s", err)
+		return nil, fmt.Errorf("Failed to prepare Index for RenterId on Blocks table. error: %s", err)
 	}
 	_, err = stmt.Exec()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create Index for ContractId. error: %s", err)
+		return nil, fmt.Errorf("Failed to create Index for RenterId on Blocks table. error: %s", err)
 	}
 
-	return db, nil
+	// Add crenterid index on contracts
+	stmt, err = db.Prepare(`CREATE INDEX IF NOT EXISTS renterid_idx ON contracts (RenterId)`)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to prepare Index for contracts. error: %s", err)
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create Index for contracts. error: %s", err)
+	}
+	pdb := &ProviderDB{db}
+	return pdb, nil
 }
 
 // Insert new activity if activity doesn't exist on that interval
-func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
+// Intervals correspond to:
+// - hour: 12 5-minute intervals
+// - day: 24 1-hour intervals
+// - hour: 12 5-minute intervals
+func (db *ProviderDB) InsertActivity() error {
 	t := time.Now()
 	hour := t.Truncate(time.Minute * 5).Format(time.RFC3339)
 	day := t.Truncate(time.Hour).Format(time.RFC3339)
 	week := t.Truncate(time.Hour * 24).Format(time.RFC3339)
 
-	stmt, err := p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+	stmt, err := db.Prepare(`INSERT INTO activity (Period, Timestamp) 
 		Select 'hour', ? WHERE NOT EXISTS(
 		SELECT 1 FROM activity WHERE Period = 'hour' and Timestamp = ?)`)
 	if err != nil {
@@ -110,7 +131,7 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+	stmt, err = db.Prepare(`INSERT INTO activity (Period, Timestamp) 
 		Select 'day', ? WHERE NOT EXISTS(
 		SELECT 1 FROM activity WHERE Period = 'day' and Timestamp = ? )`)
 	if err != nil {
@@ -121,7 +142,7 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 		return err
 	}
 
-	stmt, err = p.db.Prepare(`INSERT INTO activity (Period, Timestamp) 
+	stmt, err = db.Prepare(`INSERT INTO activity (Period, Timestamp) 
 		Select 'week', ? WHERE NOT EXISTS(
 		SELECT 1 FROM activity WHERE Period = 'week' and Timestamp = ? )`)
 	if err != nil {
@@ -136,18 +157,22 @@ func (p *Provider) InsertActivity() error { //, timestamp time.Time) error {
 }
 
 // Increment activity corresponding to interval and operation by value
-func (p *Provider) UpdateActivity(op string, value int64) error {
+func (db *ProviderDB) UpdateActivity(op string, value int64) error {
 	query := fmt.Sprintf(`UPDATE activity SET %s = %s + ? 
 		WHERE (Timestamp = ? and Period = 'hour') 
 		or (Timestamp = ? and Period = 'day') 
 		or (Timestamp = ? and Period = 'week')`, op, op)
 
+	// Truncate to sub-intervals as follows
+	// hour: 12 5-minute intervals
+	// day: 24 1-hour intervals
+	// hour: 12 5-minute intervals
 	t := time.Now()
 	hour := t.Truncate(time.Minute * 5).Format(time.RFC3339)
 	day := t.Truncate(time.Hour).Format(time.RFC3339)
 	week := t.Truncate(time.Hour * 24).Format(time.RFC3339)
 
-	stmt, err := p.db.Prepare(query)
+	stmt, err := db.Prepare(query)
 	if err != nil {
 		return err
 	}
@@ -160,22 +185,22 @@ func (p *Provider) UpdateActivity(op string, value int64) error {
 }
 
 // Drop activity that is no longer in scope
-func (p *Provider) DeleteActivity() error {
-	stmt, err := p.db.Prepare(`DELETE from activity WHERE Period='hour' and Timestamp < ?`)
+func (db *ProviderDB) DeleteActivity() error {
+	stmt, err := db.Prepare(`DELETE from activity WHERE Period='hour' and Timestamp < ?`)
 	t := time.Now().Add(-1 * time.Hour)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
 
-	stmt, err = p.db.Prepare(`DELETE from activity WHERE Period='day' and Timestamp < ?`)
+	stmt, err = db.Prepare(`DELETE from activity WHERE Period='day' and Timestamp < ?`)
 	t = time.Now().Add(-1 * time.Hour * 24)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
 
-	stmt, err = p.db.Prepare(`DELETE from activity WHERE Period='week' and Timestamp < ?`)
+	stmt, err = db.Prepare(`DELETE from activity WHERE Period='week' and Timestamp < ?`)
 	t = time.Now().Add(-1 * time.Hour * 24 * 7)
 	_, err = stmt.Exec(t.Format(time.RFC3339))
 	if err != nil {
@@ -185,17 +210,17 @@ func (p *Provider) DeleteActivity() error {
 }
 
 // This is called by the local provider server on GET /stats
-func (p *Provider) GetStatsResp() (*getStatsResp, error) {
+func (db *ProviderDB) GetStatsResp() (*getStatsResp, error) {
 	query := fmt.Sprintf(`SELECT Period, Timestamp, BlockUploads, 
 		BlockDownloads, BlockDeletions, BytesUploaded, 
 		BytesDownloaded, StorageReservations FROM activity`)
 
-	rows, err := p.db.Query(query)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := p.makeStatsResp()
+	resp := makeStatsResp()
 	var period string
 	var timestamp string
 	var blockUploads int64
@@ -211,6 +236,7 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 		if err != nil {
 			return nil, err
 		}
+		// On day we are also concerned with information to populate charts
 		if period == "day" {
 			resp.RecentSummary.Day.BlockUploads += blockUploads
 			resp.RecentSummary.Day.BlockDownloads += blockDownloads
@@ -247,8 +273,8 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 	return resp, nil
 }
 
-func (p *Provider) InsertContract(contract *core.Contract) error {
-	stmt, err := p.db.Prepare(`INSERT INTO contracts 
+func (db *ProviderDB) InsertContract(contract *core.Contract) error {
+	stmt, err := db.Prepare(`INSERT INTO contracts 
 		(ContractId, RenterId, ProviderId, StorageSpace, 
 		StartDate, EndDate, RenterSignature, ProviderSignature, StorageFee) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -273,8 +299,8 @@ func (p *Provider) InsertContract(contract *core.Contract) error {
 }
 
 // Currently unused, but probably relevant for canceling contracts
-func (p *Provider) DeleteContractById(contractId string) error {
-	stmt, err := p.db.Prepare(`DELETE from contracts where ContractId=?`)
+func (db *ProviderDB) DeleteContractById(contractId string) error {
+	stmt, err := db.Prepare(`DELETE from contracts where ContractId=?`)
 	if err != nil {
 		return err
 	}
@@ -285,11 +311,12 @@ func (p *Provider) DeleteContractById(contractId string) error {
 	return nil
 }
 
-func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, error) {
+// This is used in GET /renter-info
+func (db *ProviderDB) GetContractsByRenter(renterId string) ([]*core.Contract, error) {
 	query := fmt.Sprintf(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
 		RenterSignature, ProviderSignature, StorageFee, StartDate, EndDate 
 		FROM contracts where RenterId='%s'`, renterId)
-	rows, err := p.db.Query(query)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -311,8 +338,9 @@ func (p *Provider) GetContractsByRenter(renterId string) ([]*core.Contract, erro
 	return contracts, nil
 }
 
-func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
-	rows, err := p.db.Query(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
+// This is used in the local GET /contracts and loadDbintoMemory
+func (db *ProviderDB) GetAllContracts() ([]*core.Contract, error) {
+	rows, err := db.Query(`SELECT ContractId, RenterId, ProviderId, StorageSpace, 
 		RenterSignature, ProviderSignature, StorageFee, StartDate, EndDate FROM contracts`)
 	if err != nil {
 		return nil, err
@@ -335,8 +363,8 @@ func (p *Provider) GetAllContracts() ([]*core.Contract, error) {
 	return contracts, nil
 }
 
-func (p *Provider) InsertBlock(renterId string, blockId string, size int64) error {
-	stmt, err := p.db.Prepare(`INSERT INTO blocks (RenterId, BlockId, Size) VALUES (?, ?, ?)`)
+func (db *ProviderDB) InsertBlock(renterId string, blockId string, size int64) error {
+	stmt, err := db.Prepare(`INSERT INTO blocks (RenterId, BlockId, Size) VALUES (?, ?, ?)`)
 	if err != nil {
 		return err
 	}
@@ -347,8 +375,8 @@ func (p *Provider) InsertBlock(renterId string, blockId string, size int64) erro
 	return nil
 }
 
-func (p *Provider) DeleteBlockById(blockId string) error {
-	stmt, err := p.db.Prepare(`DELETE from blocks where BlockId=?`)
+func (db *ProviderDB) DeleteBlockById(blockId string) error {
+	stmt, err := db.Prepare(`DELETE from blocks where BlockId=?`)
 	if err != nil {
 		return err
 	}
@@ -359,10 +387,10 @@ func (p *Provider) DeleteBlockById(blockId string) error {
 	return nil
 }
 
-func (p *Provider) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
-
+// This is used in GET /renter-info
+func (db *ProviderDB) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
 	query := fmt.Sprintf(`SELECT BlockId, Size FROM blocks where RenterId='%s'`, renterId)
-	rows, err := p.db.Query(query)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -379,9 +407,9 @@ func (p *Provider) GetBlocksByRenter(renterId string) ([]*BlockInfo, error) {
 	return blocks, nil
 }
 
-func (p *Provider) GetAllBlocks() ([]*BlockInfo, error) {
-
-	rows, err := p.db.Query(`SELECT RenterId, BlockId, Size FROM blocks`)
+// This is only used in LoadDbintoMemory
+func (db *ProviderDB) GetAllBlocks() ([]*BlockInfo, error) {
+	rows, err := db.Query(`SELECT RenterId, BlockId, Size FROM blocks`)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +444,7 @@ func (p *Provider) LoadDBIntoMemory() error {
 	p.TotalContracts = 0
 	p.renters = make(map[string]*RenterInfo, 0)
 
-	contracts, err := p.GetAllContracts()
+	contracts, err := p.db.GetAllContracts()
 	if err != nil {
 		// fatal?
 		return err
@@ -430,7 +458,7 @@ func (p *Provider) LoadDBIntoMemory() error {
 		p.StorageReserved += c.StorageSpace
 		p.TotalContracts++
 	}
-	blocks, err := p.GetAllBlocks()
+	blocks, err := p.db.GetAllBlocks()
 	if err != nil {
 		// fatal?
 		return err
@@ -446,4 +474,47 @@ func (p *Provider) LoadDBIntoMemory() error {
 		p.TotalBlocks++
 	}
 	return nil
+}
+
+// Initializes an empty stats response
+func makeStatsResp() *getStatsResp {
+	var timestamps []string
+	t := time.Now().Truncate(time.Hour)
+	currTime := t.Add(-1 * time.Hour * 24)
+	for currTime != t {
+		currTime = currTime.Add(time.Hour)
+		timestamps = append(timestamps, currTime.Format(time.RFC3339))
+	}
+	resp := &getStatsResp{
+		ActivityCounter: &Activity{
+			Timestamps:          timestamps,
+			BlockUploads:        make([]int64, 24),
+			BlockDownloads:      make([]int64, 24),
+			BlockDeletions:      make([]int64, 24),
+			BytesUploaded:       make([]int64, 24),
+			BytesDownloaded:     make([]int64, 24),
+			StorageReservations: make([]int64, 24),
+		},
+		RecentSummary: &Recents{
+			Hour: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Day: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Week: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+		},
+	}
+	return resp
 }

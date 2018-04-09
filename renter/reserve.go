@@ -140,7 +140,7 @@ func createStorageEstimate(totalSpace int64, config *Config,
 			}
 			spaceLeft[idx] -= space
 			fee := calcStorageFee(space, int64(config.DefaultContractDurationDays), pinfo.StorageRate)
-			cid, err := genId()
+			cid, err := util.GenerateID()
 			if err != nil {
 				return nil, err
 			}

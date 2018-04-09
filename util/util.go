@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/satori/go.uuid"
 )
 
 func SaveJson(filename string, v interface{}) error {
@@ -32,6 +33,15 @@ func LoadJson(filename string, v interface{}) error {
 		return err
 	}
 	return json.Unmarshal(bytes, v)
+}
+
+
+func GenerateID() (string, error) {
+	id, err := uuid.NewV4()
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 func MarshalPrivateKey(key *rsa.PrivateKey) []byte {

@@ -18,8 +18,6 @@ import (
 	"strings"
 	"log"
 	"time"
-
-	"github.com/satori/go.uuid"
 )
 
 type Renter struct {
@@ -203,7 +201,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	if r.getFileByName(name) != nil {
 		return nil, fmt.Errorf("%s already exists.", name)
 	}
-	id, err := genId()
+	id, err := util.GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot generate folder ID. Error: %s", err)
 	}
@@ -688,10 +686,3 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return util.UnmarshalPrivateKey(data)
 }
 
-func genId() (string, error) {
-	id, err := uuid.NewV4()
-	if err != nil {
-		return "", err
-	}
-	return id.String(), nil
-}

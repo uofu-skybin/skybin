@@ -577,7 +577,7 @@ func (r *Renter) undoUpload(up *fileUpload) {
 
 // Creates file metadata from upload metadata.
 func (r *Renter) makeNewFile(up *fileUpload) (*core.File, error) {
-	fileId, err := genId()
+	fileId, err := util.GenerateID()
 	if err != nil {
 		return nil, err
 	}
@@ -786,7 +786,7 @@ func prepareMetadata(up *fileUpload) error {
 	// Generate block metadata
 	var blocks []core.Block
 	for blockNum, blockReader := range blockReaders {
-		blockId, err := genId()
+		blockId, err := util.GenerateID()
 		if err != nil {
 			return fmt.Errorf("Unable to create block ID. Error: %s", err)
 		}

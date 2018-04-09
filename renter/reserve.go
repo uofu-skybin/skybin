@@ -66,7 +66,6 @@ func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
 			return nil, err
 		}
 	}
-	r.contracts = append(r.contracts, estimate.Contracts...)
 
 	// Record the new storage blobs
 	blobs := []*storageBlob{}
@@ -81,6 +80,10 @@ func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
 		})
 	}
 	r.storageManager.AddBlobs(blobs)
+	err = r.saveSnapshot()
+	if err != nil {
+		r.logger.Println("Unable to save snapshot. Error: ", err)
+	}
 	return estimate.Contracts, nil
 }
 

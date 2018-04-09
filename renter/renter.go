@@ -29,7 +29,6 @@ type Renter struct {
 
 	// An in-memory cache of the renter's file and contract metadata.
 	files     []*core.File
-	contracts []*core.Contract
 
 	// The last time we pulled down a list of our files from the metaserver.
 	lastFilesUpdate time.Time
@@ -73,7 +72,6 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	renter := &Renter{
 		Homedir:        homedir,
 		files:          make([]*core.File, 0),
-		contracts:      make([]*core.Contract, 0),
 		blocksToDelete: make([]*core.Block, 0),
 		downloadQ:      make(chan []*fileDownload),
 		uploadQ:        make(chan *fileUpload),
@@ -103,7 +101,6 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 			return nil, fmt.Errorf("Unable to load snapshot. Error: %s", err)
 		}
 		renter.files = s.Files
-		renter.contracts = s.Contracts
 		renter.blocksToDelete = s.BlocksToDelete
 
 		renter.storageManager.AddBlobs(s.FreeStorage)
@@ -135,7 +132,7 @@ func (r *Renter) SetLogger(logger *log.Logger) {
 func (r *Renter) saveSnapshot() error {
 	s := snapshot{
 		Files:     r.files,
-		Contracts: r.contracts,
+		//Contracts: r.contracts,
 
 		// TODO: remove this from snapshot
 		FreeStorage: r.storageManager.freelist,
@@ -159,17 +156,21 @@ type Info struct {
 }
 
 func (r *Renter) Info() (*Info, error) {
-	var reserved int64 = 0
-	for _, contract := range r.contracts {
-		reserved += contract.StorageSpace
-	}
 	err := r.authorizeMeta()
 	if err != nil {
 		return nil, err
 	}
-	renter, err := r.metaClient.GetRenter(r.Config.RenterId)
+	renterInfo, err := r.metaClient.GetRenter(r.Config.RenterId)
 	if err != nil {
 		return nil, err
+	}
+	contracts, err := r.metaClient.GetRenterContracts(r.Config.RenterId)
+	if err != nil {
+		return nil, err
+	}
+	var reserved int64 = 0
+	for _, contract := range contracts {
+		reserved += contract.StorageSpace
 	}
 	freeStorage := r.storageManager.AvailableStorage()
 	return &Info{
@@ -180,9 +181,9 @@ func (r *Renter) Info() (*Info, error) {
 		ReservedStorage: reserved,
 		UsedStorage:     reserved - freeStorage,
 		FreeStorage:     freeStorage,
-		TotalContracts:  len(r.contracts),
+		TotalContracts:  len(contracts),
 		TotalFiles:      len(r.files),
-		Balance:         renter.Balance,
+		Balance:         renterInfo.Balance,
 	}, nil
 }
 

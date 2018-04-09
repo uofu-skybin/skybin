@@ -384,7 +384,7 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := r.GetFileByName(name); err != nil {
+	if _, err := r.GetFileByName(name); err == nil {
 		return nil, fmt.Errorf("%s already exists.", name)
 	}
 

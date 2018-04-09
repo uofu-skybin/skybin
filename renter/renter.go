@@ -186,7 +186,7 @@ func (r *Renter) Info() (*Info, error) {
 }
 
 func (r *Renter) CreateFolder(name string) (*core.File, error) {
-	if r.getFileByName(name) != nil {
+	if _, err := r.GetFileByName(name); err == nil {
 		return nil, fmt.Errorf("%s already exists.", name)
 	}
 	id, err := util.GenerateID()
@@ -384,7 +384,7 @@ func (r *Renter) RenameFile(fileId string, name string) (*core.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.getFileByName(name) != nil {
+	if _, err := r.GetFileByName(name); err != nil {
 		return nil, fmt.Errorf("%s already exists.", name)
 	}
 
@@ -658,13 +658,17 @@ func (r *Renter) findChildren(dir *core.File) []*core.File {
 	return children
 }
 
-func (r *Renter) getFileByName(name string) *core.File {
-	for _, file := range r.files {
+func (r *Renter) GetFileByName(name string) (*core.File, error) {
+	files, err := r.ListFiles()
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
 		if file.Name == name {
-			return file
+			return file, nil
 		}
 	}
-	return nil
+	return nil, fmt.Errorf("Cannot find file %s", name)
 }
 
 // Authorize with the metaclient, if necessary

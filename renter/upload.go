@@ -110,8 +110,8 @@ func (r *Renter) Upload(sourcePath string, destPath string, shouldOverwrite bool
 	if err != nil {
 		return nil, err
 	}
-	existingFile := r.getFileByName(destPath)
-	if existingFile != nil && finfo.IsDir() {
+	existingFile, err := r.GetFileByName(destPath)
+	if err == nil && finfo.IsDir() {
 		return nil, errors.New("A file with that name already exists.")
 	}
 	err = r.authorizeMeta()

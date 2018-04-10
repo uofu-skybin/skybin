@@ -217,6 +217,9 @@ func (client *Client) GetRenter(renterID string) (*core.RenterInfo, error) {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)

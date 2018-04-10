@@ -18,6 +18,15 @@ body, html {
     height: 100%;
 }
 
+#network-legend {
+    background: white;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 75px;
+    height: 30%;
+}
+
 #node-title {
     margin-bottom: 0;
 }

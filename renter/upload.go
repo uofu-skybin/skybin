@@ -776,11 +776,7 @@ func prepareMetadata(up *fileUpload) error {
 		blockReaders = append(blockReaders, io.NewSectionReader(up.eTemp, up.blockSize*int64(blockNum), up.blockSize))
 	}
 	for i := 0; i < up.numParityBlocks; i++ {
-		_, err := up.parityFiles[i].Seek(0, os.SEEK_SET)
-		if err != nil {
-			return fmt.Errorf("Unable to seek parity file. Error: %s", err)
-		}
-		blockReaders = append(blockReaders, up.parityFiles[i])
+		blockReaders = append(blockReaders, io.NewSectionReader(up.parityFiles[i], 0, up.blockSize))
 	}
 
 	// Generate block metadata
@@ -806,14 +802,7 @@ func prepareMetadata(up *fileUpload) error {
 	}
 
 	// Generate version metadata
-	uploadSize := up.blockSize * int64(up.numDataBlocks)
-	for _, f := range up.parityFiles {
-		st, err := f.Stat()
-		if err != nil {
-			return fmt.Errorf("Unable to stat parity file. Error: %s", err)
-		}
-		uploadSize += st.Size()
-	}
+	uploadSize := up.blockSize * (int64(up.numDataBlocks) + int64(up.numParityBlocks))
 	version := &core.Version{
 		ModTime:         up.finfo.ModTime(),
 		Size:            up.finfo.Size(),

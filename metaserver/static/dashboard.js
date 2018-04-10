@@ -7,7 +7,8 @@ const chartColors = {
 	blue: 'rgb(54, 162, 235)',
 	purple: 'rgb(153, 102, 255)',
     grey: 'rgb(231,233,237)',
-    darkGrey: 'rgb(128,128,128)'
+    darkGrey: 'rgb(128,128,128)',
+    brightGreen: '#66FF00'
 };
 
 // Current set of data from the metaserver.
@@ -158,6 +159,13 @@ function setupNetworkAndNodeDetails() {
     let options = {
         interaction: {
             selectConnectedEdges: false
+        },
+        nodes: {
+            chosen: {
+                node: function(values, id, selected, hovering) {
+                    values.color = chartColors.brightGreen;
+                }
+            }
         },
         groups: {
             0: {

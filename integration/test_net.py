@@ -162,7 +162,12 @@ class TestNet:
         last_checkpoint_time = start_time
         total_steps = 0
         while True:
-            self.run_step()
+            try:
+                self.run_step()
+            except Exception as err:
+                print('EXCEPTION')
+                print(err)
+                self.log_file.write('Exception while running step: {}'.format(str(err)))
             sleep_time = random.uniform(MIN_SLEEP_SEC, MAX_SLEEP_SEC)
             time.sleep(sleep_time)
             total_steps += 1

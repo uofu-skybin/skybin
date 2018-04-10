@@ -6,7 +6,8 @@ const chartColors = {
 	green: 'rgb(75, 192, 192)',
 	blue: 'rgb(54, 162, 235)',
 	purple: 'rgb(153, 102, 255)',
-	grey: 'rgb(231,233,237)'
+    grey: 'rgb(231,233,237)',
+    darkGrey: 'rgb(128,128,128)'
 };
 
 // Current set of data from the metaserver.
@@ -70,6 +71,14 @@ function setupLegend() {
         interaction: {
             dragView: false,
             selectable: false
+        },
+        groups: {
+            0: {
+                color: chartColors.blue
+            },
+            1: {
+                color: chartColors.orange
+            }
         }
     };
     network = new vis.Network(container, dataSet, options);
@@ -149,7 +158,20 @@ function setupNetworkAndNodeDetails() {
     let options = {
         interaction: {
             selectConnectedEdges: false
-        }
+        },
+        groups: {
+            0: {
+                color: chartColors.blue
+            },
+            1: {
+                color: chartColors.orange
+            }
+        },
+        edges: {
+            color: {
+                color: chartColors.darkGrey
+            }
+        },
     };
     network = new vis.Network(container, dataSet, options);
 

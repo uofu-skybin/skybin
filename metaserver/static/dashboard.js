@@ -47,6 +47,36 @@ function setupPage() {
     // Get data from metaserver.
     xhttp.open("GET", "dashboard.json", true)
     xhttp.send()
+
+    setupLegend();
+}
+
+function setupLegend() {
+    let container = document.getElementById('network-legend');
+    let x = 0;
+    let y = 0;
+    let nodes = [
+        {id: 1, x: x, y: y, group: 0, label: "Renter", fixed: true, physics: false},
+        {id: 2, x: x, y: y + 90, group: 1, label: "Provider", fixed: true, physics: false},
+    ];
+    let dataSet = {
+        nodes: new vis.DataSet(nodes),
+        edges: new vis.DataSet([])
+    };
+    let options = {
+        nodes: {
+            shape: 'dot',
+        },
+        interaction: {
+            dragView: false,
+            selectable: false
+        }
+    };
+    network = new vis.Network(container, dataSet, options);
+    network.fit({nodes: [1,2]});
+    let pos = network.getViewPosition();
+    let scale = network.getScale();
+    network.moveTo({position: {x: x, y: pos.y + 5}, scale: scale * 0.9});
 }
 
 function updatePage() {

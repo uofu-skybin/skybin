@@ -11,14 +11,19 @@ const (
 	DefaultLocalProviderAddr  = "127.0.0.1:8004"
 )
 
+const (
+	// Default length of the nonce of a BlockAudit
+	DefaultAuditNonceLen = 20
+)
+
 type ProviderInfo struct {
-	ID          string `json:"id,omitempty"`
-	PublicKey   string `json:"publicKey"`
-	Addr        string `json:"address"`
-	SpaceAvail  int64  `json:"spaceAvail,omitempty"`
+	ID         string `json:"id,omitempty"`
+	PublicKey  string `json:"publicKey"`
+	Addr       string `json:"address"`
+	SpaceAvail int64  `json:"spaceAvail,omitempty"`
 	// Rate charged for storage, in tenths-of-cents/gb/month
 	// where 1 gb is 1e9 bytes
-	StorageRate int64  `json:"storageRate"`
+	StorageRate int64 `json:"storageRate"`
 	// The provider's balance, in tenths of cents.
 	Balance int64 `json:"balance"`
 }
@@ -82,6 +87,16 @@ type BlockLocation struct {
 	ContractId string `json:"contractId"`
 }
 
+// BlockAudit is a challenge used to check a block's integrity
+// when stored with an untrusted provider. It consists of a random
+// nonce and the hash expected from performing sha256(nonce + block contents).
+// To perform the audit, the nonce should be sent to the provider storing
+// the block, who must then compute the expected hash correctly.
+type BlockAudit struct {
+	Nonce        string `json:"nonce"`
+	ExpectedHash string `json:"expectedHash"`
+}
+
 type Block struct {
 	ID string `json:"id"`
 	// Offset of the block in the file, relative to the file's other blocks.
@@ -93,6 +108,8 @@ type Block struct {
 	Sha256Hash string `json:"sha256hash"`
 	// Location of the provider where the block is stored
 	Location BlockLocation `json:"location"`
+	// Audits to be used to check the block's integrity
+	Audits []BlockAudit `json:"audits"`
 }
 
 // Permission provides access to a file to a non-owning user

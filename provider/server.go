@@ -111,9 +111,44 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, &info)
 }
 
-// TODO: stub
+type postAuditParams struct {
+	Nonce string `json:"nonce"`
+}
+
+type postAuditResp struct {
+	Hash string `json:"hash"`
+}
+
 func (server *providerServer) postAudit(w http.ResponseWriter, r *http.Request) {
-	return
+	renterQuery, exists := r.URL.Query()["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{"No renter ID given"})
+		return
+	}
+	renterID := renterQuery[0]
+	blockQuery, exists := r.URL.Query()["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{"No block ID given"})
+		return
+	}
+	blockID := blockQuery[0]
+	var params postAuditParams
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{"Bad request json"})
+		return
+	}
+	hash, err := server.provider.AuditBlock(renterID, blockID, params.Nonce)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusOK, &postAuditResp{hash})
 }
 
 type getRenterResp struct {

@@ -21,6 +21,7 @@ import (
 	"skybin/util"
 	"strings"
 	"time"
+	"hash"
 )
 
 // fileUpload stores the state for an upload as it passes through
@@ -631,7 +632,7 @@ func prepareUpload(up *fileUpload, conf *Config) error {
 		return err
 	}
 
-	err = prepareMetadata(up)
+	err = prepareMetadata(up, conf.NumBlockAudits)
 	if err != nil {
 		return err
 	}
@@ -770,7 +771,7 @@ func erasureCode(up *fileUpload, conf *Config) error {
 }
 
 // Preparation phase 4: create block and version metadata.
-func prepareMetadata(up *fileUpload) error {
+func prepareMetadata(up *fileUpload, numAudits int) error {
 	blockReaders := []io.Reader{}
 	for blockNum := 0; blockNum < up.numDataBlocks; blockNum++ {
 		blockReaders = append(blockReaders, io.NewSectionReader(up.eTemp, up.blockSize*int64(blockNum), up.blockSize))
@@ -786,17 +787,43 @@ func prepareMetadata(up *fileUpload) error {
 		if err != nil {
 			return fmt.Errorf("Unable to create block ID. Error: %s", err)
 		}
-		h := sha256.New()
-		n, err := io.Copy(h, blockReader)
+		auditHashes := []hash.Hash{}
+		audits := []core.BlockAudit{}
+		for i := 0; i < numAudits; i++ {
+			nonceBytes, err := util.GenerateAuditNonce()
+			if err != nil {
+				return err
+			}
+			audit := core.BlockAudit{
+				Nonce: base64.URLEncoding.EncodeToString(nonceBytes),
+			}
+			h := sha256.New()
+			h.Write(nonceBytes)
+			auditHashes = append(auditHashes, h)
+			audits = append(audits, audit)
+		}
+		blockHash := sha256.New()
+		writers := []io.Writer{blockHash}
+		for _, h := range auditHashes {
+			writers = append(writers, h)
+		}
+		// Generate the hashes from the block
+		n, err := io.Copy(io.MultiWriter(writers...), blockReader)
 		if err != nil {
 			return fmt.Errorf("Unable to calculate block hash. Error: %s", err)
 		}
-		blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
+		for idx, auditHash := range auditHashes {
+			audit := &audits[idx]
+			auditHashBytes := auditHash.Sum(nil)
+			audit.ExpectedHash = base64.URLEncoding.EncodeToString(auditHashBytes)
+		}
+		blockHashStr := base64.URLEncoding.EncodeToString(blockHash.Sum(nil))
 		block := core.Block{
 			ID:         blockId,
 			Num:        blockNum,
 			Size:       n,
-			Sha256Hash: blockHash,
+			Sha256Hash: blockHashStr,
+			Audits:     audits,
 		}
 		blocks = append(blocks, block)
 	}

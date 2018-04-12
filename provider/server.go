@@ -222,6 +222,8 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: Call the appropriate method to retrieve this.
+	server.provider.mu.RLock()
 	info := core.ProviderInfo{
 		ID:          server.provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
@@ -229,6 +231,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
 		StorageRate: server.provider.Config.StorageRate,
 	}
+	server.provider.mu.RUnlock()
 
 	server.writeResp(w, http.StatusOK, &info)
 }
@@ -268,7 +271,9 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// TODO: this might not be necessary at this point
+	server.provider.mu.RLock()
 	_, exists = server.provider.renters[renterID]
+	server.provider.mu.RUnlock()
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			errorResp{Error: "Provider has no record for this renter"})

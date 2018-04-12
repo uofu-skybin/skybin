@@ -9,7 +9,9 @@ import (
 )
 
 func (provider *Provider) StoreBlock(renterID string, blockID string, block io.Reader, blockSize int64) error {
+	provider.mu.RLock()
 	renter, exists := provider.renters[renterID]
+	provider.mu.RUnlock()
 	if !exists {
 		return errors.New("Insufficient space: You have no storage reserved.")
 	}
@@ -47,14 +49,17 @@ func (provider *Provider) StoreBlock(renterID string, blockID string, block io.R
 		return fmt.Errorf("Failed to insert block into DB. error: %s", err)
 	}
 
+	provider.mu.Lock()
+	renter.StorageUsed += blockSize
+	provider.TotalBlocks++
+	provider.StorageUsed += blockSize
+	provider.mu.Unlock()
+
 	err = provider.addActivity(activityOpUpload, blockSize)
 	if err != nil {
 		// non-fatal
 		// provider.logger.Println("Failed to update activity on upload:", err)
 	}
-	renter.StorageUsed += blockSize
-	provider.TotalBlocks++
-	provider.StorageUsed += blockSize
 	return nil
 }
 
@@ -87,7 +92,9 @@ func (provider *Provider) GetBlock(renterID, blockID string) (io.ReadCloser, err
 }
 
 func (provider *Provider) DeleteBlock(renterID, blockID string) error {
+	provider.mu.RLock()
 	renter, exists := provider.renters[renterID]
+	provider.mu.RUnlock()
 	if !exists {
 		return errors.New("No contracts found for given renter")
 	}
@@ -113,13 +120,16 @@ func (provider *Provider) DeleteBlock(renterID, blockID string) error {
 		return fmt.Errorf("Failed to remove block %s from DB. error: %s", blockID, err)
 	}
 
+	provider.mu.Lock()
+	renter.StorageUsed -= blockSize
+	provider.TotalBlocks--
+	provider.StorageUsed -= blockSize
+	provider.mu.Unlock()
+
 	err = provider.addActivity(activityOpDelete, blockSize)
 	if err != nil {
 		// non-fatal
 		// provider.logger.Println("Failed to update activity on deletion:", err)
 	}
-	renter.StorageUsed -= blockSize
-	provider.TotalBlocks--
-	provider.StorageUsed -= blockSize
 	return nil
 }

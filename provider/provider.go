@@ -46,7 +46,7 @@ type Provider struct {
 	StorageUsed     int64
 	TotalBlocks     int
 	TotalContracts  int
-	mu              sync.Mutex
+	mu              sync.RWMutex
 }
 
 type blockInfo struct {
@@ -152,8 +152,8 @@ func (p *Provider) loadInfoFromDB() error {
 }
 
 func (provider *Provider) GetPublicInfo() *Info {
-	provider.mu.Lock()
-	defer provider.mu.Unlock()
+	provider.mu.RLock()
+	defer provider.mu.RUnlock()
 	return &Info{
 		ProviderId:       provider.Config.ProviderID,
 		StorageAllocated: provider.Config.SpaceAvail,
@@ -205,11 +205,14 @@ func (provider *Provider) UpdateMeta() error {
 	if err != nil {
 		return fmt.Errorf("Failed to parse pubKey in UpdateMeta. error: %s", err)
 	}
+	provider.mu.RLock()
+	spaceAvail := provider.Config.SpaceAvail - provider.StorageReserved
+	provider.mu.RUnlock()
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
 		Addr:        provider.Config.PublicApiAddr,
-		SpaceAvail:  provider.Config.SpaceAvail - provider.StorageReserved,
+		SpaceAvail:  spaceAvail,
 		StorageRate: provider.Config.StorageRate,
 	}
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})

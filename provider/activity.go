@@ -26,9 +26,9 @@ type summary struct {
 }
 
 const (
-	activityOpUpload = "upload"
+	activityOpUpload   = "upload"
 	activityOpDownload = "download"
-	activityOpDelete = "delete"
+	activityOpDelete   = "delete"
 	activityOpContract = "contract"
 )
 

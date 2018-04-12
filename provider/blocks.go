@@ -47,12 +47,14 @@ func (provider *Provider) StoreBlock(renterID string, blockID string, block io.R
 		return fmt.Errorf("Failed to insert block into DB. error: %s", err)
 	}
 
-	err = provider.addActivity("upload", blockSize)
+	err = provider.addActivity(activityOpUpload, blockSize)
 	if err != nil {
 		// non-fatal
 		// provider.logger.Println("Failed to update activity on upload:", err)
 	}
 	renter.StorageUsed += blockSize
+	provider.TotalBlocks++
+	provider.StorageUsed += blockSize
 	return nil
 }
 
@@ -75,7 +77,7 @@ func (provider *Provider) GetBlock(renterID, blockID string) (io.ReadCloser, err
 		return nil, fmt.Errorf("IOError: unable to retrieve block")
 	}
 
-	err = provider.addActivity("download", fi.Size())
+	err = provider.addActivity(activityOpDownload, fi.Size())
 	if err != nil {
 		// non-fatal
 		//provider.logger.Println("Failed to update activity on download:", err)
@@ -111,11 +113,13 @@ func (provider *Provider) DeleteBlock(renterID, blockID string) error {
 		return fmt.Errorf("Failed to remove block %s from DB. error: %s", blockID, err)
 	}
 
-	err = provider.addActivity("delete", blockSize)
+	err = provider.addActivity(activityOpDelete, blockSize)
 	if err != nil {
 		// non-fatal
 		// provider.logger.Println("Failed to update activity on deletion:", err)
 	}
-	renter.StorageUsed -= fi.Size()
+	renter.StorageUsed -= blockSize
+	provider.TotalBlocks--
+	provider.StorageUsed -= blockSize
 	return nil
 }

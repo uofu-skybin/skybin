@@ -25,16 +25,20 @@ type summary struct {
 	StorageReservations int64 `json:"storageReservations"`
 }
 
-// Insert, Delete, and Update activity feeds for each interval
-func (provider *Provider) addActivity(op string, bytes int64) error {
+const (
+	activityOpUpload = "upload"
+	activityOpDownload = "download"
+	activityOpDelete = "delete"
+	activityOpContract = "contract"
+)
 
+func (provider *Provider) addActivity(op string, bytes int64) error {
 	err := provider.db.CycleActivity()
 	if err != nil {
 		return fmt.Errorf("Error adding new activity to DB: %s", err)
 	}
 
-	// TODO: Abstact and handle errors
-	if op == "upload" {
+	if op == activityOpUpload {
 		err = provider.db.UpdateActivity("BlockUploads", 1)
 		if err != nil {
 			return fmt.Errorf("add upload activity failed. error: %s", err)
@@ -43,11 +47,7 @@ func (provider *Provider) addActivity(op string, bytes int64) error {
 		if err != nil {
 			return fmt.Errorf("add upload activity failed. error: %s", err)
 		}
-
-		provider.TotalBlocks++
-		provider.StorageUsed += bytes
-
-	} else if op == "download" {
+	} else if op == activityOpDownload {
 		err = provider.db.UpdateActivity("BlockDownloads", 1)
 		if err != nil {
 			return fmt.Errorf("add download activity failed. error: %s", err)
@@ -56,21 +56,18 @@ func (provider *Provider) addActivity(op string, bytes int64) error {
 		if err != nil {
 			return fmt.Errorf("add download activity failed. error:  %s", err)
 		}
-	} else if op == "delete" {
+	} else if op == activityOpDelete {
 		provider.db.UpdateActivity("BlockDeletions", 1)
 		if err != nil {
 			return fmt.Errorf("add delete activity failed. error:  %s", err)
 		}
 
-		provider.TotalBlocks--
-		provider.StorageUsed -= bytes
-
-	} else if op == "contract" {
+	} else if op == activityOpContract {
 		provider.db.UpdateActivity("StorageReservations", 1)
 		if err != nil {
 			return fmt.Errorf("add contract activity failed. error: %s", err)
 		}
-		provider.StorageReserved += bytes
+
 	}
 	return nil
 }

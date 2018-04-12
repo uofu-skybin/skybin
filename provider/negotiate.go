@@ -47,10 +47,12 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// activity updates are non-fatal errors
-	err = provider.addActivity("contract", contract.StorageSpace)
+	err = provider.addActivity(activityOpContract, contract.StorageSpace)
 	if err != nil {
 		fmt.Println("Failed to update activity for contract: ", err)
 	}
+
+	provider.StorageReserved += contract.StorageSpace
 
 	// this could potentially be non-fatal too
 	err = provider.UpdateMeta()

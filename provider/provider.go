@@ -4,23 +4,28 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"path"
 	"skybin/core"
 	"skybin/metaserver"
 	"skybin/util"
 	"sync"
+	"time"
 )
 
 type Config struct {
-	ProviderID     string `json:"providerId"`
-	PublicApiAddr  string `json:"publicApiAddress"`
-	MetaAddr       string `json:"metaServerAddress"`
-	LocalApiAddr   string `json:"localApiAddress"`
-	PrivateKeyFile string `json:"privateKeyFile"`
-	PublicKeyFile  string `json:"publicKeyFile"`
-	SpaceAvail     int64  `json:"spaceAvail"`
-	StorageRate    int64  `json:"storageRate"`
+	ProviderID     string        `json:"providerId"`
+	PublicApiAddr  string        `json:"publicApiAddress"`
+	MetaAddr       string        `json:"metaServerAddress"`
+	LocalApiAddr   string        `json:"localApiAddress"`
+	PrivateKeyFile string        `json:"privateKeyFile"`
+	PublicKeyFile  string        `json:"publicKeyFile"`
+	SpaceAvail     int64         `json:"spaceAvail"`
+	StorageRate    int64         `json:"storageRate"`
+	MinStorageRate int64         `json:"minStorageRate"`
+	MaxStorageRate int64         `json:"maxStorageRate"`
+	PricingPolicy  PricingPolicy `json:"pricingPolicy"`
 }
 
 type Info struct {
@@ -46,6 +51,8 @@ type Provider struct {
 	StorageUsed     int64
 	TotalBlocks     int
 	TotalContracts  int
+	logger          *log.Logger
+	doneCh          chan struct{}
 	mu              sync.RWMutex
 }
 
@@ -60,18 +67,33 @@ type renterInfo struct {
 	StorageUsed     int64 `json:"storageUsed"`
 }
 
+type PricingPolicy string
+
+const (
+	FixedPricingPolicy      PricingPolicy = "fixed"
+	PassivePricingPolicy    PricingPolicy = "passive"
+	AggressivePricingPolicy PricingPolicy = "aggressive"
+)
+
 const (
 	// By default, a provider is configured to provide 10 GB of storage to the network.
 	DefaultStorageSpace = 10 * 1e9
 
 	// A provider should provide at least this much space.
-	MinStorageSpace = 100 * 1e6
+	MinStorageSpace       = 100 * 1e6
+	DefaultPricingPolicy  = PassivePricingPolicy
+	DefaultMinStorageRate = 0
+	DefaultMaxStorageRate = 10000
+	DefaultStorageRate    = DefaultMinStorageRate
+	PricingUpdateFreq     = 1 * time.Minute
 )
 
 // Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir: homedir,
+		doneCh:  make(chan struct{}),
+		logger:  log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
 	config := &Config{}
@@ -151,6 +173,18 @@ func (p *Provider) loadInfoFromDB() error {
 	return nil
 }
 
+func (provider *Provider) StartBackgroundThreads() {
+	go provider.pricingUpdateThread()
+}
+
+func (provider *Provider) StopBackgroundThreads() {
+	close(provider.doneCh)
+}
+
+func (provider *Provider) SetLogger(logger *log.Logger) {
+	provider.logger = logger
+}
+
 func (provider *Provider) GetPublicInfo() *Info {
 	provider.mu.RLock()
 	defer provider.mu.RUnlock()
@@ -206,15 +240,14 @@ func (provider *Provider) UpdateMeta() error {
 		return fmt.Errorf("Failed to parse pubKey in UpdateMeta. error: %s", err)
 	}
 	provider.mu.RLock()
-	spaceAvail := provider.Config.SpaceAvail - provider.StorageReserved
-	provider.mu.RUnlock()
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
 		Addr:        provider.Config.PublicApiAddr,
-		SpaceAvail:  spaceAvail,
+		SpaceAvail:  provider.Config.SpaceAvail - provider.StorageReserved,
 		StorageRate: provider.Config.StorageRate,
 	}
+	provider.mu.RUnlock()
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
 	err = metaService.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {

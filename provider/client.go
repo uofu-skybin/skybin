@@ -75,12 +75,12 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 	return respMsg.Contract, nil
 }
 
-func (client *Client) PutBlock(renterID string, blockID string, data io.Reader) error {
+func (client *Client) PutBlock(renterID string, blockID string, data io.Reader, size int64) error {
 	if client.token == "" {
 		return errors.New("Must authorize before calling PUT /block")
 	}
 
-	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s", client.addr, renterID, blockID)
+	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s&size=%d", client.addr, renterID, blockID, size)
 	req, err := http.NewRequest(http.MethodPost, url, data)
 	if err != nil {
 		return err

@@ -10,6 +10,8 @@ import (
 	"skybin/util"
 
 	"github.com/gorilla/mux"
+	"io"
+	"strconv"
 )
 
 type providerServer struct {
@@ -86,7 +88,127 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: signedContract})
+}
 
+func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	sizequery, exists := query["size"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No block size given"})
+		return
+	}
+	size, err := strconv.ParseInt(sizequery[0], 10, 64)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"Block size must be an integer"})
+		return
+	}
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	// Check to confirm that the authentication token matches that of the querying renter
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden,
+			errorResp{Error: "Authentication token does not match renterID"})
+		return
+	}
+
+	err = server.provider.StoreBlock(renterID, blockID, r.Body, size)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, &errorResp{err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusCreated, &errorResp{})
+}
+
+func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	block, err := server.provider.GetBlock(renterID, blockID)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, errorResp{err.Error()})
+	}
+	defer block.Close()
+
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, block)
+	if err != nil {
+		server.logger.Println("Unable to read block. Error: ", err)
+	}
+}
+
+func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{"No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden, errorResp{"Authentication token does not match renterID"})
+		return
+	}
+
+	err = server.provider.DeleteBlock(renterID, blockID)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, errorResp{err.Error()})
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 // This info object is different than the info object for local provider which serves

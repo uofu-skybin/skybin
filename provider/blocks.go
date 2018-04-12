@@ -1,232 +1,121 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
-	"skybin/util"
 )
 
-func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
-	// confirm that the request has the blockid field
-	blockquery, exists := r.URL.Query()["blockID"]
+func (provider *Provider) StoreBlock(renterID string, blockID string, block io.Reader, blockSize int64) error {
+	renter, exists := provider.renters[renterID]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
-		return
-	}
-	blockID := blockquery[0]
-
-	renterquery, exists := r.URL.Query()["renterID"]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
-		return
-	}
-	renterID := renterquery[0]
-
-	claims, err := util.GetTokenClaimsFromRequest(r)
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Failure parsing authentication token"})
-		return
-	}
-
-	// Check to confirm that the authentication token matches that of the querying renter
-	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
-		server.writeResp(w, http.StatusForbidden, errorResp{Error: "Authentication token does not match renterID"})
-		return
-	}
-
-	renter, exists := server.provider.renters[renterID]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			errorResp{Error: "Insufficient space: You have no storage reserved."})
-		return
+		return errors.New("Insufficient space: You have no storage reserved.")
 	}
 	spaceAvail := renter.StorageReserved - renter.StorageUsed
 
-	// first check block size using the http header
-	if r.ContentLength > spaceAvail {
-		msg := fmt.Sprintf("Block of size %d exceeds available storage %d", r.ContentLength, spaceAvail)
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
-		return
+	if blockSize > spaceAvail {
+		return fmt.Errorf("Block of size %d exceeds available storage %d", blockSize, spaceAvail)
 	}
 
 	// create directory for renter's blocks if necessary
-	renterDir := path.Join(server.provider.Homedir, "blocks", renterID)
+	renterDir := path.Join(provider.Homedir, "blocks", renterID)
 	if _, err := os.Stat(renterDir); os.IsNotExist(err) {
 		err := os.MkdirAll(renterDir, 0700)
 		if err != nil {
-			server.logger.Println(err)
-			server.writeResp(w, http.StatusInternalServerError,
-				errorResp{Error: "Unable to save block"})
-			return
+			return errors.New("Unable to save block")
 		}
 	}
 
-	// create file
 	path := path.Join(renterDir, blockID)
 	f, err := os.Create(path)
 	if err != nil {
-		server.logger.Println("Unable to create block file. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Unable to save block"})
-		return
+		return errors.New("Unable to save block")
 	}
 	defer f.Close()
 
-	// Copy body to the path
-	n, err := io.Copy(f, r.Body)
-	if err != nil {
-		server.logger.Println("Unable to write block. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Unable to save block"})
-		return
-	}
-
-	// Verify that copiedfile is the correct size
-	if n > spaceAvail {
-		os.Remove(path)
-		msg := fmt.Sprintf("Block of size %d, exceeds available storage %d", n, spaceAvail)
-		server.logger.Println(msg)
-		server.writeResp(w, http.StatusInsufficientStorage, errorResp{Error: msg})
-		return
-	}
-
-	// Insert into Database
-	err = server.provider.db.InsertBlock(renterID, blockID, n)
+	_, err = io.CopyN(f, block, blockSize)
 	if err != nil {
 		os.Remove(path)
-		msg := fmt.Sprintf("Failed to insert block into DB. error: %s", err)
-		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
-		return
+		return errors.New("Unable to save block")
 	}
 
-	// Activity: non-fatal error
-	err = server.provider.addActivity("upload", n)
+	err = provider.db.InsertBlock(renterID, blockID, blockSize)
 	if err != nil {
-		server.logger.Println("Failed to update activity on upload:", err)
+		os.Remove(path)
+		return fmt.Errorf("Failed to insert block into DB. error: %s", err)
 	}
 
-	renter.StorageUsed += n
-	server.writeResp(w, http.StatusCreated, &errorResp{})
+	err = provider.addActivity("upload", blockSize)
+	if err != nil {
+		// non-fatal
+		// provider.logger.Println("Failed to update activity on upload:", err)
+	}
+	renter.StorageUsed += blockSize
+	return nil
 }
 
-func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
-	blockquery, exists := r.URL.Query()["blockID"]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			&errorResp{Error: "No block given"})
-		return
-	}
-	blockID := blockquery[0]
-
-	renterquery, exists := r.URL.Query()["renterID"]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
-		return
-	}
-	renterID := renterquery[0]
-
-	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
+// Returns an io.ReadCloser containing the block's contents.
+// If err != nil, the caller has responsibility for closing the reader.
+func (provider *Provider) GetBlock(renterID, blockID string) (io.ReadCloser, error) {
+	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
 	if _, err := os.Stat(path); err != nil && os.IsNotExist(err) {
-		msg := fmt.Sprintf("Cannot find block with ID %s", blockID)
-		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: msg})
-		return
+		return nil, fmt.Errorf("Cannot find block with ID %s", blockID)
 	}
 
 	f, err := os.Open(path)
 	if err != nil {
-		server.logger.Println("Unable to open block file. Error: ", err)
-		server.writeResp(w, http.StatusInternalServerError,
-			&errorResp{Error: "IOError: unable to retrieve block"})
-		return
+		return nil, fmt.Errorf("IOError: unable to retrieve block")
 	}
-	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError, &errorResp{Error: "IOError: unable to retrieve block"})
-		return
+		f.Close()
+		return nil, fmt.Errorf("IOError: unable to retrieve block")
 	}
 
-	err = server.provider.addActivity("download", fi.Size())
-	// non-fatal error
+	err = provider.addActivity("download", fi.Size())
 	if err != nil {
-		server.logger.Println("Failed to update activity on download:", err)
+		// non-fatal
+		//provider.logger.Println("Failed to update activity on download:", err)
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, err = io.Copy(w, f)
-	if err != nil {
-		server.logger.Println("Unable to write block to ResponseWriter. Error: ", err)
-		return
-	}
+	return f, nil
 }
 
-func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
-	blockquery, exists := r.URL.Query()["blockID"]
+func (provider *Provider) DeleteBlock(renterID, blockID string) error {
+	renter, exists := provider.renters[renterID]
 	if !exists {
-		server.writeResp(w, http.StatusBadRequest, &errorResp{Error: "No block given"})
-		return
-	}
-	blockID := blockquery[0]
-
-	renterquery, exists := r.URL.Query()["renterID"]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
-		return
-	}
-	renterID := renterquery[0]
-	renter, exists := server.provider.renters[renterID]
-	if !exists {
-		server.writeResp(w, http.StatusBadRequest,
-			errorResp{Error: "No contracts found for renter"})
-		return
+		return errors.New("No contracts found for given renter")
 	}
 
-	claims, err := util.GetTokenClaimsFromRequest(r)
-	if err != nil {
-		server.writeResp(w, http.StatusInternalServerError,
-			errorResp{Error: "Failure parsing authentication token"})
-		return
-	}
-
-	// Check to confirm that the authentication token matches that of the querying renter
-	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
-		server.writeResp(w, http.StatusForbidden, errorResp{Error: "Authentication token does not match renterID"})
-		return
-	}
-
-	path := path.Join(server.provider.Homedir, "blocks", renterID, blockID)
+	path := path.Join(provider.Homedir, "blocks", renterID, blockID)
 	fi, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		msg := fmt.Sprintf("Provider does not have record of block %s", blockID)
-		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("Block %s does not exist", blockID)
+		}
+		return fmt.Errorf("IOError removing block")
 	}
+
+	blockSize := fi.Size()
 
 	err = os.Remove(path)
 	if err != nil {
-		msg := fmt.Sprintf("Provider failed to delete block %s. error: %s", blockID, err)
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: msg})
-		return
+		return fmt.Errorf("Failed to delete block %s. error: %s", blockID, err)
 	}
 
-	err = server.provider.db.DeleteBlockById(blockID)
+	err = provider.db.DeleteBlockById(blockID)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to remove %s/%s from DB. error: %s", renterID, blockID, err)
-		server.writeResp(w, http.StatusInternalServerError, errorResp{Error: msg})
-		return
+		return fmt.Errorf("Failed to remove block %s from DB. error: %s", blockID, err)
 	}
 
-	err = server.provider.addActivity("delete", fi.Size())
-	// non-fatal error
+	err = provider.addActivity("delete", blockSize)
 	if err != nil {
-		server.logger.Println("Failed to update activity on deletion:", err)
+		// non-fatal
+		// provider.logger.Println("Failed to update activity on deletion:", err)
 	}
-
 	renter.StorageUsed -= fi.Size()
-	server.writeResp(w, http.StatusOK, &errorResp{})
+	return nil
 }

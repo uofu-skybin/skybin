@@ -563,7 +563,7 @@ func (r *Renter) blockUploadThread(providerAddr string, blockQ chan *blockUpload
 			close(upload.doneCh)
 			continue
 		}
-		err := client.PutBlock(r.Config.RenterId, upload.block.ID, upload.reader())
+		err := client.PutBlock(r.Config.RenterId, upload.block.ID, upload.reader(), upload.size)
 		if err != nil {
 			upload.err = err
 		}

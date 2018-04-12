@@ -142,7 +142,13 @@ function setupNetworkAndNodeDetails() {
             edges.push({
                 id: edgeId,
                 from: contract.renterId, 
-                to: contract.providerId
+                to: contract.providerId,
+                chosen: {
+                    edge: function(values, id, selected, hovering) {
+                        values.dashes = true;
+                        values.width *= 3;
+                    }
+                }
             })
             edgeSet[edgeId] = true;
         }
@@ -164,6 +170,13 @@ function setupNetworkAndNodeDetails() {
             chosen: {
                 node: function(values, id, selected, hovering) {
                     values.color = chartColors.brightGreen;
+                }
+            }
+        },
+        edges: {
+            chosen: {
+                edge: function(values, id, selected, hovering) {
+                    values.dashes = true;
                 }
             }
         },

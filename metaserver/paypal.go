@@ -34,7 +34,7 @@ func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 		}
 
 		// Make sure the amount is greater than 0.
-		if payload.Amount < 0 {
+		if payload.Amount <= 0 {
 			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
 			return
 		}
@@ -206,7 +206,7 @@ func (server *MetaServer) getRenterPaypalWithdrawHandler() http.HandlerFunc {
 		}
 
 		// Make sure the user is trying to withdraw a positive amount.
-		if payload.Amount < 0 {
+		if payload.Amount <= 0 {
 			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
 			return
 		}
@@ -325,7 +325,7 @@ func (server *MetaServer) getProviderPaypalWithdrawHandler() http.HandlerFunc {
 		}
 
 		// Make sure the user is trying to withdraw a positive amount.
-		if payload.Amount < 0 {
+		if payload.Amount <= 0 {
 			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
 			return
 		}

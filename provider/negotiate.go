@@ -26,7 +26,7 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	}
 
 	// Sign contract
-	provSig, err := core.SignContract(contract, provider.PrivateKey)
+	provSig, err := core.SignContract(contract, provider.privKey)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to sign contract. error: %s", err)
 	}
@@ -35,7 +35,7 @@ func (provider *Provider) NegotiateContract(contract *core.Contract) (*core.Cont
 	// if renter isn't in set, add a new entry
 	renter, exists := provider.renters[contract.RenterId]
 	if !exists {
-		renter = &RenterInfo{}
+		renter = &renterInfo{}
 		provider.renters[contract.RenterId] = renter
 	}
 	// Add storage space to the renter

@@ -79,8 +79,7 @@ func (server *localServer) getContracts(w http.ResponseWriter, r *http.Request) 
 }
 
 func (server *localServer) getStats(w http.ResponseWriter, r *http.Request) {
-
-	resp, err := server.provider.db.GetStatsResp()
+	resp, err := server.provider.db.GetActivityStats()
 	if err != nil {
 		msg := fmt.Sprintf("Failed to make stats response: %s", err)
 		server.writeResp(w, http.StatusInternalServerError, &errorResp{msg})

@@ -183,7 +183,7 @@ func (client *Client) GetInfo() (*core.ProviderInfo, error) {
 
 }
 
-func (client *Client) GetRenterInfo() (*RenterInfo, error) {
+func (client *Client) GetRenterInfo() (*renterInfo, error) {
 	if client.token == "" {
 		return nil, errors.New("Must authorize before calling GET /renter/info")
 	}
@@ -206,7 +206,7 @@ func (client *Client) GetRenterInfo() (*RenterInfo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, decodeError(resp.Body)
 	}
-	renterInfo := &RenterInfo{}
+	renterInfo := &renterInfo{}
 	err = json.NewDecoder(resp.Body).Decode(renterInfo)
 	if err != nil {
 		return nil, err

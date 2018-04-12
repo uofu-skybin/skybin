@@ -461,6 +461,20 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int, recursive bool) erro
 	return r.removeFile(file)
 }
 
+func (r *Renter) RemoveSharedFile(fileId string) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.RemoveSharedFile(r.Config.RenterId, fileId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Renter) removeDir(dir *core.File, recursive bool) error {
 	children := r.findChildren(dir)
 	if len(children) > 0 && !recursive {

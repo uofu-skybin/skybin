@@ -201,6 +201,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	file := &core.File{
 		ID:         id,
 		OwnerID:    r.Config.RenterId,
+		OwnerAlias: r.Config.Alias,
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},

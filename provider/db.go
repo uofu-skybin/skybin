@@ -59,6 +59,7 @@ func (p *Provider) InsertBlock(renterId string, blockId string, size int64) erro
 	return nil
 }
 
+// Insert new activity if activity doesn't exist on that interval
 func (p *Provider) InsertActivity(period string, timestamp time.Time) error {
 	stmt, err := p.db.Prepare("INSERT INTO activity (Period, Timestamp) Select ?, ? WHERE NOT EXISTS(SELECT 1 FROM activity WHERE Period = ? and Timestamp = ? )")
 	if err != nil {
@@ -73,6 +74,7 @@ func (p *Provider) InsertActivity(period string, timestamp time.Time) error {
 	return nil
 }
 
+// Increment activity corresponding to interval by "value"
 func (p *Provider) UpdateActivity(period string, timestamp time.Time, op string, value int64) error {
 	query := fmt.Sprintf("UPDATE activity SET %s = %s + ? WHERE Timestamp = ? and Period = ?", op, op)
 
@@ -86,49 +88,10 @@ func (p *Provider) UpdateActivity(period string, timestamp time.Time, op string,
 	return nil
 }
 
-// TODO Rename
-func (provider *Provider) makeStats() *getStatsResp {
-	var timestamps []time.Time
-	t := time.Now().Truncate(provider.stats.Day.Interval)
-	currTime := t.Add(-1 * provider.stats.Week.Interval)
-	for currTime != t {
-		currTime = currTime.Add(provider.stats.Day.Interval)
-		timestamps = append(timestamps, currTime)
-	}
-	resp := getStatsResp{
-		ActivityCounter: &Activity{
-			Timestamps:   timestamps,
-			BlockUploads: make([]int64, 24),
-		},
-		RecentSummary: &Recents{
-			Hour: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-			Day: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-			Week: &Summary{
-				BlockUploads:        0,
-				BlockDownloads:      0,
-				BlockDeletions:      0,
-				StorageReservations: 0,
-			},
-		},
-	}
-	fmt.Println(resp.ActivityCounter.Timestamps)
-	fmt.Println(resp.RecentSummary.Hour)
-	return &resp
-}
-
+// This is called by the local provider server on GET /stats
 func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 	query := fmt.Sprintf("SELECT Period, Timestamp, BlockUploads, BlockDownloads, BlockDeletions, BytesUploaded, BytesDownloaded, StorageReservations FROM activity") // WHERE Period=%s", period)
-	resp := p.makeStats()
+	resp := p.makeStatsResp()
 	rows, err := p.db.Query(query)
 	if err != nil {
 		fmt.Println(err)
@@ -154,10 +117,19 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 
 			stamp, err := time.Parse(time.RFC3339, timestamp)
 			if err != nil {
-				// TODO:
+				return nil, err
 			}
-			fmt.Println(stamp)
-			// TODO: increment by index
+
+			// Increment activity counters for the day interval
+			idx := 23 - int(time.Since(stamp).Hours())
+			if idx < 24 {
+				resp.ActivityCounter.BlockUploads[idx] += blockUploads
+				resp.ActivityCounter.BlockDownloads[idx] += blockDownloads
+				resp.ActivityCounter.BlockDeletions[idx] += blockDeletions
+				resp.ActivityCounter.BytesUploaded[idx] += bytesUploaded
+				resp.ActivityCounter.BytesDownloaded[idx] += bytesDownloaded
+				resp.ActivityCounter.StorageReservations[idx] += storageReservations
+			}
 		}
 		if period == "hour" {
 			resp.RecentSummary.Hour.BlockUploads += blockUploads
@@ -170,16 +142,13 @@ func (p *Provider) GetStatsResp() (*getStatsResp, error) {
 			resp.RecentSummary.Week.BlockDownloads += blockDownloads
 			resp.RecentSummary.Week.BlockDeletions += blockDeletions
 			resp.RecentSummary.Week.StorageReservations += storageReservations
-
 		}
 
-		t, _ := time.Parse(time.RFC3339, timestamp)
-		fmt.Println(t)
 	}
 	return resp, nil
 }
 
-// Drop old activity
+// Drop activity that is no longer in the scope of the interval
 func (p *Provider) DeleteActivity() error {
 	stmt, err := p.db.Prepare("DELETE from activity WHERE Period='hour' and Timestamp < ?")
 	t := time.Now().Add(-1 * time.Hour)

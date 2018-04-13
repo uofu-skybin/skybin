@@ -34,7 +34,6 @@ type Provider struct {
 	Homedir         string //move this maybe
 	PrivateKey      *rsa.PrivateKey
 	contracts       []*core.Contract
-	stats           Stats
 	renters         map[string]*RenterInfo
 	mu              sync.Mutex
 	db              *sql.DB
@@ -60,29 +59,18 @@ type Stats struct {
 
 // Structure to cycle activity over a set interval
 type Activity struct {
-	// time interval to truncate time on
-	Interval time.Duration `json:"interval"`
-	// number of activity cycles to save
-	Cycles int `json:"cycles"`
-
-	Timestamps []time.Time `json:"timestamps"`
-
-	BlockUploads   []int64 `json:"blockUploads"`
-	BlockDownloads []int64 `json:"blockDownloads"`
-	BlockDeletions []int64 `json:"blockDeletions"`
-
-	BytesUploaded   []int64 `json:"bytesUploaded"`
-	BytesDownloaded []int64 `json:"bytesDownloaded"`
-
-	StorageReservations []int64 `json:"storageReservations"`
+	Timestamps          []string `json:"timestamps"`
+	BlockUploads        []int64  `json:"blockUploads"`
+	BlockDownloads      []int64  `json:"blockDownloads"`
+	BlockDeletions      []int64  `json:"blockDeletions"`
+	BytesUploaded       []int64  `json:"bytesUploaded"`
+	BytesDownloaded     []int64  `json:"bytesDownloaded"`
+	StorageReservations []int64  `json:"storageReservations"`
 }
-
 type Recents struct {
 	Hour *Summary `json:"hour"`
 	Day  *Summary `json:"day"`
 	Week *Summary `json:"week"`
-	// Period string `json:"period"`
-	// Counters RecentCounters `json:"counters"`
 }
 type Summary struct {
 	BlockUploads        int64 `json:"blockUploads"`
@@ -93,41 +81,6 @@ type Summary struct {
 type getStatsResp struct {
 	RecentSummary   *Recents  `json:"recentSummary"`
 	ActivityCounter *Activity `json:"activityCounters"`
-}
-
-func (provider *Provider) makeStatsResp() *getStatsResp {
-	resp := getStatsResp{
-		ActivityCounter: &provider.stats.Day,
-		RecentSummary: &Recents{
-			Hour: &Summary{
-				BlockUploads:        sum(provider.stats.Hour.BlockUploads),
-				BlockDownloads:      sum(provider.stats.Hour.BlockDownloads),
-				BlockDeletions:      sum(provider.stats.Hour.BlockDeletions),
-				StorageReservations: sum(provider.stats.Hour.StorageReservations),
-			},
-			Day: &Summary{
-				BlockUploads:        sum(provider.stats.Day.BlockUploads),
-				BlockDownloads:      sum(provider.stats.Day.BlockDownloads),
-				BlockDeletions:      sum(provider.stats.Day.BlockDeletions),
-				StorageReservations: sum(provider.stats.Day.StorageReservations),
-			},
-			Week: &Summary{
-				BlockUploads:        sum(provider.stats.Week.BlockUploads),
-				BlockDownloads:      sum(provider.stats.Week.BlockDownloads),
-				BlockDeletions:      sum(provider.stats.Week.BlockDeletions),
-				StorageReservations: sum(provider.stats.Week.StorageReservations),
-			},
-		},
-	}
-	return &resp
-}
-
-func sum(arr []int64) int64 {
-	tot := int64(0)
-	for _, i := range arr {
-		tot += i
-	}
-	return tot
 }
 
 type BlockInfo struct {
@@ -154,8 +107,8 @@ func (provider *Provider) saveSnapshot() error {
 
 	s := snapshot{
 		Contracts: provider.contracts,
-		Stats:     provider.stats,
-		Renters:   provider.renters,
+		// Stats:     provider.stats,
+		Renters: provider.renters,
 	}
 
 	return util.SaveJson(path.Join(provider.Homedir, "snapshot.json"), &s)
@@ -188,29 +141,19 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		}
 
 		provider.contracts = s.Contracts
-		provider.stats = s.Stats
+		// provider.stats = s.Stats
 		provider.renters = s.Renters
 	}
-	// Recalculate storage reserved and used
+	// TODO: Recalculate storage reserved and used
 	// alternatively: store in snapshot and/or move to maintenance
 	// provider.StorageReserved = 0
 	// provider.StorageUsed = 0
 
-	// Use database to calculate this on load
+	//TODO: Use database to calculate this on load
 	for _, r := range provider.renters {
 		provider.StorageReserved += r.StorageReserved
 		provider.StorageUsed += r.StorageUsed
 	}
-
-	// 12 - 5 minute intervals
-	provider.stats.Hour.Interval = time.Minute * 5
-	provider.stats.Hour.Cycles = 12
-	// 24 - 1 hour intervals
-	provider.stats.Day.Interval = time.Hour
-	provider.stats.Day.Cycles = 24
-	// 7 - 1 day intervals
-	provider.stats.Week.Interval = time.Hour * 24
-	provider.stats.Week.Cycles = 7
 
 	privKey, err := loadPrivateKey(path.Join(homedir, "providerid"))
 	if err != nil {
@@ -224,24 +167,17 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 // Add statistics in Time Series format for charting
 func (provider *Provider) addActivity(op string, bytes int64) {
 	t := time.Now()
-	hour := t.Truncate(provider.stats.Hour.Interval)
-	day := t.Truncate(provider.stats.Day.Interval)
-	week := t.Truncate(provider.stats.Week.Interval)
+	hour := t.Truncate(time.Minute * 5)
+	day := t.Truncate(time.Hour)
+	week := t.Truncate(time.Hour * 24)
 
+	// if activity for this interval does not already exist create it
 	provider.InsertActivity("hour", hour)
 	provider.InsertActivity("day", day)
 	provider.InsertActivity("week", week)
 
 	provider.DeleteActivity()
 
-	// metrics := []*Activity{&provider.stats.Hour, &provider.stats.Day, &provider.stats.Week}
-	// metrics := [["hour", provider.stats.Day.Interval]]
-	// for _, act := range metrics {
-	// add and cycle activity within metric as needed
-	// act.cycleActivity()
-
-	// update data in current frame
-	// idx := len(act.Timestamps) - 1
 	if op == "upload" {
 		provider.UpdateActivity("hour", hour, "BlockUploads", 1)
 		provider.UpdateActivity("day", day, "BlockUploads", 1)
@@ -251,8 +187,8 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 		provider.UpdateActivity("day", day, "BytesUploaded", bytes)
 		provider.UpdateActivity("week", week, "BytesUploaded", bytes)
 
-		// act.BlockUploads[idx]++
-		// act.BytesUploaded[idx] += bytes
+		provider.TotalBlocks++
+		provider.StorageUsed += bytes
 	}
 	if op == "download" {
 		provider.UpdateActivity("hour", hour, "BlockDownloads", 1)
@@ -262,80 +198,21 @@ func (provider *Provider) addActivity(op string, bytes int64) {
 		provider.UpdateActivity("hour", hour, "BytesDownloaded", bytes)
 		provider.UpdateActivity("day", day, "BytesDownloaded", bytes)
 		provider.UpdateActivity("week", week, "BytesDownloaded", bytes)
-		// 	act.BlockDownloads[idx]++
-		// 	act.BytesDownloaded[idx] += bytes
 	}
 	if op == "delete" {
 		provider.UpdateActivity("hour", hour, "BlockDeletions", 1)
 		provider.UpdateActivity("day", day, "BlockDeletions", 1)
 		provider.UpdateActivity("week", week, "BlockDeletions", 1)
-		// act.BlockDeletions[idx]++
+
+		provider.TotalBlocks--
+		provider.StorageUsed -= bytes
 	}
 	if op == "contract" {
 		provider.UpdateActivity("hour", hour, "StorageReservations", 1)
 		provider.UpdateActivity("day", day, "StorageReservations", 1)
 		provider.UpdateActivity("week", week, "StorageReservations", 1)
-		// act.StorageReservations[idx]++
-	}
-	// }
-	// update provider information
-	if op == "upload" {
-		provider.TotalBlocks++
-		provider.StorageUsed += bytes
-	}
-	if op == "delete" {
-		provider.TotalBlocks--
-		provider.StorageUsed -= bytes
-	}
-	if op == "contract" {
+
 		provider.StorageReserved += bytes
-	}
-
-}
-
-// takes in a pointer to an activity cycle and adds any new activity cycles
-// and discards old cycles
-func (act *Activity) cycleActivity() {
-
-	// Round current time to nearest time increment
-	t := time.Now()
-	t = t.Truncate(act.Interval)
-
-	var currTime time.Time
-	// if no timestamps set to oldest interval within the frame
-	if len(act.Timestamps) == 0 {
-		currTime = t.Add(-1 * act.Interval * time.Duration(act.Cycles))
-	} else {
-		currTime = act.Timestamps[len(act.Timestamps)-1]
-	}
-	// Fill in empty intervals from most recent frame with 0's
-	for currTime != t {
-		currTime = currTime.Add(act.Interval)
-		act.Timestamps = append(act.Timestamps, currTime)
-
-		act.BlockUploads = append(act.BlockUploads, 0)
-		act.BlockDownloads = append(act.BlockDownloads, 0)
-		act.BlockDeletions = append(act.BlockDeletions, 0)
-
-		act.BytesUploaded = append(act.BytesUploaded, 0)
-		act.BytesDownloaded = append(act.BytesDownloaded, 0)
-
-		act.StorageReservations = append(act.StorageReservations, 0)
-	}
-
-	// Discard any out of frame cycles
-	if len(act.Timestamps) > act.Cycles {
-		idx := len(act.Timestamps) - act.Cycles
-		act.Timestamps = act.Timestamps[idx:]
-
-		act.BlockUploads = act.BlockUploads[idx:]
-		act.BlockDownloads = act.BlockDownloads[idx:]
-		act.BlockDeletions = act.BlockDeletions[idx:]
-
-		act.BytesUploaded = act.BytesUploaded[idx:]
-		act.BytesDownloaded = act.BytesDownloaded[idx:]
-
-		act.StorageReservations = act.StorageReservations[idx:]
 	}
 }
 
@@ -394,7 +271,7 @@ func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, e
 // Currently called after forming every contract could also be moved into maintenance
 // (It will still need to be called in the postInfo method)
 func (provider *Provider) UpdateMeta() error {
-	provider.makeStats()
+	// provider.makeStats()
 	pubKeyBytes, err := ioutil.ReadFile(provider.Config.PublicKeyFile)
 	if err != nil {
 		log.Fatal("Could not read public key file. Error: ", err)
@@ -416,4 +293,47 @@ func (provider *Provider) UpdateMeta() error {
 		return fmt.Errorf("Error updating provider: %s", err)
 	}
 	return nil
+}
+
+// Initializes an empty stats response
+func (provider *Provider) makeStatsResp() *getStatsResp {
+	var timestamps []string
+	t := time.Now().Truncate(time.Hour)
+	currTime := t.Add(-1 * time.Hour * 24)
+	for currTime != t {
+		currTime = currTime.Add(time.Hour)
+		timestamps = append(timestamps, currTime.Format(time.RFC3339))
+	}
+	resp := getStatsResp{
+		ActivityCounter: &Activity{
+			Timestamps:          timestamps,
+			BlockUploads:        make([]int64, 24),
+			BlockDownloads:      make([]int64, 24),
+			BlockDeletions:      make([]int64, 24),
+			BytesUploaded:       make([]int64, 24),
+			BytesDownloaded:     make([]int64, 24),
+			StorageReservations: make([]int64, 24),
+		},
+		RecentSummary: &Recents{
+			Hour: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Day: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+			Week: &Summary{
+				BlockUploads:        0,
+				BlockDownloads:      0,
+				BlockDeletions:      0,
+				StorageReservations: 0,
+			},
+		},
+	}
+	return &resp
 }

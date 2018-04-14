@@ -146,6 +146,7 @@ func runProviderInit(args ...string) {
 		PricingPolicy:  provider.DefaultPricingPolicy,
 		MinStorageRate: provider.DefaultMinStorageRate,
 		StorageRate:    provider.DefaultMinStorageRate,
+		MaxStorageRate: provider.DefaultMaxStorageRate,
 	}
 	if len(*metaAddrFlag) > 0 {
 		err = util.ValidateNetAddr(*metaAddrFlag)
@@ -208,8 +209,6 @@ func runProviderInit(args ...string) {
 		if config.StorageRate > config.MaxStorageRate {
 			config.StorageRate = config.MaxStorageRate
 		}
-	} else {
-		config.MaxStorageRate = 10000
 	}
 
 	// Register with metaserver

@@ -208,6 +208,8 @@ func runProviderInit(args ...string) {
 		if config.StorageRate > config.MaxStorageRate {
 			config.StorageRate = config.MaxStorageRate
 		}
+	} else {
+		config.MaxStorageRate = 10000
 	}
 
 	// Register with metaserver

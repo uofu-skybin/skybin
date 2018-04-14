@@ -34,6 +34,7 @@ type Info struct {
 	StorageReserved  int64  `json:"storageReserved"`
 	StorageUsed      int64  `json:"storageUsed"`
 	StorageFree      int64  `json:"storageFree"`
+	StorageRate      int64  `json:"storageRate"`
 	TotalContracts   int    `json:"totalContracts"`
 	TotalBlocks      int    `json:"totalBlocks"`
 	TotalRenters     int    `json:"totalRenters"`
@@ -195,6 +196,7 @@ func (provider *Provider) GetPublicInfo() *Info {
 		StorageUsed:      provider.StorageUsed,
 		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
 		TotalContracts:   provider.TotalContracts,
+		StorageRate:      provider.Config.StorageRate,
 		TotalRenters:     len(provider.renters),
 		TotalBlocks:      provider.TotalBlocks,
 	}

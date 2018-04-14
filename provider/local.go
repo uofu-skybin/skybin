@@ -97,8 +97,11 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.provider.Config.SpaceAvail = params.SpaceAvail
-	server.provider.Config.StorageRate = params.StorageRate
+	server.provider.Config.MinStorageRate = params.MinStorageRate
+	server.provider.Config.MaxStorageRate = params.MaxStorageRate
 	server.provider.Config.PublicApiAddr = params.PublicApiAddr
+	server.provider.Config.PricingPolicy = params.PricingPolicy
+	server.provider.updatePricing()
 	// Maybe allow this to be mutated (whether or not we display in UI)
 	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
 

@@ -48,7 +48,7 @@ func auditBlock(addr, renterID, blockID, nonce string) (hash string, err error) 
 
 func (server *MetaServer) startAuditRunner() {
 	// Frequency at which the runner should be triggered (should probably put this in a config file)
-	runnerFrequency := time.Minute * 1
+	runnerFrequency := time.Minute * 5
 
 	// Ticker triggering the runner.
 	ticker := time.NewTicker(runnerFrequency)
@@ -73,30 +73,30 @@ func (server *MetaServer) runAudits() error {
 
 	// For each file...
 	for _, file := range files {
-		server.logger.Println("Auditing blocks for file", file.ID)
+		// server.logger.Println("Auditing blocks for file", file.ID)
 
 		// Audit each version of the file...
 		for _, version := range file.Versions {
-			server.logger.Println("Auditing version", version.Num)
+			// server.logger.Println("Auditing version", version.Num)
 
 			// Check that each block of the stored version is still stored properly.
 			for i, block := range version.Blocks {
-				server.logger.Println("Auditing block", block.ID)
+				// server.logger.Println("Auditing block", block.ID)
 
 				nonceToUse := rand.Intn(len(block.Audits))
 				audit := block.Audits[nonceToUse]
 				res, err := auditBlock(block.Location.Addr, file.OwnerID, block.ID, audit.Nonce)
 				if err != nil {
-					server.logger.Println("Error auditing block:", err)
+					// server.logger.Println("Error auditing block:", err)
 
 					version.Blocks[i].AuditPassed = false
 					continue
 				}
 				if res != audit.ExpectedHash {
-					server.logger.Println("Audit failed")
+					// server.logger.Println("Audit failed")
 					version.Blocks[i].AuditPassed = false
 				} else {
-					server.logger.Println("Audit passed")
+					// server.logger.Println("Audit passed")
 					version.Blocks[i].AuditPassed = true
 				}
 			}

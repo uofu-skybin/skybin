@@ -110,6 +110,8 @@ type Block struct {
 	Location BlockLocation `json:"location"`
 	// Audits to be used to check the block's integrity
 	Audits []BlockAudit `json:"audits"`
+	// Whether or not the last audit passed.
+	AuditPassed bool `json:"auditPassed"`
 }
 
 // Permission provides access to a file to a non-owning user

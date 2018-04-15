@@ -303,8 +303,15 @@ function showNodeInfo(nodeId) {
                 if (block.location.providerId == provider.id) {
                     blockStored = true;
                     let listItem = $('<li>');
-                    listItem.append(block.id);
-                    listItem.click(copyToClipboard);
+                    if (block.auditPassed) {
+                        listItem.append('<i title="block verified" class="fas fa-check-circle text-success"></i> ');
+                    } else {
+                        listItem.append('<i title="block corrupt" class="fas fa-times-circle text-danger"></i> ');
+                    }
+                    let idSpan = $('<span>');
+                    idSpan.append(block.id);
+                    idSpan.click(copyToClipboard);
+                    listItem.append(idSpan);
                     blockList.append(listItem);
                 }
             }

@@ -197,6 +197,9 @@ function updateNetworkAndNodeDetails() {
     }
 }
 
+// Set of blocks that we are currently auditing.
+let auditing = {};
+
 function showNodeInfo(nodeId) {
     /** 
      * Display information about the node in the given parameters.
@@ -308,6 +311,26 @@ function showNodeInfo(nodeId) {
                     } else {
                         listItem.append('<i title="block corrupt" class="fas fa-times-circle text-danger"></i> ');
                     }
+
+                    let integrityIcon = $('<i>')
+                    integrityIcon.addClass('fas');
+                    integrityIcon.on(
+                        'click',
+                        { fileId: file.id, blockId: block.id},
+                        checkIntegrity
+                    );
+                    integrityIcon.addClass('text-primary');
+                    if (!auditing[block.id]) {
+                        integrityIcon.addClass('fa-question-circle');
+                        integrityIcon.prop('title', 'check block integrity')
+                    } else {
+                        integrityIcon.addClass('fa-spinner');
+                        integrityIcon.addClass('fa-spin');
+                        integrityIcon.prop('title', 'checking block integrity')
+                    }
+
+                    listItem.append(integrityIcon);
+
                     let idSpan = $('<span>');
                     idSpan.append(block.id);
                     idSpan.click(copyToClipboard);
@@ -328,6 +351,24 @@ function showNodeInfo(nodeId) {
         $('#provider-info').show();
         $("#file-list-container").css("max-height", $("#node-info").height()-$("#provider-info").height()-$("#general-info").height());
     }
+}
+
+function checkIntegrity(event) {
+    $(this).removeClass('fa-question-circle');
+    $(this).addClass('fa-spinner');
+    $(this).addClass('fa-spin');
+    $(this).prop('title', 'checking block integrity')
+    auditing[event.data.blockId] = true;
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            delete auditing[event.data.blockId];
+        }
+    }
+    // Get data from metaserver.
+    xhttp.open("POST", "/dashboard/audit/" + event.data.fileId + "/" + event.data.blockId, true)
+    xhttp.send()
 }
 
 function updateNodeInfo() {

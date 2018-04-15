@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 // TODO: Refactor these into their own package inside of the provider.
@@ -108,4 +110,51 @@ func (server *MetaServer) runAudits() error {
 	}
 
 	return nil
+}
+
+type dashboardAuditResp struct {
+	Success bool `json:"success"`
+}
+
+func (server *MetaServer) getDashboardAuditHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		params := mux.Vars(r)
+
+		file, err := server.db.FindFileByID(params["fileID"])
+		if err != nil {
+			writeErr(err.Error(), http.StatusBadRequest, w)
+			return
+		}
+
+		if len(file.Versions) < 1 {
+			writeErr("file has no stored versions", http.StatusBadRequest, w)
+			return
+		}
+
+		latestVersion := file.Versions[len(file.Versions)-1]
+		for i, block := range latestVersion.Blocks {
+			if block.ID == params["blockID"] {
+				nonceToUse := rand.Intn(len(block.Audits))
+				audit := block.Audits[nonceToUse]
+				res, err := auditBlock(block.Location.Addr, file.OwnerID, block.ID, audit.Nonce)
+				if err != nil {
+					latestVersion.Blocks[i].AuditPassed = false
+				}
+				if res != audit.ExpectedHash {
+					latestVersion.Blocks[i].AuditPassed = false
+				} else {
+					latestVersion.Blocks[i].AuditPassed = true
+				}
+				err = server.db.UpdateFileVersion(file.ID, &latestVersion)
+				if err != nil {
+					writeAndLogInternalError(err, w, server.logger)
+					return
+				}
+				resp := dashboardAuditResp{latestVersion.Blocks[i].AuditPassed}
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
 }

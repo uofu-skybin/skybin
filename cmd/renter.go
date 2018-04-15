@@ -251,7 +251,7 @@ func runRenterDaemon(args ...string) {
 	logger := log.New(logfile, "", log.LstdFlags)
 
 	r.SetLogger(logger)
-	r.StartThreads()
+	r.StartBackgroundThreads()
 
 	log.Println("starting renter server at", addr)
 	server := renter.NewServer(r, logger)

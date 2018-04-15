@@ -50,7 +50,7 @@ type Renter struct {
 	// view of every file and contract we store locally. However, the
 	// opposite is not necessarily true; we may not have an up-to-date
 	// view of everything the metaserver stores on our behalf.
-	metaClient *metaserver.Client
+	metaClient     *metaserver.Client
 
 	storageManager *storageManager
 
@@ -59,10 +59,11 @@ type Renter struct {
 	blocksToDelete []*core.Block
 
 	// Queue for batches of downloads to be performed by the download thread.
-	downloadQ chan []*fileDownload
-	uploadQ   chan *fileUpload
-	logger    *log.Logger
-	mu        sync.RWMutex
+	downloadQ      chan []*fileDownload
+	uploadQ        chan *fileUpload
+	restoreQ       chan *recoveredBlockBatch
+	logger         *log.Logger
+	mu             sync.RWMutex
 }
 
 // snapshot stores a renter's serialized state
@@ -81,6 +82,12 @@ type storageBlob struct {
 	ContractId string // The contract the blob is associated with
 }
 
+var (
+	// Indicates that a block download has failed because
+	// the block contents are incorrect.
+	errBlockCorrupted = errors.New("Block corrupted")
+)
+
 func LoadFromDisk(homedir string) (*Renter, error) {
 
 	renter := &Renter{
@@ -89,6 +96,7 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 		blocksToDelete: make([]*core.Block, 0),
 		downloadQ:      make(chan []*fileDownload),
 		uploadQ:        make(chan *fileUpload),
+		restoreQ:      make(chan *recoveredBlockBatch),
 		logger:         log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 
@@ -129,14 +137,16 @@ func LoadFromDisk(homedir string) (*Renter, error) {
 	return renter, err
 }
 
-func (r *Renter) StartThreads() {
+func (r *Renter) StartBackgroundThreads() {
 	go r.downloadThread()
 	go r.uploadThread()
+	go r.blockRestoreThread()
 }
 
 func (r *Renter) ShutdownThreads() {
 	close(r.downloadQ)
 	close(r.uploadQ)
+	close(r.restoreQ)
 }
 
 func (r *Renter) SetLogger(logger *log.Logger) {
@@ -655,6 +665,30 @@ func (r *Renter) ListContracts() ([]*core.Contract, error) {
 		return nil, err
 	}
 	return contracts, nil
+}
+
+func (r *Renter) updateFileVersion(fileId string, versionNum int, newVersion *core.Version) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+	file, err := r.GetFile(fileId)
+	if err != nil {
+		return err
+	}
+	for idx := 0; idx < len(file.Versions); idx++ {
+		if file.Versions[idx].Num == versionNum {
+			oldCpy := file.Versions[idx]
+			file.Versions[idx] = *newVersion
+			err = r.metaClient.UpdateFile(r.Config.RenterId, file)
+			if err != nil {
+				file.Versions[idx] = oldCpy
+				return err
+			}
+			return nil
+		}
+	}
+	return errors.New("version does not exist")
 }
 
 func (r *Renter) saveFile(f *core.File) error {

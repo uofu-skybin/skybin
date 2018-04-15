@@ -128,6 +128,11 @@ func (bd *blockDownload) cleanup() {
 	os.Remove(bd.destFile.Name())
 }
 
+const (
+	maxConcurrentDownloads = 8
+	maxOpenFiles           = 256
+)
+
 func (r *Renter) Download(fileId string, destPath string, versionNum *int) (*DownloadStats, error) {
 	file, err := r.GetFile(fileId)
 	if err != nil {
@@ -236,11 +241,6 @@ func (r *Renter) performDirDownload(dir *core.File, destPath string) ([]*FileDow
 	}
 	return allFileStats, nil
 }
-
-const (
-	maxConcurrentDownloads = 8
-	maxOpenFiles           = 256
-)
 
 // Main thread for downloads. Dequeues and performs batches of downloads,
 // maintaining limits on concurrency and the number of temporary files
@@ -381,11 +381,11 @@ func downloadBlock(client *provider.Client, ownerID string, block *core.Block, d
 		return fmt.Errorf("Cannot write block to local file. Error: %s", err)
 	}
 	if n != block.Size {
-		return errors.New("Corrupted block: block has incorrect size.")
+		return errBlockCorrupted
 	}
 	blockHash := base64.URLEncoding.EncodeToString(h.Sum(nil))
 	if blockHash != block.Sha256Hash {
-		return errors.New("Corrupted block: block hash does not match that expected.")
+		return errBlockCorrupted
 	}
 	return nil
 }
@@ -399,8 +399,42 @@ func (r *Renter) performDownload(download *fileDownload, blockQ chan *blockDownl
 	totalTimeMs := toMilliseconds(endTime.Sub(startTime))
 	download.stats.TotalTimeMs = totalTimeMs
 
-	// Remove temp files
-	download.cleanup()
+	if download.failedBlocks == 0 {
+		download.cleanup()
+		return
+	}
+
+	// Blocks that were corrupted but recovered via erasure coding
+	// need to be submitted to the restore Q to be uploaded to new
+	// providers.
+	// TODO: This only recovers data blocks. recover parity blocks as well
+	restoreNeeded := false
+	for idx, blockDownload := range download.blockDownloads {
+		if idx < download.version.NumDataBlocks && blockDownload.err == errBlockCorrupted {
+			restoreNeeded = true
+			break
+		}
+	}
+	if !restoreNeeded {
+		download.cleanup()
+		return
+	}
+	batch := &recoveredBlockBatch{
+		file:    *download.file,
+		version: *download.version,
+	}
+	for idx, blockDownload := range download.blockDownloads {
+		if idx < download.version.NumDataBlocks && blockDownload.err == errBlockCorrupted {
+			rc := &recoveredBlock{
+				block:    *blockDownload.block,
+				contents: blockDownload.destFile,
+			}
+			batch.blocks = append(batch.blocks, rc)
+		} else {
+			blockDownload.cleanup()
+		}
+	}
+	go func() { r.restoreQ <- batch }()
 }
 
 func (r *Renter) doPerformDownload(download *fileDownload, blockQ chan *blockDownload) {
@@ -458,15 +492,16 @@ func (r *Renter) doPerformDownload(download *fileDownload, blockQ chan *blockDow
 		return
 	}
 
-	err := finishDownload(download)
+	err := reconstructFile(download)
 	if err != nil {
 		download.err = err
+		return
 	}
 }
 
 // Completes a download by reconstructing the file from the downloaded
 // blocks and placing it at the destination path.
-func finishDownload(download *fileDownload) error {
+func reconstructFile(download *fileDownload) error {
 	var blockFiles []*os.File
 	for _, blockDownload := range download.blockDownloads {
 		blockFiles = append(blockFiles, blockDownload.destFile)

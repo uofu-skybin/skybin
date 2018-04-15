@@ -312,12 +312,12 @@ def init_renter(homedir, alias, metaserver_addr, api_addr):
 def start_renter(homedir):
     with open(os.path.join(homedir, 'config.json')) as f:
         config = json.load(f)
-    api_addr = config['apiAddress']    
+    api_addr = config['apiAddress']
     env = os.environ.copy()
     env['SKYBIN_RENTER_HOME'] = homedir
     args = [SKYBIN_CMD, 'renter', 'daemon']
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-    return RenterService(process=process, address=api_addr, homedir=homedir)    
+    return RenterService(process=process, address=api_addr, homedir=homedir)
 
 def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*1024*1024*1024):
     """Set up a skybin provider directory"""
@@ -343,7 +343,7 @@ def start_provider(homedir, disable_local_api=True):
     if disable_local_api:
         args.append('--disable-local-api')
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-    return Service(process=process, address=api_addr, homedir=homedir, env=env)    
+    return Service(process=process, address=api_addr, homedir=homedir, env=env)
 
 def create_renter(metaserver_addr, repo_dir, alias):
     """Create and start a new renter instance."""
@@ -358,14 +358,6 @@ def create_renter(metaserver_addr, repo_dir, alias):
         api_addr=api_addr
     )
     return start_renter(homedir)
-
-    # # Start renter server
-    # env = os.environ.copy()
-    # env['SKYBIN_RENTER_HOME'] = homedir
-    # args = [SKYBIN_CMD, 'renter', 'daemon']
-    # process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-
-    # return RenterService(process=process, address=api_addr, homedir=homedir)
 
 def create_provider(metaserver_addr, repo_dir,
                     api_addr=None,
@@ -384,14 +376,6 @@ def create_provider(metaserver_addr, repo_dir,
         storage_space=storage_space,
     )
     return start_provider(homedir)
-
-    # Start the provider daemon with no local API
-    # env = os.environ.copy()
-    # env['SKYBIN_PROVIDER_HOME'] = homedir
-    # args = [SKYBIN_CMD, 'provider', 'daemon', '--disable-local-api']
-    # process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-
-    # return Service(process=process, address=api_addr, homedir=homedir, env=env)
 
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,

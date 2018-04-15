@@ -456,8 +456,9 @@ func (r *Renter) performUpload(upload *fileUpload, blockQ chan *blockUpload) {
 
 	finishedUploads := []*blockUpload{}
 	blobsToReturn := []*storageBlob{}
+	offlineProviders := map[string]bool{}
 	for len(pendingUploads) > 0 {
-		blobs, err := r.storageManager.FindStorage(len(pendingUploads), upload.blockSize)
+		blobs, err := r.storageManager.FindStorageExclude(len(pendingUploads), upload.blockSize, offlineProviders)
 		if err != nil {
 			upload.err = err
 			break
@@ -479,15 +480,11 @@ func (r *Renter) performUpload(upload *fileUpload, blockQ chan *blockUpload) {
 		}
 		successes, failures := doBlockUploads(pendingUploads, blockQ)
 		finishedUploads = append(finishedUploads, successes...)
-		offlinePvdrs := []string{}
 		for _, failure := range failures {
 			r.logger.Printf("Error uploading block %s for file %s to provider %s: %s\n",
 				failure.block.ID, upload.destPath, failure.blob.ProviderId, failure.err)
 			blobsToReturn = append(blobsToReturn, failure.blob)
-			offlinePvdrs = append(offlinePvdrs, failure.blob.ProviderId)
-		}
-		if len(offlinePvdrs) > 0 {
-			r.storageManager.MarkProvidersOffline(offlinePvdrs, time.Now().Add(time.Minute))
+			offlineProviders[failure.blob.ProviderId] = true
 		}
 		pendingUploads = failures
 	}

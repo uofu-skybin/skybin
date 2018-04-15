@@ -23,11 +23,6 @@ type storageManager struct {
 	// one associated blob in this list.
 	freelist []*storageBlob
 
-	// Set of providers currently marked "offline" which are
-	// are not to be returned with a call to FindStorage.
-	// Maps provider IDs to the time at which the provider
-	// can be used again.
-	offlinePvdrs    map[string]time.Time
 	updateFn        func() ([]*storageBlob, error)
 	updateFreq      time.Duration
 	lastCacheUpdate time.Time
@@ -53,7 +48,6 @@ func newStorageManager(
 
 	return &storageManager{
 		freelist:     blobs,
-		offlinePvdrs: make(map[string]time.Time),
 		updateFn:     updateFn,
 		updateFreq:   updateFreq,
 		clock:        clock,
@@ -86,38 +80,19 @@ func (sm *storageManager) AddBlobs(blobs []*storageBlob) {
 	sm.mu.Unlock()
 }
 
-// Find storage blobs for use in an upload.
+// Finds storage blobs for use in an upload.
 func (sm *storageManager) FindStorage(nblobs int, blobSize int64) ([]*storageBlob, error) {
+	return sm.FindStorageExclude(nblobs, blobSize, map[string]bool{})
+}
+
+// Finds storage blobs for use in an upload. Does not return blobs located
+// with providers whose IDs are in the given set.
+func (sm *storageManager) FindStorageExclude(nblobs int, blobSize int64, providers map[string]bool) ([]*storageBlob, error) {
 	sm.mu.Lock()
 	sm.maybeUpdateCache()
-	sm.updateOfflineProviders()
-	blobs, err := sm.findStorage(nblobs, blobSize)
+	blobs, err := sm.findStorage(nblobs, blobSize, providers)
 	sm.mu.Unlock()
 	return blobs, err
-}
-
-// Mark a set of providers as "offline" until the given time.
-// Storage blobs associated with offline providers will not be
-// returned with a call to FindStorage.
-func (sm *storageManager) MarkProvidersOffline(pvdrIds []string, until time.Time) {
-	sm.mu.Lock()
-	for _, pvdrId := range pvdrIds {
-		t, exists := sm.offlinePvdrs[pvdrId]
-		if !exists || t.Before(until) {
-			t = until
-		}
-		sm.offlinePvdrs[pvdrId] = t
-	}
-	sm.mu.Unlock()
-}
-
-func (sm *storageManager) updateOfflineProviders() {
-	now := sm.clock.Now()
-	for pvdrId, t := range sm.offlinePvdrs {
-		if t.Before(now) {
-			delete(sm.offlinePvdrs, pvdrId)
-		}
-	}
 }
 
 func (sm *storageManager) addBlob(blob *storageBlob) {
@@ -135,7 +110,7 @@ type candidate struct {
 	idx int // Index of the blob in the freelist
 }
 
-func (sm *storageManager) findCandidates(blobSize int64) []candidate {
+func (sm *storageManager) findCandidates(blobSize int64, excludedProviders map[string]bool) []candidate {
 	if len(sm.freelist) == 0 {
 		return nil
 	}
@@ -148,8 +123,8 @@ func (sm *storageManager) findCandidates(blobSize int64) []candidate {
 		idx := curr % len(sm.freelist)
 		blob := sm.freelist[idx]
 		if blob.Amount >= blobSize {
-			_, isOffline := sm.offlinePvdrs[blob.ProviderId]
-			if !isOffline {
+			_, isExcluded := excludedProviders[blob.ProviderId]
+			if !isExcluded {
 				candidates = append(candidates, candidate{
 					storageBlob: blob,
 					idx:         idx,
@@ -161,8 +136,8 @@ func (sm *storageManager) findCandidates(blobSize int64) []candidate {
 	return candidates
 }
 
-func (sm *storageManager) findStorage(nblobs int, blobSize int64) ([]*storageBlob, error) {
-	candidates := sm.findCandidates(blobSize)
+func (sm *storageManager) findStorage(nblobs int, blobSize int64, excludedProviders map[string]bool) ([]*storageBlob, error) {
+	candidates := sm.findCandidates(blobSize, excludedProviders)
 	blobs := []*storageBlob{}
 
 	for i := 0; len(blobs) < nblobs && len(candidates) > 0; {

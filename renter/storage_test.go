@@ -228,7 +228,7 @@ func TestFindStorage_Fuzz(t *testing.T) {
 	}
 }
 
-func TestMarkProvidersOffline(t *testing.T) {
+func TestExcludeProviders(t *testing.T) {
 	mc := mockClock{time.Now()}
 	sm := newStorageManager([]*storageBlob{}, noOpUpdateFn, time.Minute, &mc)
 	for i := 0; i < 10; i++ {
@@ -238,18 +238,19 @@ func TestMarkProvidersOffline(t *testing.T) {
 			ContractId: fmt.Sprintf("c%d", i),
 		})
 	}
-	sm.MarkProvidersOffline([]string{"p1", "p2", "p7"}, time.Now().Add(5 * time.Minute))
-	_, err := sm.FindStorage(7, 1024)
+	excluded := map[string]bool{
+		"p1": true,
+		"p2": true,
+		"p7": true,
+	}
+	_, err := sm.FindStorageExclude(7, 1024, excluded)
 	if err != nil {
 		t.Fatal("failed to find storage")
 	}
-	_, err = sm.FindStorage(1, 1024)
+	_, err = sm.FindStorageExclude(1, 1024, excluded)
 	if err == nil {
 		t.Fatal("found storage with offline provider")
 	}
-
-	// Advance the clock
-	mc.nextTime = time.Now().Add(10 * time.Minute)
 
 	_, err = sm.FindStorage(3, 1024)
 	if err != nil {
@@ -257,29 +258,3 @@ func TestMarkProvidersOffline(t *testing.T) {
 	}
 }
 
-func TestMarkProvidersOffline_Duplicates(t *testing.T) {
-	mc := mockClock{time.Now()}
-	sm := newStorageManager([]*storageBlob{}, noOpUpdateFn, time.Minute, &mc)
-	for i := 0; i < 10; i++ {
-		sm.AddBlob(&storageBlob{
-			ProviderId: fmt.Sprintf("p%d", i),
-			Amount: 1024,
-			ContractId: fmt.Sprintf("c%d", i),
-		})
-	}
-	sm.MarkProvidersOffline([]string{"p1", "p2"}, time.Now().Add(5 * time.Minute))
-	sm.MarkProvidersOffline([]string{"p2", "p3"}, time.Now().Add(5 * time.Minute))
-	_, err := sm.FindStorage(7, 1024)
-	if err != nil {
-		t.Fatal("failed to find storage")
-	}
-	_, err = sm.FindStorage(1, 512)
-	if err == nil {
-		t.Fatal("found storage with offline provider")
-	}
-	mc.nextTime = time.Now().Add(time.Hour)
-	_, err = sm.FindStorage(6, 512)
-	if err != nil {
-		t.Fatal("failed to find storage")
-	}
-}

@@ -80,11 +80,45 @@ def fuzz_lost_blocks(ctxt, renter):
         renter.download_file(file_info['id'], output_path)
         is_match = filecmp.cmp(input_path, output_path)
         ctxt.assert_true(is_match, 'download does not match upload after removing several blocks')
+
+def fuzz_corrupted_blocks(ctxt, renter):
+    renter.reserve_space(10*1024*1024*1024)
+    for _ in range(5):
+        input_path = ctxt.create_test_file(size=random.randint(1, 25*1024*1024))
+        file_info = renter.upload_file(input_path, ctxt.relpath(input_path))
+
+        file_version = file_info['versions'][-1]
+        data_blocks = file_version['blocks'][:file_version['numDataBlocks']]
+        parity_blocks = file_version['blocks'][file_version['numDataBlocks']:]
+        num_blocks_to_corrupt = random.randint(1, len(parity_blocks))
+        num_parity_to_corrupt = random.randint(0, len(parity_blocks) - num_blocks_to_corrupt)
+        data_blocks_to_corrupt = random.sample(data_blocks, num_blocks_to_corrupt)
+        parity_blocks_to_corrupt = random.sample(parity_blocks, num_parity_to_corrupt)
+        blocks_to_corrupt = data_blocks_to_corrupt + parity_blocks_to_corrupt
+
+        renter_id = renter.get_info()['id']
+        for block in blocks_to_corrupt:
+            ctxt.log('corrupting block {}'.format(block['id']))
+            location = block['location']
+            addr = location['address']
+            pvdr = next(p for p in ctxt.providers if p.address  == addr)
+            block_location = os.path.join(pvdr.homedir, 'blocks', renter_id, block['id'])
+            with open(block_location, 'r+') as f:
+                f.seek(random.randint(0, block['size']))
+                amt = random.randint(1, 128)
+                f.write(str(os.urandom(amt)))
+
+        output_path = ctxt.create_output_path()
+        renter.download_file(file_info['id'], output_path)
+        is_match = filecmp.cmp(input_path, output_path)
+        ctxt.assert_true(is_match, 'download does not match upload after corrupting several blocks')
+
 def file_recovery_test(ctxt, args):
-    assert len(ctxt.additional_renters) >= 3
+    assert len(ctxt.additional_renters) >= 4
     test_all_blocks_inaccessible(ctxt, ctxt.additional_renters[0])
     fuzz_inaccessible_blocks(ctxt, ctxt.additional_renters[1])
     fuzz_lost_blocks(ctxt, ctxt.additional_renters[2])
+    fuzz_corrupted_blocks(ctxt, ctxt.additional_renters[3])
 
 def main():
     parser = argparse.ArgumentParser()
@@ -93,7 +127,7 @@ def main():
     args = parser.parse_args()
     ctxt = setup_test(
         num_providers=args.num_providers,
-        num_additional_renters=3,
+        num_additional_renters=4,
     )
     try:
         ctxt.log('file recovery test')

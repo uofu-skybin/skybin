@@ -141,6 +141,8 @@ func (r *Renter) restoreBlockBatch(batch *recoveredBlockBatch) {
 				ContractId: blob.ContractId,
 			}
 			newVersion.Blocks[newBlock.Num] = newBlock
+			r.logger.Printf("block recovery thread: restored block %s for file %s\n",
+				badBlock.block.ID, batch.file.Name)
 		}
 		stillBadBlocks := []*recoveredBlock{}
 		for idx := range failures {
@@ -177,4 +179,5 @@ func (r *Renter) restoreBlockBatch(batch *recoveredBlockBatch) {
 		r.logger.Printf("block recovery thread: error updating file version %d for file %s: %s\n",
 			batch.version.Num, batch.file.Name, err)
 	}
+	r.logger.Printf("block recovery thread: restored all blocks for file %s\n", batch.file.Name)
 }

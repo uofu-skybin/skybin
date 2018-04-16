@@ -26,11 +26,16 @@ type CreatePaypalPaymentResp struct {
 
 func (server *MetaServer) getCreatePaypalPaymentHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Perform validation on the amount we recieve.
 		var payload CreatePaypalPaymentReq
 		err := json.NewDecoder(r.Body).Decode(&payload)
 		if err != nil {
 			writeErr("Could not parse payload", http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the amount is greater than 0.
+		if payload.Amount <= 0 {
+			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
 			return
 		}
 
@@ -200,6 +205,12 @@ func (server *MetaServer) getRenterPaypalWithdrawHandler() http.HandlerFunc {
 			return
 		}
 
+		// Make sure the user is trying to withdraw a positive amount.
+		if payload.Amount <= 0 {
+			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
+			return
+		}
+
 		claims, err := util.GetTokenClaimsFromRequest(r)
 		if err != nil {
 			writeAndLogInternalError(err, w, server.logger)
@@ -310,6 +321,12 @@ func (server *MetaServer) getProviderPaypalWithdrawHandler() http.HandlerFunc {
 
 		if payload.Email == "" {
 			writeErr("Must supply email", http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the user is trying to withdraw a positive amount.
+		if payload.Amount <= 0 {
+			writeErr("Must withdraw more than 0 cents", http.StatusBadRequest, w)
 			return
 		}
 

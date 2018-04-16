@@ -595,6 +595,7 @@ func (r *Renter) makeNewFile(up *fileUpload) (*core.File, error) {
 	file := &core.File{
 		ID:         fileId,
 		OwnerID:    r.Config.RenterId,
+		OwnerAlias: r.Config.Alias,
 		Name:       up.destPath,
 		IsDir:      false,
 		AccessList: []core.Permission{},

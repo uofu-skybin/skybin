@@ -526,7 +526,8 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 			writeAndLogInternalError(err, w, server.logger)
 			return
 		}
-		if renterID, present := claims["renterID"]; !present || renterID.(string) != file.OwnerID {
+		renterID, present := claims["renterID"]
+		if !present || renterID.(string) != file.OwnerID {
 			writeErr("cannot share other users' files", http.StatusUnauthorized, w)
 			return
 		}
@@ -535,6 +536,12 @@ func (server *MetaServer) postFilePermissionHandler() http.HandlerFunc {
 		err = json.NewDecoder(r.Body).Decode(&permission)
 		if err != nil {
 			writeErr("could not parse payload", http.StatusBadRequest, w)
+			return
+		}
+
+		// Make sure the user is not sharing files with themselves.
+		if permission.RenterId == renterID.(string) {
+			writeErr("cannot share files with self", http.StatusBadRequest, w)
 			return
 		}
 

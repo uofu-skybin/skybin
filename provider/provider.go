@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"skybin/core"
 	"skybin/metaserver"
@@ -47,7 +48,10 @@ type Provider struct {
 	db      *providerDB
 
 	// Maps renter IDs to renter information
-	renters         map[string]*renterInfo
+	renters map[string]*renterInfo
+
+	// Maps renter IDs to their public keys
+	renterKeys      map[string]string
 	StorageReserved int64
 	StorageUsed     int64
 	TotalBlocks     int
@@ -87,14 +91,17 @@ const (
 	DefaultMaxStorageRate = 10000
 	DefaultStorageRate    = DefaultMinStorageRate
 	PricingUpdateFreq     = 1 * time.Minute
+
+	renterKeyFile = "renter_keys.json"
 )
 
 // Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
-		Homedir: homedir,
+		Homedir:    homedir,
 		doneCh:  make(chan struct{}),
 		logger:  log.New(ioutil.Discard, "", log.LstdFlags),
+		renterKeys: map[string]string{},
 	}
 
 	config := &Config{}
@@ -119,8 +126,17 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load providers private key. error: %s", err)
 	}
-
 	provider.privKey = privKey
+
+	renterKeyFile := path.Join(homedir, renterKeyFile)
+	if _, err := os.Stat(renterKeyFile); err == nil {
+		renterKeys := map[string]string{}
+		err = util.LoadJson(renterKeyFile, &renterKeys)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to load renter keys. error: %s", err)
+		}
+		provider.renterKeys = renterKeys
+	}
 	return provider, nil
 }
 
@@ -218,16 +234,29 @@ func (provider *Provider) GetPrivateInfo() (*core.ProviderInfo, error) {
 }
 
 func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
-	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err := client.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch authenticate with meta while fetching pubkey. error: %s", err)
+	provider.mu.RLock()
+	keyStr, exists := provider.renterKeys[renterId]
+	provider.mu.RUnlock()
+	if !exists {
+		client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
+		err := client.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to fetch authenticate with meta while fetching pubkey. error: %s", err)
+		}
+		renter, err := client.GetRenter(renterId)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to retrieve renter from meta. error: %s", err)
+		}
+		provider.mu.Lock()
+		provider.renterKeys[renterId] = renter.PublicKey
+		provider.mu.Unlock()
+		err = util.SaveJson(path.Join(provider.Homedir, renterKeyFile), provider.renterKeys)
+		if err != nil {
+			fmt.Println("error saving renter keys: ", err)
+		}
+		keyStr = renter.PublicKey
 	}
-	rent, err := client.GetRenter(renterId)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve renter from meta. error: %s", err)
-	}
-	key, err := util.UnmarshalPublicKey([]byte(rent.PublicKey))
+	key, err := util.UnmarshalPublicKey([]byte(keyStr))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse renters pubkey. error: %s", err)
 	}

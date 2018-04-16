@@ -201,6 +201,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	file := &core.File{
 		ID:         id,
 		OwnerID:    r.Config.RenterId,
+		OwnerAlias: r.Config.Alias,
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
@@ -459,6 +460,20 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int, recursive bool) erro
 		return r.removeFileVersion(file, *versionNum)
 	}
 	return r.removeFile(file)
+}
+
+func (r *Renter) RemoveSharedFile(fileId string) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.RemoveSharedFile(r.Config.RenterId, fileId)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Renter) removeDir(dir *core.File, recursive bool) error {

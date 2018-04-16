@@ -102,6 +102,7 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 
 	if showDash {
 		router.Handle("/dashboard.json", server.getDashboardDataHandler()).Methods("GET")
+		router.Handle("/dashboard/audit/{fileID}/{blockID}", server.getDashboardAuditHandler()).Methods("POST")
 
 		staticPath, err := getStaticPath()
 		if err != nil {

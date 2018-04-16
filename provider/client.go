@@ -46,12 +46,11 @@ func (client *Client) ReserveStorage(contract *core.Contract) (*core.Contract, e
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	var respMsg postContractResp
-	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
 		return nil, decodeError(resp.Body)
 	}
+	var respMsg postContractResp
+	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	return respMsg.Contract, nil
 }
 
@@ -66,12 +65,13 @@ func (client *Client) RenewContract(contract *core.Contract) (*core.Contract, er
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	var respMsg postContractResp
-	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
 	if resp.StatusCode != http.StatusCreated {
 		return nil, decodeError(resp.Body)
 	}
+
+	var respMsg postContractResp
+	_ = json.NewDecoder(resp.Body).Decode(&respMsg)
+
 	return respMsg.Contract, nil
 }
 
@@ -117,18 +117,28 @@ func (client *Client) GetBlock(renterID string, blockID string) (io.ReadCloser, 
 	return resp.Body, nil
 }
 
-func (client *Client) AuditBlock(renterID string, blockID string) (io.ReadCloser, error) {
+func (client *Client) AuditBlock(renterID string, blockID string, nonce string) (hash string, err error) {
 	url := fmt.Sprintf("http://%s/blocks/audit?renterID=%s&blockID=%s", client.addr, renterID, blockID)
-	resp, err := client.client.Get(url)
+	req := postAuditParams{nonce}
+	body, err := json.Marshal(&req)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	resp, err := client.client.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, decodeError(resp.Body)
+		return "", decodeError(resp.Body)
 	}
-	return resp.Body, nil
+	var respMsg postAuditResp
+	err = json.NewDecoder(resp.Body).Decode(&respMsg)
+	if err != nil {
+		return "", err
+	}
+	return respMsg.Hash, nil
 }
 
 func (client *Client) RemoveBlock(renterID string, blockID string) error {

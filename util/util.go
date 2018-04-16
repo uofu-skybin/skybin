@@ -17,6 +17,8 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/satori/go.uuid"
+	"skybin/core"
+	"crypto/rand"
 )
 
 func SaveJson(filename string, v interface{}) error {
@@ -42,6 +44,15 @@ func GenerateID() (string, error) {
 		return "", err
 	}
 	return id.String(), nil
+}
+
+func GenerateAuditNonce() ([]byte, error) {
+	buf := make([]byte, core.DefaultAuditNonceLen)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func MarshalPrivateKey(key *rsa.PrivateKey) []byte {

@@ -1,4 +1,4 @@
-package metaserver
+package integration
 
 import (
 	"bytes"

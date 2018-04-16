@@ -12,6 +12,8 @@ type Config struct {
 	DefaultDataBlocks           int    `json:"defaultDataBlocks"`
 	DefaultParityBlocks         int    `json:"defaultParityBlocks"`
 	DefaultContractDurationDays int    `json:"defaultContractDurationDays"`
+	// Block audits to create per block
+	NumBlockAudits              int    `json:"numBlockAudits"`
 }
 
 const (
@@ -35,6 +37,9 @@ const (
 
 	// Default contract duration - 6 months
 	kDefaultContractDurationDays = 30 * 6
+
+	// Number of block audits to generate for each uploaded block
+	kDefaultBlockAudits = 2
 )
 
 func DefaultConfig() *Config {
@@ -44,5 +49,6 @@ func DefaultConfig() *Config {
 		DefaultDataBlocks:           kDefaultDataBlocks,
 		DefaultParityBlocks:         kDefaultParityBlocks,
 		DefaultContractDurationDays: kDefaultContractDurationDays,
+		NumBlockAudits:              kDefaultBlockAudits,
 	}
 }

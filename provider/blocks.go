@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -89,6 +91,30 @@ func (provider *Provider) GetBlock(renterID, blockID string) (io.ReadCloser, err
 	}
 
 	return f, nil
+}
+
+func (p *Provider) AuditBlock(renterID, blockID, nonce string) (hash string, err error) {
+	nonceBytes, err := base64.URLEncoding.DecodeString(nonce)
+	if err != nil {
+		return "", fmt.Errorf("Unable to decode nonce. Error: %s", err)
+	}
+	blockPath := path.Join(p.Homedir, "blocks", renterID, blockID)
+	if _, err := os.Stat(blockPath); err != nil && os.IsNotExist(err) {
+		return "", errors.New("Cannot find block")
+	}
+	f, err := os.Open(blockPath)
+	if err != nil {
+		return "", errors.New("IOError: Unable to retrieve block")
+	}
+	defer f.Close()
+	h := sha256.New()
+	h.Write(nonceBytes)
+	_, err = io.Copy(h, f)
+	if err != nil {
+		return "", fmt.Errorf("Error reading block. Error: %s", err)
+	}
+	hashBytes := h.Sum(nil)
+	return base64.URLEncoding.EncodeToString(hashBytes), nil
 }
 
 func (provider *Provider) DeleteBlock(renterID, blockID string) error {

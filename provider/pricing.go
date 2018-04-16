@@ -23,12 +23,6 @@ func (provider *Provider) pricingUpdateThread() {
 	}
 }
 
-type ByRate []core.ProviderInfo
-
-func (r ByRate) Len() int           { return len(r) }
-func (r ByRate) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-func (r ByRate) Less(i, j int) bool { return r[i].StorageRate < r[j].StorageRate }
-
 func (provider *Provider) updatePricing() {
 	if provider.Config.PricingPolicy == FixedPricingPolicy {
 		return
@@ -43,57 +37,56 @@ func (provider *Provider) updatePricing() {
 		return
 	}
 
-	// Set rate to the average of all the providers in the cheapest quartile.
-	sort.Sort(ByRate(providers))
+	rates := []int64{}
+	for _, pinfo := range providers {
+		if pinfo.ID != provider.Config.ProviderID {
+			rates = append(rates, pinfo.StorageRate)
+		}
+	}
+
+	sort.Slice(rates, func(i, j int) bool {
+		return rates[i] < rates[j]
+	})
 
 	var rate int64
 	var avg int64
 
 	switch provider.Config.PricingPolicy {
 	case AggressivePricingPolicy:
-		// Set the price to the average of the cheapest quartile of providers.
-		cheapestQuartile := len(providers) / 4
-
-		// If the cheapest quartile doesn't exist, set the price to the average of all current providers.
-		if cheapestQuartile == 0 {
-			cheapestQuartile = len(providers) - 1
+		// Set the price to the average of the most expensive quartile of providers.
+		mostExpensiveQuartile := len(rates) - len(rates) / 4
+		if mostExpensiveQuartile == len(rates) {
+			mostExpensiveQuartile -= 1
+		}
+		if mostExpensiveQuartile < 0 {
+			mostExpensiveQuartile = 0
 		}
 
 		tot := int64(0)
-		for i := 0; i < cheapestQuartile; i++ {
-			pinfo := providers[i]
-			if pinfo.ID == provider.Config.ProviderID {
-				continue
-			}
-			tot += pinfo.StorageRate
+		for i := mostExpensiveQuartile; i < len(rates); i++ {
+			tot += rates[i]
 		}
-		avg = tot / int64(cheapestQuartile)
-		noise := 3 - rand.Intn(5)
-		rate = avg + 3 + int64(noise)
-
+		avg = tot
+		if l := int64(len(rates) - mostExpensiveQuartile); l > 0 {
+			avg /= l
+		}
+		noise := 3 - rand.Intn(7)
+		rate = avg + int64(noise)
 	case PassivePricingPolicy:
 		// Set the price to the average of the middle fifty percent of providers.
-		cheapestQuartile := len(providers) / 4
-		mostExpensiveQuartile := len(providers) / 4 * 3
-
-		// If we don't have enough providers to exclude the cheapest and most expensive quartiles,
-		// take the average of the entire group.
-		if cheapestQuartile == mostExpensiveQuartile {
-			cheapestQuartile = 0
-			mostExpensiveQuartile = len(providers)
-		}
+		cheapestQuartile := len(rates) / 4
+		mostExpensiveQuartile := len(rates) - cheapestQuartile
 
 		tot := int64(0)
 		for i := cheapestQuartile; i < mostExpensiveQuartile; i++ {
-			pinfo := providers[i]
-			if pinfo.ID == provider.Config.ProviderID {
-				continue
-			}
-			tot += pinfo.StorageRate
+			tot += rates[i]
 		}
-		avg = tot / int64(mostExpensiveQuartile-cheapestQuartile)
-		noise := 3 - rand.Intn(5)
-		rate = avg + 3 + int64(noise)
+		avg = tot
+		if l := int64(mostExpensiveQuartile-cheapestQuartile); l > 0 {
+			avg /= l
+		}
+		noise := 3 - rand.Intn(7)
+		rate = avg + int64(noise)
 	default:
 		provider.logger.Println("unrecognized pricing policy", provider.Config.PricingPolicy)
 	}

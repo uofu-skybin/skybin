@@ -87,7 +87,7 @@ const (
 	// A provider should provide at least this much space.
 	MinStorageSpace       = 100 * 1e6
 	DefaultPricingPolicy  = PassivePricingPolicy
-	DefaultMinStorageRate = 0
+	DefaultMinStorageRate = 1
 	DefaultMaxStorageRate = 10000
 	DefaultStorageRate    = DefaultMinStorageRate
 	PricingUpdateFreq     = 1 * time.Minute

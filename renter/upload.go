@@ -825,6 +825,7 @@ func prepareMetadata(up *fileUpload, numAudits int) error {
 			Size:       n,
 			Sha256Hash: blockHashStr,
 			Audits:     audits,
+			AuditPassed: true,
 		}
 		blocks = append(blocks, block)
 	}

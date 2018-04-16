@@ -112,7 +112,6 @@ func InitServer(dataDirectory string, showDash bool, logger *log.Logger) *MetaSe
 	}
 
 	server.startPaymentRunner()
-	server.startAuditRunner()
 
 	return server
 }

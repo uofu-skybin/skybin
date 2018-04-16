@@ -17,6 +17,7 @@ import (
 	"skybin/provider"
 	"skybin/util"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -61,6 +62,7 @@ type Renter struct {
 	downloadQ chan []*fileDownload
 	uploadQ   chan *fileUpload
 	logger    *log.Logger
+	mu        sync.RWMutex
 }
 
 // snapshot stores a renter's serialized state
@@ -171,6 +173,9 @@ func (r *Renter) Info() (*Info, error) {
 		reserved += contract.StorageSpace
 	}
 	freeStorage := r.storageManager.AvailableStorage()
+	r.mu.RLock()
+	numFiles := len(r.files)
+	r.mu.RUnlock()
 	return &Info{
 		ID:              r.Config.RenterId,
 		Alias:           r.Config.Alias,
@@ -180,7 +185,7 @@ func (r *Renter) Info() (*Info, error) {
 		UsedStorage:     reserved - freeStorage,
 		FreeStorage:     freeStorage,
 		TotalContracts:  len(contracts),
-		TotalFiles:      len(r.files),
+		TotalFiles:      numFiles,
 		Balance:         renterInfo.Balance,
 	}, nil
 }
@@ -196,6 +201,7 @@ func (r *Renter) CreateFolder(name string) (*core.File, error) {
 	file := &core.File{
 		ID:         id,
 		OwnerID:    r.Config.RenterId,
+		OwnerAlias: r.Config.Alias,
 		Name:       name,
 		IsDir:      true,
 		AccessList: []core.Permission{},
@@ -229,7 +235,9 @@ func (r *Renter) pullFiles() error {
 	if err != nil {
 		return err
 	}
+	r.mu.Lock()
 	r.files = files
+	r.mu.Unlock()
 	r.lastFilesUpdate = time.Now()
 	return r.saveSnapshot()
 }
@@ -237,11 +245,14 @@ func (r *Renter) pullFiles() error {
 func (r *Renter) GetFile(fileId string) (*core.File, error) {
 
 	// Check if it exists locally
+	r.mu.RLock()
 	for _, file := range r.files {
 		if file.ID == fileId {
+			r.mu.RUnlock()
 			return file, nil
 		}
 	}
+	r.mu.RUnlock()
 
 	// It might not exist because the local cache is out of date.
 	// Check with the metaserver.
@@ -254,7 +265,9 @@ func (r *Renter) GetFile(fileId string) (*core.File, error) {
 		return nil, err
 	}
 
+	r.mu.Lock()
 	r.files = append(r.files, file)
+	r.mu.Unlock()
 
 	return file, nil
 }
@@ -449,6 +462,20 @@ func (r *Renter) RemoveFile(fileId string, versionNum *int, recursive bool) erro
 	return r.removeFile(file)
 }
 
+func (r *Renter) RemoveSharedFile(fileId string) error {
+	err := r.authorizeMeta()
+	if err != nil {
+		return err
+	}
+
+	err = r.metaClient.RemoveSharedFile(r.Config.RenterId, fileId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Renter) removeDir(dir *core.File, recursive bool) error {
 	children := r.findChildren(dir)
 	if len(children) > 0 && !recursive {
@@ -507,18 +534,16 @@ func (r *Renter) removeFile(file *core.File) error {
 	r.removeFileContents(file)
 
 	// Delete locally
-	fileIdx := -1
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for idx, file2 := range r.files {
 		if file2.ID == file.ID {
-			fileIdx = idx
+			r.files = append(r.files[:idx], r.files[idx+1:]...)
+			err = r.saveSnapshot()
+			if err != nil {
+				r.logger.Println("Error saving snapshot:", err)
+			}
 			break
-		}
-	}
-	if fileIdx != -1 {
-		r.files = append(r.files[:fileIdx], r.files[fileIdx+1:]...)
-		err = r.saveSnapshot()
-		if err != nil {
-			r.logger.Println("Error saving snapshot:", err)
 		}
 	}
 
@@ -641,11 +666,16 @@ func (r *Renter) saveFile(f *core.File) error {
 	if err != nil {
 		return err
 	}
+	r.mu.Lock()
 	r.files = append(r.files, f)
+	r.mu.Unlock()
 	return r.saveSnapshot()
 }
 
 func (r *Renter) findChildren(dir *core.File) []*core.File {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	var children []*core.File
 	for _, f := range r.files {
 		if f != dir && strings.HasPrefix(f.Name, dir.Name) &&

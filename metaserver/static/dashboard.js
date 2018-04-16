@@ -6,7 +6,9 @@ const chartColors = {
 	green: 'rgb(75, 192, 192)',
 	blue: 'rgb(54, 162, 235)',
 	purple: 'rgb(153, 102, 255)',
-	grey: 'rgb(231,233,237)'
+    grey: 'rgb(231,233,237)',
+    darkGrey: 'rgb(128,128,128)',
+    brightGreen: '#66FF00'
 };
 
 // Current set of data from the metaserver.
@@ -47,6 +49,44 @@ function setupPage() {
     // Get data from metaserver.
     xhttp.open("GET", "dashboard.json", true)
     xhttp.send()
+
+    setupLegend();
+}
+
+function setupLegend() {
+    let container = document.getElementById('network-legend');
+    let x = 0;
+    let y = 0;
+    let nodes = [
+        {id: 1, x: x, y: y, group: 0, label: "Renter", fixed: true, physics: false},
+        {id: 2, x: x, y: y + 90, group: 1, label: "Provider", fixed: true, physics: false},
+    ];
+    let dataSet = {
+        nodes: new vis.DataSet(nodes),
+        edges: new vis.DataSet([])
+    };
+    let options = {
+        nodes: {
+            shape: 'dot',
+        },
+        interaction: {
+            dragView: false,
+            selectable: false
+        },
+        groups: {
+            0: {
+                color: chartColors.blue
+            },
+            1: {
+                color: chartColors.orange
+            }
+        }
+    };
+    network = new vis.Network(container, dataSet, options);
+    network.fit({nodes: [1,2]});
+    let pos = network.getViewPosition();
+    let scale = network.getScale();
+    network.moveTo({position: {x: x, y: pos.y + 5}, scale: scale * 0.9});
 }
 
 function updatePage() {
@@ -102,7 +142,13 @@ function setupNetworkAndNodeDetails() {
             edges.push({
                 id: edgeId,
                 from: contract.renterId, 
-                to: contract.providerId
+                to: contract.providerId,
+                chosen: {
+                    edge: function(values, id, selected, hovering) {
+                        values.dashes = true;
+                        values.width *= 3;
+                    }
+                }
             })
             edgeSet[edgeId] = true;
         }
@@ -119,7 +165,34 @@ function setupNetworkAndNodeDetails() {
     let options = {
         interaction: {
             selectConnectedEdges: false
-        }
+        },
+        nodes: {
+            chosen: {
+                node: function(values, id, selected, hovering) {
+                    values.color = chartColors.brightGreen;
+                }
+            }
+        },
+        edges: {
+            chosen: {
+                edge: function(values, id, selected, hovering) {
+                    values.dashes = true;
+                }
+            }
+        },
+        groups: {
+            0: {
+                color: chartColors.blue
+            },
+            1: {
+                color: chartColors.orange
+            }
+        },
+        edges: {
+            color: {
+                color: chartColors.darkGrey
+            }
+        },
     };
     network = new vis.Network(container, dataSet, options);
 

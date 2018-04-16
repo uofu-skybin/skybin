@@ -23,20 +23,41 @@ type Config struct {
 	StorageRate    int64  `json:"storageRate"`
 }
 
+type Info struct {
+	ProviderId       string `json:"providerId"`
+	StorageAllocated int64  `json:"storageAllocated"`
+	StorageReserved  int64  `json:"storageReserved"`
+	StorageUsed      int64  `json:"storageUsed"`
+	StorageFree      int64  `json:"storageFree"`
+	TotalContracts   int    `json:"totalContracts"`
+	TotalBlocks      int    `json:"totalBlocks"`
+	TotalRenters     int    `json:"totalRenters"`
+}
+
 type Provider struct {
 	Homedir string //move this maybe
 	Config  *Config
-	db      *ProviderDB
-	mu      sync.Mutex
+	privKey *rsa.PrivateKey
+	db      *providerDB
 
-	PrivateKey *rsa.PrivateKey
-	renters    map[string]*RenterInfo
-
+	// Maps renter IDs to renter information
+	renters         map[string]*renterInfo
 	StorageReserved int64
 	StorageUsed     int64
+	TotalBlocks     int
+	TotalContracts  int
+	mu              sync.RWMutex
+}
 
-	TotalBlocks    int
-	TotalContracts int
+type blockInfo struct {
+	RenterId string `json:"renterId"`
+	BlockId  string `json:"blockId"`
+	Size     int64  `json:"blockSize"`
+}
+
+type renterInfo struct {
+	StorageReserved int64 `json:"storageReserved"`
+	StorageUsed     int64 `json:"storageUsed"`
 }
 
 const (
@@ -46,43 +67,6 @@ const (
 	// A provider should provide at least this much space.
 	MinStorageSpace = 100 * 1e6
 )
-
-// Structure to cycle activity over a set interval
-type Activity struct {
-	Timestamps          []string `json:"timestamps"`
-	BlockUploads        []int64  `json:"blockUploads"`
-	BlockDownloads      []int64  `json:"blockDownloads"`
-	BlockDeletions      []int64  `json:"blockDeletions"`
-	BytesUploaded       []int64  `json:"bytesUploaded"`
-	BytesDownloaded     []int64  `json:"bytesDownloaded"`
-	StorageReservations []int64  `json:"storageReservations"`
-}
-type Recents struct {
-	Hour *Summary `json:"hour"`
-	Day  *Summary `json:"day"`
-	Week *Summary `json:"week"`
-}
-type Summary struct {
-	BlockUploads        int64 `json:"blockUploads"`
-	BlockDownloads      int64 `json:"blockDownloads"`
-	BlockDeletions      int64 `json:"blockDeletions"`
-	StorageReservations int64 `json:"storageReservations"`
-}
-type getStatsResp struct {
-	RecentSummary   *Recents  `json:"recentSummary"`
-	ActivityCounter *Activity `json:"activityCounters"`
-}
-
-type BlockInfo struct {
-	RenterId string `json:"renterId"`
-	BlockId  string `json:"blockId"`
-	Size     int64  `json:"blockSize"`
-}
-
-type RenterInfo struct {
-	StorageReserved int64 `json:"storageReserved"`
-	StorageUsed     int64 `json:"storageUsed"`
-}
 
 // Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
@@ -98,12 +82,12 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 	provider.Config = config
 
 	dbPath := path.Join(homedir, "provider.db")
-	provider.db, err = SetupDB(dbPath)
+	provider.db, err = setupDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize DB. error: %s", err)
 	}
 
-	err = provider.LoadDBIntoMemory()
+	err = provider.loadInfoFromDB()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load provider DB into mem. error: %s", err)
 	}
@@ -113,78 +97,63 @@ func LoadFromDisk(homedir string) (*Provider, error) {
 		return nil, fmt.Errorf("Failed to load providers private key. error: %s", err)
 	}
 
-	provider.PrivateKey = privKey
+	provider.privKey = privKey
 	return provider, nil
 }
 
-// Insert, Delete, and Update activity feeds for each interval
-func (provider *Provider) addActivity(op string, bytes int64) error {
+//  Loads basic memory objects from db
+//  These will be recalculated based on db state at each restart
+//  (potentially useful for maintenance also)
+// - provider.StorageReserved
+// - provider.StorageUsed
+// - provider.TotalBlocks
+// - provider.TotalContracts
+// - provider.renters {
+// 	   - StorageUsed
+//     - StorageReserved
+//   }
+func (p *Provider) loadInfoFromDB() error {
+	p.StorageReserved = 0
+	p.StorageUsed = 0
+	p.TotalBlocks = 0
+	p.TotalContracts = 0
+	p.renters = make(map[string]*renterInfo, 0)
 
-	err := provider.db.InsertActivity()
+	contracts, err := p.db.GetAllContracts()
 	if err != nil {
-		return fmt.Errorf("Error adding new activity to DB: %s", err)
+		// fatal?
+		return err
 	}
-	err = provider.db.DeleteActivity()
+	for _, c := range contracts {
+		_, ok := p.renters[c.RenterId]
+		if !ok {
+			p.renters[c.RenterId] = &renterInfo{}
+		}
+		p.renters[c.RenterId].StorageReserved += c.StorageSpace
+		p.StorageReserved += c.StorageSpace
+		p.TotalContracts++
+	}
+	blocks, err := p.db.GetAllBlocks()
 	if err != nil {
-		return fmt.Errorf("Error cycling activity in DB: %s", err)
+		// fatal?
+		return err
 	}
-
-	// TODO: Abstact and handle errors
-	if op == "upload" {
-		err = provider.db.UpdateActivity("BlockUploads", 1)
-		if err != nil {
-			return fmt.Errorf("add upload activity failed. error: %s", err)
+	for _, b := range blocks {
+		_, ok := p.renters[b.RenterId]
+		if !ok {
+			// TODO: block with no associated contract?
+			return nil
 		}
-		err = provider.db.UpdateActivity("BytesUploaded", bytes)
-		if err != nil {
-			return fmt.Errorf("add upload activity failed. error: %s", err)
-		}
-
-		provider.TotalBlocks++
-		provider.StorageUsed += bytes
-
-	} else if op == "download" {
-		err = provider.db.UpdateActivity("BlockDownloads", 1)
-		if err != nil {
-			return fmt.Errorf("add download activity failed. error: %s", err)
-		}
-		err = provider.db.UpdateActivity("BytesDownloaded", bytes)
-		if err != nil {
-			return fmt.Errorf("add download activity failed. error:  %s", err)
-		}
-	} else if op == "delete" {
-		provider.db.UpdateActivity("BlockDeletions", 1)
-		if err != nil {
-			return fmt.Errorf("add delete activity failed. error:  %s", err)
-		}
-
-		provider.TotalBlocks--
-		provider.StorageUsed -= bytes
-
-	} else if op == "contract" {
-		provider.db.UpdateActivity("StorageReservations", 1)
-		if err != nil {
-			return fmt.Errorf("add contract activity failed. error: %s", err)
-		}
-		provider.StorageReserved += bytes
+		p.renters[b.RenterId].StorageUsed += b.Size
+		p.StorageUsed += b.Size
+		p.TotalBlocks++
 	}
 	return nil
 }
 
-type Info struct {
-	ProviderId       string `json:"providerId"`
-	StorageAllocated int64  `json:"storageAllocated"`
-	StorageReserved  int64  `json:"storageReserved"`
-	StorageUsed      int64  `json:"storageUsed"`
-	StorageFree      int64  `json:"storageFree"`
-	TotalContracts   int    `json:"totalContracts"`
-	TotalBlocks      int    `json:"totalBlocks"`
-	TotalRenters     int    `json:"totalRenters"`
-}
-
 func (provider *Provider) GetPublicInfo() *Info {
-	provider.mu.Lock()
-	defer provider.mu.Unlock()
+	provider.mu.RLock()
+	defer provider.mu.RUnlock()
 	return &Info{
 		ProviderId:       provider.Config.ProviderID,
 		StorageAllocated: provider.Config.SpaceAvail,
@@ -199,7 +168,7 @@ func (provider *Provider) GetPublicInfo() *Info {
 
 func (provider *Provider) GetPrivateInfo() (*core.ProviderInfo, error) {
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err := metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err := metaService.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {
 		return nil, fmt.Errorf("Error authenticating with metaserver: %s", err)
 	}
@@ -212,17 +181,9 @@ func (provider *Provider) GetPrivateInfo() (*core.ProviderInfo, error) {
 	return info, nil
 }
 
-func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return util.UnmarshalPrivateKey(data)
-}
-
 func (provider *Provider) getRenterPublicKey(renterId string) (*rsa.PublicKey, error) {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err := client.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch authenticate with meta while fetching pubkey. error: %s", err)
 	}
@@ -244,15 +205,18 @@ func (provider *Provider) UpdateMeta() error {
 	if err != nil {
 		return fmt.Errorf("Failed to parse pubKey in UpdateMeta. error: %s", err)
 	}
+	provider.mu.RLock()
+	spaceAvail := provider.Config.SpaceAvail - provider.StorageReserved
+	provider.mu.RUnlock()
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
 		Addr:        provider.Config.PublicApiAddr,
-		SpaceAvail:  provider.Config.SpaceAvail - provider.StorageReserved,
+		SpaceAvail:  spaceAvail,
 		StorageRate: provider.Config.StorageRate,
 	}
 	metaService := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err = metaService.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err = metaService.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {
 		return fmt.Errorf("Error authenticating with metaserver: %s", err)
 	}
@@ -265,7 +229,7 @@ func (provider *Provider) UpdateMeta() error {
 
 func (provider *Provider) Withdraw(email string, amount int64) error {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err := client.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {
 		return err
 	}
@@ -280,7 +244,7 @@ func (provider *Provider) Withdraw(email string, amount int64) error {
 
 func (provider *Provider) ListTransactions() ([]core.Transaction, error) {
 	client := metaserver.NewClient(provider.Config.MetaAddr, &http.Client{})
-	err := client.AuthorizeProvider(provider.PrivateKey, provider.Config.ProviderID)
+	err := client.AuthorizeProvider(provider.privKey, provider.Config.ProviderID)
 	if err != nil {
 		return nil, err
 	}
@@ -290,4 +254,12 @@ func (provider *Provider) ListTransactions() ([]core.Transaction, error) {
 		return nil, err
 	}
 	return transactions, nil
+}
+
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return util.UnmarshalPrivateKey(data)
 }

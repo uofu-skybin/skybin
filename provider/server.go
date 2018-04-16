@@ -10,6 +10,8 @@ import (
 	"skybin/util"
 
 	"github.com/gorilla/mux"
+	"io"
+	"strconv"
 )
 
 type providerServer struct {
@@ -31,11 +33,11 @@ func NewServer(provider *Provider, logger *log.Logger) http.Handler {
 		authorizer: authorization.NewAuthorizer(logger),
 	}
 
-	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.PrivateKey))
+	authMiddleware := authorization.GetAuthMiddleware(util.MarshalPrivateKey(server.provider.privKey))
 	router.Handle("/auth/renter", server.authorizer.GetAuthChallengeHandler("renterID")).Methods("GET")
 	router.Handle("/auth/renter", server.authorizer.GetRespondAuthChallengeHandler(
 		"renterID",
-		util.MarshalPrivateKey(server.provider.PrivateKey),
+		util.MarshalPrivateKey(server.provider.privKey),
 		server.provider.getRenterPublicKey)).Methods("POST")
 
 	router.HandleFunc("/contracts", server.postContract).Methods("POST")
@@ -86,13 +88,133 @@ func (server *providerServer) postContract(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	server.writeResp(w, http.StatusCreated, &postContractResp{Contract: signedContract})
+}
 
+func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	sizequery, exists := query["size"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No block size given"})
+		return
+	}
+	size, err := strconv.ParseInt(sizequery[0], 10, 64)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"Block size must be an integer"})
+		return
+	}
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	// Check to confirm that the authentication token matches that of the querying renter
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden,
+			errorResp{Error: "Authentication token does not match renterID"})
+		return
+	}
+
+	err = server.provider.StoreBlock(renterID, blockID, r.Body, size)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, &errorResp{err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusCreated, &errorResp{})
+}
+
+func (server *providerServer) getBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	block, err := server.provider.GetBlock(renterID, blockID)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, errorResp{err.Error()})
+	}
+	defer block.Close()
+
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, block)
+	if err != nil {
+		server.logger.Println("Unable to read block. Error: ", err)
+	}
+}
+
+func (server *providerServer) deleteBlock(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	renterquery, exists := query["renterID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, errorResp{"No renter ID given"})
+		return
+	}
+	renterID := renterquery[0]
+
+	blockquery, exists := query["blockID"]
+	if !exists {
+		server.writeResp(w, http.StatusBadRequest, &errorResp{"No block given"})
+		return
+	}
+	blockID := blockquery[0]
+
+	claims, err := util.GetTokenClaimsFromRequest(r)
+	if err != nil {
+		server.writeResp(w, http.StatusInternalServerError,
+			errorResp{Error: "Failure parsing authentication token"})
+		return
+	}
+
+	if claimID, present := claims["renterID"]; !present || claimID.(string) != renterID {
+		server.writeResp(w, http.StatusForbidden, errorResp{"Authentication token does not match renterID"})
+		return
+	}
+
+	err = server.provider.DeleteBlock(renterID, blockID)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, errorResp{err.Error()})
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
 }
 
 // This info object is different than the info object for local provider which serves
 // as a means to populate the provider dashboard
 func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
-	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.PrivateKey.PublicKey)
+	pubKeyBytes, err := util.MarshalPublicKey(&server.provider.privKey.PublicKey)
 	if err != nil {
 		server.logger.Println("Unable to marshal public key. Error: ", err)
 		server.writeResp(w, http.StatusInternalServerError,
@@ -100,6 +222,8 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: Call the appropriate method to retrieve this.
+	server.provider.mu.RLock()
 	info := core.ProviderInfo{
 		ID:          server.provider.Config.ProviderID,
 		PublicKey:   string(pubKeyBytes),
@@ -107,6 +231,7 @@ func (server *providerServer) getInfo(w http.ResponseWriter, r *http.Request) {
 		SpaceAvail:  server.provider.Config.SpaceAvail - server.provider.StorageReserved,
 		StorageRate: server.provider.Config.StorageRate,
 	}
+	server.provider.mu.RUnlock()
 
 	server.writeResp(w, http.StatusOK, &info)
 }
@@ -155,7 +280,7 @@ type getRenterResp struct {
 	StorageReserved int64            `json:"storageReserved"`
 	StorageUsed     int64            `json:"storageUsed"`
 	Contracts       []*core.Contract `json:"contracts"`
-	Blocks          []*BlockInfo     `json:"blocks"`
+	Blocks          []*blockInfo     `json:"blocks"`
 }
 
 func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +306,9 @@ func (server *providerServer) getRenter(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// TODO: this might not be necessary at this point
+	server.provider.mu.RLock()
 	_, exists = server.provider.renters[renterID]
+	server.provider.mu.RUnlock()
 	if !exists {
 		server.writeResp(w, http.StatusBadRequest,
 			errorResp{Error: "Provider has no record for this renter"})

@@ -289,8 +289,8 @@ class TestContext:
         for r in self.additional_renters:
             r.teardown(rm_files)
 
-def create_metaserver(api_addr=None, dashboard=False):
-    """Create and start a new metaserver instance"""
+def start_metaserver(api_addr=None, dashboard=False):
+    """Start a new metaserver instance"""
     api_addr = api_addr or '127.0.0.1:{}'.format(rand_port())
     args = [SKYBIN_CMD, 'metaserver', '-addr', api_addr]
     if dashboard:
@@ -309,6 +309,16 @@ def init_renter(homedir, alias, metaserver_addr, api_addr):
         _, stderr = process.communicate()
         raise ValueError('renter init failed. stderr={}'.format(stderr))
 
+def start_renter(homedir):
+    with open(os.path.join(homedir, 'config.json')) as f:
+        config = json.load(f)
+    api_addr = config['apiAddress']
+    env = os.environ.copy()
+    env['SKYBIN_RENTER_HOME'] = homedir
+    args = [SKYBIN_CMD, 'renter', 'daemon']
+    process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+    return RenterService(process=process, address=api_addr, homedir=homedir)
+
 def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*1024*1024*1024):
     """Set up a skybin provider directory"""
     args = [SKYBIN_CMD, 'provider', 'init',
@@ -323,14 +333,23 @@ def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*10
         _, stderr = process.communicate()
         raise ValueError('provider init failed. stderr={}'.format(stderr))
 
+def start_provider(homedir, disable_local_api=True):
+    with open(os.path.join(homedir, 'config.json')) as f:
+        config = json.load(f)
+    api_addr = config['publicApiAddress']
+    env = os.environ.copy()
+    env['SKYBIN_PROVIDER_HOME'] = homedir
+    args = [SKYBIN_CMD, 'provider', 'daemon']
+    if disable_local_api:
+        args.append('--disable-local-api')
+    process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
+    return Service(process=process, address=api_addr, homedir=homedir, env=env)
+
 def create_renter(metaserver_addr, repo_dir, alias):
     """Create and start a new renter instance."""
 
     # Create repo
-    homedir = '{}/renter{}'.format(repo_dir, random.randint(1, 1024))
-    while os.path.exists(homedir):
-        homedir = '{}/renter{}'.format(repo_dir, random.randint(1, 1024))
-
+    homedir = '{}/renter_{}'.format(repo_dir, alias)
     api_addr = '127.0.0.1:{}'.format(rand_port())
     init_renter(
         homedir,
@@ -338,14 +357,7 @@ def create_renter(metaserver_addr, repo_dir, alias):
         metaserver_addr=metaserver_addr,
         api_addr=api_addr
     )
-
-    # Start renter server
-    env = os.environ.copy()
-    env['SKYBIN_RENTER_HOME'] = homedir
-    args = [SKYBIN_CMD, 'renter', 'daemon']
-    process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-
-    return RenterService(process=process, address=api_addr, homedir=homedir)
+    return start_renter(homedir)
 
 def create_provider(metaserver_addr, repo_dir,
                     api_addr=None,
@@ -363,14 +375,7 @@ def create_provider(metaserver_addr, repo_dir,
         public_api_addr=api_addr,
         storage_space=storage_space,
     )
-
-    # Start the provider daemon with no local API
-    env = os.environ.copy()
-    env['SKYBIN_PROVIDER_HOME'] = homedir
-    args = [SKYBIN_CMD, 'provider', 'daemon', '--disable-local-api']
-    process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
-
-    return Service(process=process, address=api_addr, homedir=homedir, env=env)
+    return start_provider(homedir)
 
 def setup_test(num_providers=1,
                repo_dir=DEFAULT_REPOS_DIR,
@@ -403,7 +408,7 @@ def setup_test(num_providers=1,
                        teardown_db=teardown_db)
     try:
         setup_db()
-        ctxt.metaserver = create_metaserver()
+        ctxt.metaserver = start_metaserver()
         time.sleep(1.0)
         check_service_startup(ctxt.metaserver.process)
         for _ in range(num_providers):

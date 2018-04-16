@@ -101,6 +101,15 @@ class RenterAPI:
         if resp.status_code != 200:
             raise ValueError(resp.content.decode('utf-8'))
 
+    def remove_shared_file(self, file_id):
+        url = '{}/files/shared/remove'.format(self.base_url)
+        args = {
+            'fileID': file_id,
+        }
+        resp = requests.post(url, json=args)
+        if resp.status_code != 200:
+            raise ValueError(resp.content.decode('utf-8'))
+
     def list_files(self):
         resp = requests.get(self.base_url + '/files')
         if resp.status_code != 200:

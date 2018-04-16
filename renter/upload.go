@@ -564,7 +564,7 @@ func (r *Renter) blockUploadThread(providerAddr string, blockQ chan *blockUpload
 			close(upload.doneCh)
 			continue
 		}
-		err := client.PutBlock(r.Config.RenterId, upload.block.ID, upload.reader())
+		err := client.PutBlock(r.Config.RenterId, upload.block.ID, upload.reader(), upload.size)
 		if err != nil {
 			upload.err = err
 		}
@@ -596,6 +596,7 @@ func (r *Renter) makeNewFile(up *fileUpload) (*core.File, error) {
 	file := &core.File{
 		ID:         fileId,
 		OwnerID:    r.Config.RenterId,
+		OwnerAlias: r.Config.Alias,
 		Name:       up.destPath,
 		IsDir:      false,
 		AccessList: []core.Permission{},

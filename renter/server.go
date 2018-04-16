@@ -36,6 +36,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 	router.HandleFunc("/files/rename", server.renameFile).Methods("POST")
 	router.HandleFunc("/files/copy", server.copyFile).Methods("POST")
 	router.HandleFunc("/files/remove", server.removeFile).Methods("POST")
+	router.HandleFunc("/files/shared/remove", server.removeSharedFile).Methods("POST")
 	router.HandleFunc("/paypal/create", server.createPaypalPayment).Methods("POST")
 	router.HandleFunc("/paypal/execute", server.executePaypalPayment).Methods("POST")
 	router.HandleFunc("/paypal/withdraw", server.withdraw).Methods("POST")
@@ -334,6 +335,31 @@ func (server *renterServer) removeFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = server.renter.RemoveFile(req.FileID, req.VersionNum, req.Recursive)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: err.Error()})
+		return
+	}
+
+	server.writeResp(w, http.StatusOK, &errorResp{})
+}
+
+type removeSharedFileReq struct {
+	FileID string `json:"fileID"`
+}
+
+func (server *renterServer) removeSharedFile(w http.ResponseWriter, r *http.Request) {
+	var req removeSharedFileReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{Error: fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+
+	err = server.renter.RemoveSharedFile(req.FileID)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusInternalServerError,

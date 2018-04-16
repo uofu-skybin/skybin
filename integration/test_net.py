@@ -13,6 +13,10 @@ Important:
    to the port you want the metaserver to listen on.
  - If you want to keep the renter/provider repos and test files this creates
    after killing the test network (perhaps for debugging), set the --keep_files option.
+ - You run the test net with existing providers and renters by setting the --files_dir
+   and --repo_dir options to folders which were previously created. If you run
+   the test net with default files and repo dirs, then merely starting and stopping
+   the script without manually deleting these folders will do this.
  - This creates a log file, test_net.log, in the current directory which you can
    view to see which operations are being run and by which renters.
 
@@ -20,6 +24,7 @@ Important:
 
 import argparse
 import os
+import glob
 import time
 import random
 import shutil
@@ -87,7 +92,7 @@ class TestNet:
 
     def log_op(self, renter_info, op):
         self.log_file.write('{}: renter alias={} op={}\n'.format(
-            time.strftime("%H:%M:%S", time.gmtime(666)), renter_info['alias'], op))
+            time.asctime(), renter_info['alias'], op))
         self.log_file.flush()
 
     def run_step(self):
@@ -162,7 +167,12 @@ class TestNet:
         last_checkpoint_time = start_time
         total_steps = 0
         while True:
-            self.run_step()
+            try:
+                self.run_step()
+            except Exception as err:
+                print('EXCEPTION')
+                print(err)
+                self.log_file.write('Exception while running step: {}\n'.format(str(err)))
             sleep_time = random.uniform(MIN_SLEEP_SEC, MAX_SLEEP_SEC)
             time.sleep(sleep_time)
             total_steps += 1
@@ -187,14 +197,9 @@ class TestNet:
         if rm_files:
             shutil.rmtree(self.options.repo_dir)
 
-def setup_test_net(options):
-    net = TestNet()
-    net.options = options
-    net.log_file = open(LOG_FILE, 'w+')
-
-    print('creating folders and files')
+def create_files(options):
     os.makedirs(options.files_dir)
-    os.makedirs(options.repo_dir)
+    files = []
     step_size = int((options.max_file_size - options.min_file_size) / options.num_files)
     for i in range(options.num_files):
         file_name = test_framework.create_file_name()
@@ -203,35 +208,56 @@ def setup_test_net(options):
         max_size = min_size + step_size
         file_size = random.randint(min_size, max_size)
         test_framework.create_test_file(full_path, file_size)
-        net.files.append(full_path)
+        files.append(full_path)
+    return files
 
-    print('starting metaserver')
+def setup_test_net(options):
+    net = TestNet()
+    net.options = options
+    net.log_file = open(LOG_FILE, 'w+')
+
+    if os.path.exists(options.files_dir):
+        print('using existing folders and files found in {}'.format(options.files_dir))
+        net.files = glob.glob('{}/*'.format(options.files_dir))
+    else:
+        print('creating folders and files')
+        net.files = create_files(options)
+
     meta_addr = '{}:{}'.format(options.ip_addr, options.meta_port)
-    net.metaserver = test_framework.create_metaserver(api_addr=meta_addr, dashboard=True)
+    print('starting metaserver at {}'.format(meta_addr))
+    net.metaserver = test_framework.start_metaserver(api_addr=meta_addr, dashboard=True)
 
     # Wait for metaserver to start before starting other services
     time.sleep(1.0)
     test_framework.check_service_startup(net.metaserver.process)
 
-    print('starting renters')
-    for _ in range(options.num_renters):
-        renter = test_framework.create_renter(
-            metaserver_addr=meta_addr,
-            repo_dir=options.repo_dir,
-            alias=test_framework.create_renter_alias(),
-        )
-        net.renters.append(renter)
-
-    print('starting providers')
-    for _ in range(options.num_providers):
-        api_addr = '{}:{}'.format(options.ip_addr, test_framework.rand_port())
-        provider = test_framework.create_provider(
-            metaserver_addr=meta_addr,
-            repo_dir=options.repo_dir,
-            api_addr=api_addr,
-            storage_space=PROVIDER_STORAGE_SPACE,
-        )
-        net.providers.append(provider)
+    if os.path.exists(options.repo_dir):
+        print('starting existing renters and providers found in {}'.format(options.repo_dir))
+        renter_homedirs = glob.glob('{}/renter*'.format(options.repo_dir))
+        provider_homedirs = glob.glob('{}/provider*'.format(options.repo_dir))
+        for renter_homedir in renter_homedirs:
+            net.renters.append(test_framework.start_renter(renter_homedir))
+        for provider_homedir in provider_homedirs:
+            net.providers.append(test_framework.start_provider(provider_homedir))
+    else:
+        print('creating renters and providers in {}'.format(options.repo_dir))
+        os.makedirs(options.repo_dir)
+        for _ in range(options.num_renters):
+            renter = test_framework.create_renter(
+                metaserver_addr=meta_addr,
+                repo_dir=options.repo_dir,
+                alias=test_framework.create_renter_alias(),
+            )
+            net.renters.append(renter)
+        for _ in range(options.num_providers):
+            api_addr = '{}:{}'.format(options.ip_addr, test_framework.rand_port())
+            provider = test_framework.create_provider(
+                metaserver_addr=meta_addr,
+                repo_dir=options.repo_dir,
+                api_addr=api_addr,
+                storage_space=PROVIDER_STORAGE_SPACE,
+            )
+            net.providers.append(provider)
 
     print('checking server startups')
     time.sleep(1.0)
@@ -270,18 +296,11 @@ def main():
 
     args = parser.parse_args()
 
+    assert args.min_file_size < args.max_file_size, 'min_file_size must be less than max_file_size'
+
     # Be sure that the files_dir and repo_dir args use absolute paths.
     args.files_dir = os.path.abspath(args.files_dir)
     args.repo_dir = os.path.abspath(args.repo_dir)
-
-    for e in [args.files_dir, args.repo_dir]:
-        if os.path.exists(e):
-            print('{} already exists'.format(e))
-            print(('Be sure to either set the repo_dir and files_dir options '
-                   'or remove the default directories'))
-            sys.exit(1)
-
-    assert args.min_file_size < args.max_file_size, 'min_file_size must be less than max_file_size'
 
     net = setup_test_net(args)
     try:

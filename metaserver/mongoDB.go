@@ -640,7 +640,7 @@ func (db *mongoDB) FindContractsByRenter(renterID string) ([]core.Contract, erro
 	defer session.Close()
 
 	var result []core.Contract
-	selector := struct{ renterId string }{renterId: renterID}
+	selector := bson.M{"renterid": renterID}
 	err = c.Find(selector).All(&result)
 	if err != nil {
 		return nil, err

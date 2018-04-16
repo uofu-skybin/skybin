@@ -127,6 +127,7 @@ type Permission struct {
 type File struct {
 	ID         string       `json:"id"`
 	OwnerID    string       `json:"ownerId"`
+	OwnerAlias string       `json:"ownerAlias"`
 	Name       string       `json:"name"`
 	IsDir      bool         `json:"isDir"`
 	AccessList []Permission `json:"accessList"`

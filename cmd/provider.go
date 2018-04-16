@@ -56,11 +56,14 @@ func runProvider(args ...string) {
 
 var providerInitUsage = `provider init [options...]
 options:
-    --homedir         Home directory to place files in (default ~/.skybin/provider)
-    --public-api-addr Public network address for renter traffic in 'host:port' form
-    --local-api-addr  Local API network address in 'host:port' form
-    --meta-addr       Address of the metaserver to register with
-    --storage-space   Storage space to make available to renters (default 10GB)
+    --homedir          Home directory to place files in (default ~/.skybin/provider)
+    --public-api-addr  Public network address for renter traffic in 'host:port' form
+    --local-api-addr   Local API network address in 'host:port' form
+    --meta-addr        Address of the metaserver to register with
+    --storage-space    Storage space to make available to renters (default 10GB)
+    --pricing-policy   Policy to determine storage rates (fixed, passive, or aggressive) default: passive
+    --min-storage-rate Minimum storage rate to charge, in tenths of cents/1e9 bytes/30 days
+    --max-storage-rate Maximum storage rate to charge, in tenths of cents/1e9 bytes/30 days
 `
 
 var providerInitCmd = Cmd{
@@ -80,6 +83,9 @@ func runProviderInit(args ...string) {
 	localApiAddrFlag := fs.String("local-api-addr", "", "")
 	publicApiAddrFlag := fs.String("public-api-addr", "", "")
 	storageSpaceFlag := fs.String("storage-space", "", "")
+	pricingPolicyFlag := fs.String("pricing-policy", "", "")
+	minStorageRateFlag := fs.Int64("min-storage-rate", -1, "")
+	maxStorageRateFlag := fs.Int64("max-storage-rate", -1, "")
 	fs.Parse(args)
 
 	homeDir := *homeDirFlag
@@ -137,6 +143,10 @@ func runProviderInit(args ...string) {
 		PrivateKeyFile: privateKeyPath,
 		PublicKeyFile:  publicKeyPath,
 		SpaceAvail:     provider.DefaultStorageSpace,
+		PricingPolicy:  provider.DefaultPricingPolicy,
+		MinStorageRate: provider.DefaultMinStorageRate,
+		StorageRate:    provider.DefaultMinStorageRate,
+		MaxStorageRate: provider.DefaultMaxStorageRate,
 	}
 	if len(*metaAddrFlag) > 0 {
 		err = util.ValidateNetAddr(*metaAddrFlag)
@@ -174,12 +184,39 @@ func runProviderInit(args ...string) {
 		}
 		config.SpaceAvail = amt
 	}
+	if len(*pricingPolicyFlag) > 0 {
+		policy := provider.PricingPolicy(*pricingPolicyFlag)
+		switch policy {
+		case provider.FixedPricingPolicy:
+			fallthrough
+		case provider.PassivePricingPolicy:
+			fallthrough
+		case provider.AggressivePricingPolicy:
+			config.PricingPolicy = policy
+		default:
+			os.RemoveAll(homeDir)
+			log.Fatal("Invalid pricing policy")
+		}
+	}
+	if *minStorageRateFlag != -1 {
+		config.MinStorageRate = *minStorageRateFlag
+		if config.StorageRate < *minStorageRateFlag {
+			config.StorageRate = *minStorageRateFlag
+		}
+	}
+	if *maxStorageRateFlag != -1 {
+		config.MaxStorageRate = *maxStorageRateFlag
+		if config.StorageRate > config.MaxStorageRate {
+			config.StorageRate = config.MaxStorageRate
+		}
+	}
 
 	// Register with metaserver
 	info := core.ProviderInfo{
-		PublicKey:  string(publicKeyBytes),
-		Addr:       config.PublicApiAddr,
-		SpaceAvail: config.SpaceAvail,
+		PublicKey:   string(publicKeyBytes),
+		Addr:        config.PublicApiAddr,
+		SpaceAvail:  config.SpaceAvail,
+		StorageRate: config.StorageRate,
 	}
 	metaClient := metaserver.NewClient(config.MetaAddr, &http.Client{})
 	updatedInfo, err := metaClient.RegisterProvider(&info)
@@ -215,7 +252,7 @@ func runProviderDaemon(args ...string) {
 		log.Fatal(err)
 	}
 
-	p, err := provider.LoadFromDisk(homedir)
+	pvdr, err := provider.LoadFromDisk(homedir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -227,18 +264,21 @@ func runProviderDaemon(args ...string) {
 	defer logfile.Close()
 	logger := log.New(logfile, "", log.LstdFlags)
 
+	pvdr.SetLogger(logger)
+	pvdr.StartBackgroundThreads()
+
 	// Run local API
 	if !*disableLocalApiFlag {
-		log.Println("starting local provider server at", p.Config.LocalApiAddr)
+		log.Println("starting local provider server at", pvdr.Config.LocalApiAddr)
 		go func() {
-			localServer := provider.NewLocalServer(p, logger)
-			log.Fatal(http.ListenAndServe(p.Config.LocalApiAddr, localServer))
+			localServer := provider.NewLocalServer(pvdr, logger)
+			log.Fatal(http.ListenAndServe(pvdr.Config.LocalApiAddr, localServer))
 		}()
 	}
 
-	server := provider.NewServer(p, logger)
-	port := p.Config.PublicApiAddr[strings.LastIndex(p.Config.PublicApiAddr, ":"):]
-	log.Println("starting public provider server at", p.Config.PublicApiAddr)
+	server := provider.NewServer(pvdr, logger)
+	port := pvdr.Config.PublicApiAddr[strings.LastIndex(pvdr.Config.PublicApiAddr, ":"):]
+	log.Println("starting public provider server at", pvdr.Config.PublicApiAddr)
 	log.Fatal(http.ListenAndServe(port, server))
 }
 

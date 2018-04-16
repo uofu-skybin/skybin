@@ -334,6 +334,8 @@ function showNodeInfo(nodeId) {
         $('#storage-leased').text(bytesToSize(amountReserved));
         $('#storage-offering').text(bytesToSize(amountReserved + provider.spaceAvail));
 
+        $('#storage-rate').text(provider.storageRate / 1000);
+
         let expandedSet = {};
         for (let item of $('#file-list').children()) {
             let name = '';

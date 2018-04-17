@@ -24,6 +24,7 @@ func NewServer(renter *Renter, logger *log.Logger) http.Handler {
 
 	router.HandleFunc("/info", server.getInfo).Methods("GET")
 	router.HandleFunc("/create-storage-estimate", server.createStorageEstimate).Methods("POST")
+	router.HandleFunc("/confirm-storage-estimate", server.confirmStorageEstimate).Methods("POST")
 	router.HandleFunc("/reserve-storage", server.reserveStorage).Methods("POST")
 	router.HandleFunc("/contracts", server.getContracts).Methods("GET")
 	router.HandleFunc("/files/get-metadata", server.getFileMetadata).Methods("POST")
@@ -72,8 +73,47 @@ func (server *renterServer) getInfo(w http.ResponseWriter, r *http.Request) {
 	server.writeResp(w, http.StatusOK, info)
 }
 
+type createStorageEstimateReq struct {
+	Amount int64 `json:"amount"`
+}
+
 func (server *renterServer) createStorageEstimate(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	var req createStorageEstimateReq
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+	estimate, err := server.renter.CreateStorageEstimate(req.Amount)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{err.Error()})
+		return
+	}
+	server.writeResp(w, http.StatusCreated, estimate)
+}
+
+func (server *renterServer) confirmStorageEstimate(w http.ResponseWriter, r *http.Request) {
+	var estimate StorageEstimate
+	err := json.NewDecoder(r.Body).Decode(&estimate)
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			&errorResp{fmt.Sprintf("Unable to decode JSON. Error: %v", err)})
+		return
+	}
+	contracts, err := server.renter.ConfirmStorageEstimate(&estimate)
+	if err != nil {
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusInternalServerError,
+			&errorResp{Error: fmt.Sprintf("Unable to reserve storage. Error: %v", err)})
+		return
+	}
+	resp := reserveStorageResp{
+		Contracts: contracts,
+	}
+	server.writeResp(w, http.StatusCreated, &resp)
 }
 
 type reserveStorageReq struct {

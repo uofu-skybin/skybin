@@ -13,15 +13,15 @@ import (
 	"math"
 )
 
-type storageEstimate struct {
+type StorageEstimate struct {
 	// Total space the estimate reserves in bytes
 	TotalSpace int64 `json:"totalSpace"`
-	// Total price in tenths of cents
-	TotalPrice int64 `json:"totalPrice"`
+	// Total cost in tenths of cents
+	TotalCost  int64 `json:"totalCost"`
 	// Tentative contracts. Terms are set but signatures are empty
-	Contracts []*core.Contract `json:"contracts"`
+	Contracts  []*core.Contract `json:"contracts"`
 	// Providers the contracts are with. Contracts[i] is with Providers[i]
-	Providers []*core.ProviderInfo `json:"providers"`
+	Providers  []*core.ProviderInfo `json:"providers"`
 }
 
 type pvdrDialFn func(*core.ProviderInfo) pvdrIface
@@ -35,7 +35,7 @@ type pvdrIface interface {
 	ReserveStorage(contract *core.Contract) (*core.Contract, error)
 }
 
-func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
+func (r *Renter) CreateStorageEstimate(totalSpace int64) (*StorageEstimate, error) {
 	if totalSpace < kMinContractSize {
 		return nil, fmt.Errorf("Must reserve at least %d bytes.", kMinContractSize)
 	}
@@ -54,7 +54,11 @@ func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Unable to find enough storage space.")
 	}
-	err = confirmStorageEstimate(estimate, r.privKey, dialProvider)
+	return estimate, nil
+}
+
+func (r *Renter) ConfirmStorageEstimate(estimate *StorageEstimate) ([]*core.Contract, error) {
+	err := confirmStorageEstimate(estimate, r.privKey, dialProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -87,11 +91,19 @@ func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
 	return estimate.Contracts, nil
 }
 
+func (r *Renter) ReserveStorage(totalSpace int64) ([]*core.Contract, error) {
+	estimate, err := r.CreateStorageEstimate(totalSpace)
+	if err != nil {
+		return nil, err
+	}
+	return r.ConfirmStorageEstimate(estimate)
+}
+
 func createStorageEstimate(totalSpace int64, config *Config,
 	providers []core.ProviderInfo,
-	dialFn pvdrDialFn) (*storageEstimate, error) {
+	dialFn pvdrDialFn) (*StorageEstimate, error) {
 
-	estimate := &storageEstimate{}
+	estimate := &StorageEstimate{}
 	startDate := time.Now().UTC().Round(0)
 	endDate := time.Now().AddDate(0, 0, config.DefaultContractDurationDays)
 	badPvdrs := make([]bool, len(providers))
@@ -156,7 +168,7 @@ func createStorageEstimate(totalSpace int64, config *Config,
 			estimate.Contracts = append(estimate.Contracts, proposal)
 			estimate.Providers = append(estimate.Providers, pinfo)
 			estimate.TotalSpace += space
-			estimate.TotalPrice += fee
+			estimate.TotalCost += fee
 			break
 		}
 	}
@@ -173,7 +185,7 @@ func calcStorageFee(spaceBytes, durationDays, rateGbMonth int64) int64 {
 	return z * rateGbMonth
 }
 
-func confirmStorageEstimate(estimate *storageEstimate, signingKey *rsa.PrivateKey, dialFn pvdrDialFn) error {
+func confirmStorageEstimate(estimate *StorageEstimate, signingKey *rsa.PrivateKey, dialFn pvdrDialFn) error {
 	for i := 0; i < len(estimate.Contracts); i++ {
 		contract := estimate.Contracts[i]
 		pinfo := estimate.Providers[i]

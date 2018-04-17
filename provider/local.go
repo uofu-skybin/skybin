@@ -6,11 +6,8 @@ import (
 
 	"log"
 	"net/http"
-	"path"
 	"skybin/core"
 	"skybin/metaserver"
-	"skybin/util"
-
 	"github.com/gorilla/mux"
 )
 
@@ -96,30 +93,10 @@ func (server *localServer) postConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server.provider.mu.Lock()
-	server.provider.Config.SpaceAvail = params.SpaceAvail
-	server.provider.Config.MinStorageRate = params.MinStorageRate
-	server.provider.Config.MaxStorageRate = params.MaxStorageRate
-	server.provider.Config.PublicApiAddr = params.PublicApiAddr
-	server.provider.Config.PricingPolicy = params.PricingPolicy
-	server.provider.mu.Unlock()
-
-	server.provider.updatePricing()
-	// Maybe allow this to be mutated (whether or not we display in UI)
-	// server.provider.Config.LocalApiAddr = params.LocalApiAddr
-
-	// TODO: if local or public addr changed reset provider???
-	// This is best addressed in the frontend
-
-	err = server.provider.UpdateMeta()
+	err = server.provider.UpdateConfig(&params)
 	if err != nil {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving updating metaserver"})
-		return
-	}
-
-	err = util.SaveJson(path.Join(server.provider.Homedir, "config.json"), &server.provider.Config)
-	if err != nil {
-		server.writeResp(w, http.StatusBadRequest, errorResp{Error: "Error saving config file"})
+		server.logger.Println(err)
+		server.writeResp(w, http.StatusBadRequest, errorResp{err.Error()})
 		return
 	}
 

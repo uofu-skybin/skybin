@@ -62,6 +62,7 @@ options:
     --meta-addr        Address of the metaserver to register with
     --storage-space    Storage space to make available to renters (default 10GB)
     --pricing-policy   Policy to determine storage rates (fixed, passive, or aggressive) default: passive
+    --storage-rate     Storage rate to charge, in tenths of cents/1e9 bytes/30 days (ignored if policy is not fixed)
     --min-storage-rate Minimum storage rate to charge, in tenths of cents/1e9 bytes/30 days
     --max-storage-rate Maximum storage rate to charge, in tenths of cents/1e9 bytes/30 days
 `
@@ -84,9 +85,25 @@ func runProviderInit(args ...string) {
 	publicApiAddrFlag := fs.String("public-api-addr", "", "")
 	storageSpaceFlag := fs.String("storage-space", "", "")
 	pricingPolicyFlag := fs.String("pricing-policy", "", "")
+	storageRateFlag := fs.Int64("storage-rate", -1, "")
 	minStorageRateFlag := fs.Int64("min-storage-rate", -1, "")
 	maxStorageRateFlag := fs.Int64("max-storage-rate", -1, "")
 	fs.Parse(args)
+
+	if *pricingPolicyFlag != "" {
+		policy := provider.PricingPolicy(*pricingPolicyFlag)
+		switch policy {
+		case provider.FixedPricingPolicy:
+		case provider.PassivePricingPolicy:
+		case provider.AggressivePricingPolicy:
+		default:
+			log.Fatal("Unrecognized pricing policy")
+		}
+	}
+	if *minStorageRateFlag != -1 && *maxStorageRateFlag != -1 &&
+		*minStorageRateFlag > *maxStorageRateFlag {
+		log.Fatal("min-storage-rate must be less than or equal to max-storage-rate")
+	}
 
 	homeDir := *homeDirFlag
 	if len(homeDir) == 0 {
@@ -145,7 +162,7 @@ func runProviderInit(args ...string) {
 		SpaceAvail:     provider.DefaultStorageSpace,
 		PricingPolicy:  provider.DefaultPricingPolicy,
 		MinStorageRate: provider.DefaultMinStorageRate,
-		StorageRate:    provider.DefaultMinStorageRate,
+		StorageRate:    provider.DefaultStorageRate,
 		MaxStorageRate: provider.DefaultMaxStorageRate,
 	}
 	if len(*metaAddrFlag) > 0 {
@@ -198,17 +215,31 @@ func runProviderInit(args ...string) {
 			log.Fatal("Invalid pricing policy")
 		}
 	}
+	if *storageRateFlag != -1 && config.PricingPolicy == provider.FixedPricingPolicy {
+		config.StorageRate = *storageRateFlag
+	}
 	if *minStorageRateFlag != -1 {
 		config.MinStorageRate = *minStorageRateFlag
 		if config.StorageRate < *minStorageRateFlag {
-			config.StorageRate = *minStorageRateFlag
+			if config.PricingPolicy == provider.FixedPricingPolicy {
+				config.MinStorageRate = config.StorageRate
+			} else {
+				config.StorageRate = config.MinStorageRate
+			}
 		}
 	}
 	if *maxStorageRateFlag != -1 {
 		config.MaxStorageRate = *maxStorageRateFlag
 		if config.StorageRate > config.MaxStorageRate {
-			config.StorageRate = config.MaxStorageRate
+			if config.PricingPolicy == provider.FixedPricingPolicy {
+				config.MaxStorageRate = config.StorageRate
+			} else {
+				config.StorageRate = config.MaxStorageRate
+			}
 		}
+	}
+	if config.MinStorageRate > config.MaxStorageRate {
+		config.MaxStorageRate = config.MinStorageRate
 	}
 
 	// Register with metaserver

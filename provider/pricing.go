@@ -3,7 +3,6 @@ package provider
 import (
 	"math/rand"
 	"net/http"
-	"skybin/core"
 	"skybin/metaserver"
 	"sort"
 	"time"

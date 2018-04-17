@@ -13,6 +13,7 @@ import (
 	"skybin/util"
 	"sync"
 	"time"
+	"errors"
 )
 
 type Config struct {
@@ -36,6 +37,9 @@ type Info struct {
 	StorageUsed      int64  `json:"storageUsed"`
 	StorageFree      int64  `json:"storageFree"`
 	StorageRate      int64  `json:"storageRate"`
+	MinStorageRate   int64  `json:"minStorageRate"`
+	MaxStorageRate   int64  `json:"maxStorageRate"`
+	PricingPolicy    string `json:"pricingPolicy"`
 	TotalContracts   int    `json:"totalContracts"`
 	TotalBlocks      int    `json:"totalBlocks"`
 	TotalRenters     int    `json:"totalRenters"`
@@ -88,19 +92,18 @@ const (
 	MinStorageSpace       = 100 * 1e6
 	DefaultPricingPolicy  = PassivePricingPolicy
 	DefaultMinStorageRate = 1
-	DefaultMaxStorageRate = 10000
+	DefaultMaxStorageRate = 100000
 	DefaultStorageRate    = DefaultMinStorageRate
 	PricingUpdateFreq     = 1 * time.Minute
-
-	renterKeyFile = "renter_keys.json"
+	renterKeyFile         = "renter_keys.json"
 )
 
 // Loads configuration and database
 func LoadFromDisk(homedir string) (*Provider, error) {
 	provider := &Provider{
 		Homedir:    homedir,
-		doneCh:  make(chan struct{}),
-		logger:  log.New(ioutil.Discard, "", log.LstdFlags),
+		doneCh:     make(chan struct{}),
+		logger:     log.New(ioutil.Discard, "", log.LstdFlags),
 		renterKeys: map[string]string{},
 	}
 
@@ -202,6 +205,46 @@ func (provider *Provider) SetLogger(logger *log.Logger) {
 	provider.logger = logger
 }
 
+func (provider *Provider) UpdateConfig(config *Config) error {
+	switch config.PricingPolicy {
+	case FixedPricingPolicy:
+	case PassivePricingPolicy:
+	case AggressivePricingPolicy:
+	default:
+		return errors.New("Unrecognized pricing policy.")
+	}
+	if config.MinStorageRate > config.MaxStorageRate {
+		return errors.New("min storage rate cannot exceed max storage rate")
+	}
+
+	provider.mu.Lock()
+	provider.Config.SpaceAvail = config.SpaceAvail
+	provider.Config.MinStorageRate = config.MinStorageRate
+	provider.Config.MaxStorageRate = config.MaxStorageRate
+	provider.Config.PublicApiAddr = config.PublicApiAddr
+	provider.Config.PricingPolicy = config.PricingPolicy
+	if config.PricingPolicy == FixedPricingPolicy {
+
+		// Only update our storage rate to match the given config
+		// if our pricing policy is fixed. Otherwise the pricing
+		// algorithm should determine the rate.
+		provider.Config.StorageRate = config.StorageRate
+	}
+	provider.mu.Unlock()
+
+	provider.updatePricing()
+
+	err := provider.UpdateMeta()
+	if err != nil {
+		return fmt.Errorf("Unable to update metaserver. Error: %s", err)
+	}
+	err = util.SaveJson(path.Join(provider.Homedir, "config.json"), provider.Config)
+	if err != nil {
+		return fmt.Errorf("Unable to save config update. Error: %s", err)
+	}
+	return nil
+}
+
 func (provider *Provider) GetPublicInfo() *Info {
 	provider.mu.RLock()
 	defer provider.mu.RUnlock()
@@ -211,8 +254,11 @@ func (provider *Provider) GetPublicInfo() *Info {
 		StorageReserved:  provider.StorageReserved,
 		StorageUsed:      provider.StorageUsed,
 		StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
-		TotalContracts:   provider.TotalContracts,
 		StorageRate:      provider.Config.StorageRate,
+		MinStorageRate:   provider.Config.MinStorageRate,
+		MaxStorageRate:   provider.Config.MaxStorageRate,
+		PricingPolicy:    string(provider.Config.PricingPolicy),
+		TotalContracts:   provider.TotalContracts,
 		TotalRenters:     len(provider.renters),
 		TotalBlocks:      provider.TotalBlocks,
 	}

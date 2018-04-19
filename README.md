@@ -38,3 +38,8 @@ $ go build -o skybin
 Run a test network or integration tests to become more familiar with the system.
 See the `/integration` folder for more information.
 
+## Prerequisites
+
+SkyBin uses mongoDB for metadata storage. You must install and run mongodb to run a
+local SkyBin metaserver instance.
+

@@ -1,0 +1,358 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: SkyBin Provider
+  description: "API for SkyBin Provider"
+  license:
+    name: MIT
+    
+paths:
+
+  /blocks:
+    get:
+      summary: "Download the block"
+      tags:
+        - Public API
+      parameters:
+        - in: query
+          name: blockID
+          required: true
+          description: "Block Id"
+          schema:
+            type: string
+        - in: query
+          name: renterID
+          required: true
+          description: "Renter Id"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Block Data"
+        400:
+          description: "Bad Request"
+
+    post:
+      summary: "Upload a block"
+      tags:
+        - Public API
+      parameters:
+        - in: query
+          name: blockID
+          required: true
+          description: "Block Id"
+          schema:
+            type: string
+        - in: query
+          name: renterID
+          required: true
+          description: "Renter Id"
+          schema:
+            type: string
+      responses:
+        201:
+          description: "Block uploaded successfully"
+        400:
+          description: "Bad Request format"
+        403:
+          description: "Failure Parsing authentication token"
+        500:
+          description: "Provider information was successfully updated"
+    delete:
+      summary: "Delete a block"
+      tags:
+        - Public API
+      parameters:
+        - in: query
+          name: blockID
+          required: true
+          description: "Block Id"
+          schema:
+            type: string
+        - in: query
+          name: renterID
+          required: true
+          description: "Renter Id"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "Block deleted successfully"
+        400:
+          description: "Bad Request format"
+        403:
+          description: "Failure Parsing authentication token"
+        500:
+          description: "Provider information was successfully updated"
+  
+  /blocks/audit:
+    post:
+      summary: "Audit the block"
+      tags:
+        - Public API
+      parameters:
+        - in: query
+          name: blockID
+          required: true
+          description: "Block Id"
+          schema:
+            type: string
+        - in: query
+          name: renterID
+          required: true
+          description: "Renter Id"
+          schema:
+            type: string
+            
+        - in: query
+          name: nonce
+          required: true
+          description: "Nonce"
+          schema:
+            type: string
+      responses:
+        200:
+          description: "The block was successfully audited"
+  
+  /contracts:
+    get:
+      summary: "Get a list of all contracts."
+      tags:
+        - Local API
+      responses:
+        200:
+          description: "Array of contracts."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+        500:
+          description: "Internal Server Error"
+                
+    post:
+      summary: "Negotiate a contract"
+      tags:
+        - Public API
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: "Provider's ID"
+          schema:
+            type: string
+      requestBody:
+        description: "Proposed Contract"
+        required: true
+        content:
+          application/json:
+            schema:
+                $ref: "#/components/schemas/Contract"
+
+      responses:
+        201:
+          description: "Signed contract"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+        400:
+          description: "Bad Request Error"
+    
+  /info:
+    get:
+      summary: "Get Provider Info object"
+      tags:
+        - Public API
+      responses:
+        200:
+          description: "Successfully retrieved provider info."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+
+  /renter-info:
+    get:
+      summary: "Returns summary information about the given renter."
+      tags:
+        - Public API
+      responses:
+        200:
+          description: "Retrieved Renter"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+
+  /config:
+    get:
+      summary: "Return the config for the current provider."
+      tags:
+        - Local API
+      responses:
+        200:
+          description: "Retrieved provider"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Config"
+    post:  
+      summary: "Update the config for the current provider."
+      tags:
+        - Local API
+      requestBody:
+        description: "Updated Configuration"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Config"
+      responses:
+        200:
+          description: "Configuration updated successfully"
+                
+  /stats:
+    get:
+      summary: "Return statistics to populate the provider dashboard."
+      tags:
+        - Local API
+      responses:
+        200:
+          description: "Get Stats object"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+                
+                  
+  /transactions:
+    get:
+      summary: "Return a list of the providers transactions"
+      tags:
+        - Local API
+      responses:
+        200:
+          description: "Successfully retrieved transactions"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"  
+                  
+  /paypal/withdraw:
+    get:
+      summary: "Withdraw funds from the wallet."
+      tags:
+        - Local API
+      parameters: 
+        - in: query
+          name: email
+          required: true
+          description: "Block Id"
+          schema:
+            type: string
+        - in: query
+          name: amount
+          required: true
+          description: "Renter Id"
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "Payment withdrawal request has been sent."
+
+components:
+  schemas:
+    Provider:
+      properties:
+        id:
+          type: string
+        publicKey:
+          type: string
+        addr:
+          type: string
+        spaceAvail:
+          type: integer
+          format: int64
+        storageRate:
+          type: integer
+          format: int64
+        balance:
+          type: integer
+          format: int64
+    Contract:
+      properties:
+        id:
+          type: string
+        renterId:
+          type: string
+        providerId:
+          type: string
+        storageSpace:
+          type: integer
+          format: int64
+        fee:
+          type: integer
+          format: int64
+        startDate:
+          type: string
+        endDate:
+          type: string
+        renterSignature:
+          type: string
+        providerSignature:
+          type: string
+    Transaction:
+      properties:
+        userType:
+          type: string
+        userId:
+          type: string
+        contractId:
+          type: string
+        transactionType:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        description:
+          type: string
+        date:
+          type: string
+    Config:
+      properties:
+        publicApiAddr:
+          type: string
+        SpaceAvail:
+          type: integer
+          format: int64
+        StorageRate:
+          type: integer
+          format: int64
+        minStorageRate:
+          type: integer
+          format: int64 
+        pricingPolicy:
+          type: string
+          
+          
+          
+    # ProviderId:       provider.Config.ProviderID,
+    # StorageAllocated: provider.Config.SpaceAvail,
+    # StorageReserved:  provider.StorageReserved,
+    # StorageUsed:      provider.StorageUsed,
+    # StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
+    # StorageRate:      provider.Config.StorageRate,
+    # MinStorageRate:   provider.Config.MinStorageRate,
+    # MaxStorageRate:   provider.Config.MaxStorageRate,
+    # PricingPolicy:    string(provider.Config.PricingPolicy),
+    # TotalContracts:   provider.TotalContracts,
+    # TotalRenters:     len(provider.renters),
+    # TotalBlocks:      provider.TotalBlocks,
+          
+        

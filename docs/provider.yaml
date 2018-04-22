@@ -5,12 +5,12 @@ info:
   description: "API for SkyBin Provider"
   license:
     name: MIT
-    
+
 paths:
 
   /blocks:
     get:
-      summary: "Download the block"
+      summary: "Download a block"
       tags:
         - Public API
       parameters:
@@ -58,6 +58,7 @@ paths:
           description: "Failure Parsing authentication token"
         500:
           description: "Provider information was successfully updated"
+
     delete:
       summary: "Delete a block"
       tags:
@@ -84,10 +85,10 @@ paths:
           description: "Failure Parsing authentication token"
         500:
           description: "Provider information was successfully updated"
-  
+
   /blocks/audit:
     post:
-      summary: "Audit the block"
+      summary: "Audit a block"
       tags:
         - Public API
       parameters:
@@ -103,7 +104,7 @@ paths:
           description: "Renter Id"
           schema:
             type: string
-            
+
         - in: query
           name: nonce
           required: true
@@ -113,10 +114,10 @@ paths:
       responses:
         200:
           description: "The block was successfully audited"
-  
+
   /contracts:
     get:
-      summary: "Get a list of all contracts."
+      summary: "List all contracts."
       tags:
         - Local API
       responses:
@@ -130,7 +131,7 @@ paths:
                   $ref: "#/components/schemas/Contract"
         500:
           description: "Internal Server Error"
-                
+
     post:
       summary: "Negotiate a contract"
       tags:
@@ -161,7 +162,7 @@ paths:
                   $ref: "#/components/schemas/Contract"
         400:
           description: "Bad Request Error"
-    
+
   /info:
     get:
       summary: "Get Provider Info object"
@@ -200,7 +201,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Config"
-    post:  
+    post:
       summary: "Update the config for the current provider."
       tags:
         - Local API
@@ -214,7 +215,7 @@ paths:
       responses:
         200:
           description: "Configuration updated successfully"
-                
+
   /stats:
     get:
       summary: "Return statistics to populate the provider dashboard."
@@ -227,8 +228,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Contract"
-                
-                  
+
+
   /transactions:
     get:
       summary: "Return a list of the providers transactions"
@@ -242,14 +243,14 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Transaction"  
-                  
+                  $ref: "#/components/schemas/Transaction"
+
   /paypal/withdraw:
     get:
       summary: "Withdraw funds from the wallet."
       tags:
         - Local API
-      parameters: 
+      parameters:
         - in: query
           name: email
           required: true
@@ -336,23 +337,6 @@ components:
           format: int64
         minStorageRate:
           type: integer
-          format: int64 
+          format: int64
         pricingPolicy:
           type: string
-          
-          
-          
-    # ProviderId:       provider.Config.ProviderID,
-    # StorageAllocated: provider.Config.SpaceAvail,
-    # StorageReserved:  provider.StorageReserved,
-    # StorageUsed:      provider.StorageUsed,
-    # StorageFree:      provider.Config.SpaceAvail - provider.StorageReserved,
-    # StorageRate:      provider.Config.StorageRate,
-    # MinStorageRate:   provider.Config.MinStorageRate,
-    # MaxStorageRate:   provider.Config.MaxStorageRate,
-    # PricingPolicy:    string(provider.Config.PricingPolicy),
-    # TotalContracts:   provider.TotalContracts,
-    # TotalRenters:     len(provider.renters),
-    # TotalBlocks:      provider.TotalBlocks,
-          
-        

@@ -1,0 +1,569 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: SkyBin Renter
+  description: "API for SkyBin renter server"
+  license:
+    name: MIT
+
+paths:
+  /info:
+    get:
+      summary: "Retrieve information about the renter node."
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenterInfo"
+
+  /create-storage-estimate:
+    post:
+      summary: "Find storage on the SkyBin network but do not reserve it."
+      tags:
+        - storage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  description: "Amount of storage to find."
+                  type: integer
+                  format: int64
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageEstimate"
+
+  /confirm-storage-estimate:
+    post:
+      summary: "Reserve storage on the SkyBin network from a storage estimate."
+      tags:
+        - storage
+      requestBody:
+        description: "The storage estimate to confirm."
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorageEstimate"
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+  /reserve-storage:
+    post:
+      summary: "Reserve storage on the SkyBin network without first creating a storage estimate."
+      tags:
+         - storage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+  /contracts:
+    get:
+      summary: "List storage contracts owned by this renter."
+      tags:
+        - storage
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+  /files/get-metadata:
+    post:
+      summary: "Retrieve metadata for a file."
+      tags:
+        - files
+      requestBody:
+        description: "The file's ID"
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileId:
+                  type: string
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+  /files:
+    get:
+      summary: "List all stored files"
+      tags:
+        - files
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/File"
+
+  /files/upload:
+    post:
+      summary: "Upload a file."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sourcePath:
+                  type: string
+                destPath:
+                  type: string
+                shouldOverwrite:
+                  type: boolean
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+        400:
+          description: "No file existed at the given sourcePath."
+        500:
+          description: "The file could not be uploaded due to a network error or lack of storage."
+
+  /files/download:
+    post:
+      summary: "Download a stored file."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileId:
+                  type: string
+                destPath:
+                  type: string
+                versionNum:
+                  type: integer
+      responses:
+        201:
+          description: "Success"
+        500:
+          description: "The file could not be downloaded due to a network error or data loss."
+
+  /files/create-folder:
+    post:
+      summary: "Create a folder."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+
+  /files/rename:
+    post:
+      summary: "Rename a file."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileId:
+                  type: string
+                name:
+                  type: string
+      responses:
+        200:
+          description: "Success"
+        400:
+          description: "A file with the given name already exists."
+
+  /files/remove:
+    post:
+      summary: "Remove a file or folder. Recursively removes all children if the file is a folder and the recursive option is given."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileId:
+                  type: string
+                versionNum:
+                  type: integer
+                recursive:
+                  type: boolean
+      responses:
+        200:
+          description: "Success"
+        400:
+          description: "The file was a non-empty folder but the recursive option was not given"
+
+  /files/shared:
+    get:
+      summary: "List all files shared with the renter."
+      tags:
+        - files
+      responses:
+        200:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/File"
+
+  /files/shared/remove:
+    post:
+      summary: "Remove a file that has been shared with the renter from the renter's list of shared files."
+      tags:
+        - files
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileId:
+                  type: string
+      responses:
+        200:
+          description: "Success"
+        400:
+          description: "The given file ID doesn't correspond to any file shared with the renter."
+
+  /paypal/create:
+    post:
+      summary: "Create a paypal transaction to deposit money into SkyBin."
+      tags:
+        - payments
+      responses:
+        201:
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+  /paypal/execute:
+    post:
+      summary: "Execute a previously created paypal transaction."
+      tags:
+        - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                payerId:
+                  type: string
+      responses:
+        200:
+          description: "Success."
+
+  /paypal/withdraw:
+    post:
+      summary: "Withdraw money from the renter's account"
+      tags:
+        - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: integer
+                  format: int64
+                email:
+                  type: string
+                renterId:
+                  type: string
+      responses:
+        200:
+          description: "Success."
+
+  /transactions:
+    get:
+      summary: "List all of the renter's transactions"
+      tags:
+        - payments
+      responses:
+        200:
+          description: "Success."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+components:
+  schemas:
+    RenterInfo:
+      properties:
+        id:
+          type: string
+        alias:
+          type: string
+        apiAddress:
+          type: string
+        homedir:
+          type: string
+        reservedStorage:
+          type: integer
+          format: int64
+        freeStorage:
+          type: integer
+          format: int64
+        usedStorage:
+          type: integer
+          format: int64
+        totalContracts:
+          type: integer
+        totalFiles:
+          type: integer
+        balance:
+          type: integer
+          format: int64
+
+    StorageEstimate:
+      properties:
+        totalSpace:
+          type: integer
+          format: int64
+        totalCost:
+          type: integer
+          format: int64
+        contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contract"
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Provider"
+
+    Provider:
+      properties:
+        id:
+          type: string
+        publicKey:
+          type: string
+        addr:
+          type: string
+        spaceAvail:
+          type: integer
+          format: int64
+        storageRate:
+          type: integer
+          format: int64
+        balance:
+          type: integer
+          format: int64
+
+    Contract:
+      properties:
+        id:
+          type: string
+        renterId:
+          type: string
+        providerId:
+          type: string
+        storageSpace:
+          type: integer
+          format: int64
+        fee:
+          type: integer
+          format: int64
+        startDate:
+          type: string
+        endDate:
+          type: string
+        renterSignature:
+          type: string
+        providerSignature:
+          type: string
+
+    PaymentInfo:
+      properties:
+        contract:
+          type: string
+        isPaying:
+          type: boolean
+        lastPaymentTime:
+          type: string
+        balance:
+          type: integer
+          format: int64
+
+    File:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        isDir:
+          type: boolean
+        accessList:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+        aesKey:
+          type: string
+        aesIV:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Version"
+
+    Permission:
+      properties:
+        renterId:
+          type: string
+        renterAlias:
+          type: string
+        aesKey:
+          type: string
+        aesIV:
+          type: string
+
+    Version:
+      properties:
+        num:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        modTime:
+          type: string
+        uploadTime:
+          type: string
+        uploadSize:
+          type: integer
+          format: int64
+        paddingBytes:
+          type: integer
+          format: int64
+        numDataBlocks:
+          type: integer
+        numParityBlocks:
+          type: integer
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Block"
+
+    Block:
+      properties:
+        id:
+          type: string
+        num:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        sha256hash:
+          type: string
+        location:
+          $ref: "#/components/schemas/BlockLocation"
+
+    BlockLocation:
+      properties:
+        providerId:
+          type: string
+        addr:
+          type: string
+        contractId:
+          type: string
+
+    Transaction:
+      properties:
+        userType:
+          type: string
+        userId:
+          type: string
+        contractId:
+          type: string
+        transactionType:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        description:
+          type: string
+        date:
+          type: string

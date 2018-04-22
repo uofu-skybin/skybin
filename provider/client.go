@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"skybin/authorization"
 	"skybin/core"
+	"mime/multipart"
 )
 
 type Client struct {
@@ -81,13 +82,27 @@ func (client *Client) PutBlock(renterID string, blockID string, data io.Reader, 
 	}
 
 	url := fmt.Sprintf("http://%s/blocks?renterID=%s&blockID=%s&size=%d", client.addr, renterID, blockID, size)
-	req, err := http.NewRequest(http.MethodPost, url, data)
+
+	buf := &bytes.Buffer{}
+	bw := multipart.NewWriter(buf)
+	fw, err := bw.CreateFormFile("blockData", "blockData")
 	if err != nil {
 		return err
 	}
+	_, err = io.CopyN(fw, data, size)
+	if err != nil {
+		return err
+	}
+	bw.Close()
+	req, err := http.NewRequest(http.MethodPost, url, buf)
+	if err != nil {
+		return err
+	}
+
 	token := fmt.Sprintf("Bearer %s", client.token)
 	req.Header.Add("Authorization", token)
-	req.Header.Set("Content-Type", "application/octet-stream")
+	//req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Type", bw.FormDataContentType())
 
 	resp, err := client.client.Do(req)
 	if err != nil {

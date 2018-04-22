@@ -132,7 +132,15 @@ func (server *providerServer) postBlock(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = server.provider.StoreBlock(renterID, blockID, r.Body, size)
+	multiFile, _, err := r.FormFile("blockData")
+	if err != nil {
+		server.writeResp(w, http.StatusBadRequest,
+			errorResp{err.Error()})
+		return
+	}
+	defer multiFile.Close()
+
+	err = server.provider.StoreBlock(renterID, blockID, multiFile, size)//r.Body, size)
 	if err != nil {
 		server.logger.Println(err)
 		server.writeResp(w, http.StatusBadRequest, &errorResp{err.Error()})

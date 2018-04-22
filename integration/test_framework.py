@@ -319,7 +319,11 @@ def start_renter(homedir):
     process = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
     return RenterService(process=process, address=api_addr, homedir=homedir)
 
-def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*1024*1024*1024):
+def init_provider(homedir, metaserver_addr, public_api_addr,
+                  storage_space=50*1024*1024*1024,
+                  min_storage_rate=None,
+                  max_storage_rate=None,
+                  pricing_policy=None):
     """Set up a skybin provider directory"""
     args = [SKYBIN_CMD, 'provider', 'init',
             '-homedir', homedir,
@@ -328,6 +332,15 @@ def init_provider(homedir, metaserver_addr, public_api_addr, storage_space=50*10
     if storage_space != None:
         args.append('-storage-space')
         args.append(str(storage_space))
+    if min_storage_rate != None:
+        args.append('--min-storage-rate')
+        args.append(str(min_storage_rate))
+    if max_storage_rate != None:
+        args.append('--max-storage-rate')
+        args.append(str(max_storage_rate))
+    if pricing_policy != None:
+        args.append('--pricing-policy')
+        args.append(pricing_policy)
     process = subprocess.Popen(args, stderr=subprocess.PIPE)
     if process.wait() != 0:
         _, stderr = process.communicate()
@@ -361,7 +374,10 @@ def create_renter(metaserver_addr, repo_dir, alias):
 
 def create_provider(metaserver_addr, repo_dir,
                     api_addr=None,
-                    storage_space=None):
+                    storage_space=None,
+                    min_storage_rate=None,
+                    max_storage_rate=None,
+                    pricing_policy=None):
     """Create and start a new provider instance."""
 
     homedir = '{}/provider{}'.format(repo_dir, random.randint(1, 1024))
@@ -374,6 +390,9 @@ def create_provider(metaserver_addr, repo_dir,
         metaserver_addr=metaserver_addr,
         public_api_addr=api_addr,
         storage_space=storage_space,
+        min_storage_rate=min_storage_rate,
+        max_storage_rate=max_storage_rate,
+        pricing_policy=pricing_policy
     )
     return start_provider(homedir)
 

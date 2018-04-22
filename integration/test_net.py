@@ -256,6 +256,9 @@ def setup_test_net(options):
                 repo_dir=options.repo_dir,
                 api_addr=api_addr,
                 storage_space=PROVIDER_STORAGE_SPACE,
+                min_storage_rate=options.min_storage_rate,
+                max_storage_rate=options.max_storage_rate,
+                pricing_policy=options.pricing_policy
             )
             net.providers.append(provider)
 
@@ -293,6 +296,12 @@ def main():
                         help='minimum test file size')
     parser.add_argument('--max_file_size', type=int, default=10000000,
                         help='maximum test file size')
+    parser.add_argument('--min_storage_rate', type=int, default=None,
+                        help='minimum storage rate to set for all providers')
+    parser.add_argument('--max_storage_rate', type=int, default=None,
+                        help='maximum storage rate to set for all providers')
+    parser.add_argument('--pricing_policy', type=str, default=None,
+                        help='pricing policy to set for all providers')
 
     args = parser.parse_args()
 

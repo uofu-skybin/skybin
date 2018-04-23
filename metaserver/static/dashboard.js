@@ -42,8 +42,8 @@ function setupPage() {
             response = JSON.parse(this.responseText);
 
             setupNetworkAndNodeDetails();
-            createContractsOverTime(7);
-            createUploadsOverTime(7);
+            createContractsOverTime();
+            createUploadsOverTime();
             createFileSizeDistribution();
         }
     }
@@ -516,26 +516,24 @@ function showFileContractsAndLocations(renterId, fileId) {
     });
 }
 
-function getPreviousDays(numDays) {
-    /** 
-     * Create an array containing the specified number of days, moving backward starting with the current day.
-    */
-    let days = [];
-    for (let i = 0; i < numDays; i++) {
-        let currDate = new Date();
-        currDate.setDate(currDate.getDate() - (numDays - 1) + i);
-        days.push(currDate);
+function getPreviousTimes() {
+    let times = [];
+    let numTicks = 7;
+    let currTime = new Date();
+    for (let i = 0; i < numTicks; i++) {
+        let nextTime = new Date(currTime - 30 * 60 * 1000 * i);
+        times.push(nextTime);
     }
-    return days;
+    return times.reverse();
 }
 
 let contractsOverTime = null;
 
-function createContractsOverTime(numberOfDays) {
+function createContractsOverTime() {
     /** 
      * Create the contracts per day chart
     */
-    let labelsAndData = calculateContractsOverTime(numberOfDays);
+    let labelsAndData = calculateContractsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -558,7 +556,7 @@ function createContractsOverTime(numberOfDays) {
             maintainAspectRatio: false,
             scales: {
                 xAxes: [{
-                    type: 'time'
+                    type: 'time',
                 }],
                 yAxes: [{
                     ticks: {
@@ -571,14 +569,14 @@ function createContractsOverTime(numberOfDays) {
             },
             title: {
                 display: true,
-                text: "Storage Reservations Per Day"
+                text: "Storage Reservations in Last 3 Hours"
             }
         }
     });
 }
 
-function updateContractsOverTime(numberOfDays) {
-    let labelsAndData = calculateContractsOverTime(numberOfDays);
+function updateContractsOverTime() {
+    let labelsAndData = calculateContractsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -588,32 +586,29 @@ function updateContractsOverTime(numberOfDays) {
     contractsOverTime.update();
 }
 
-function calculateContractsOverTime(numberOfDays) {
-    let days = getPreviousDays(numberOfDays);
-    let dates = {};
-    for (let day of days) {
-        dates[day.toDateString()] = 0;
-    }
+function calculateContractsOverTime() {
+    let times = getPreviousTimes();
+    let contractNumbers = new Array(times.length).fill(0);
 
     for (let contract of response.contracts) {
-        let contractDate = new Date(contract.startDate).toDateString();
-        if (dates[contractDate] != undefined) {
-            dates[contractDate]++;
+        let contractDate = new Date(contract.startDate);
+        for (let i = 1; i < times.length; i++) {
+            if (contractDate >= times[i-1] && contractDate < times[i]) {
+                contractNumbers[i-1]++;
+            }
         }
     }
 
-    let numberOfContractsPerDay = [];
-    for (let i = 0; i < days.length; i++) {
-        numberOfContractsPerDay[i] = dates[days[i].toDateString()];
-    }
-
-    return [days, numberOfContractsPerDay];
+    times.splice(times.length - 1, 1);
+    contractNumbers.splice(contractNumbers.length - 1, 1);
+    let returnVal = [times, contractNumbers];
+    return returnVal;
 }
 
 let uploadsOverTime = null;
 
-function createUploadsOverTime(numberOfDays) {
-    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+function createUploadsOverTime() {
+    let labelsAndData = calculateUploadsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -648,14 +643,14 @@ function createUploadsOverTime(numberOfDays) {
             },
             title: {
                 display: true,
-                text: "Uploads Per Day"
+                text: "Uploads in Last 3 Hours"
             }
         }
     });
 }
 
-function updateUploadsOverTime(numberOfDays) {
-    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+function updateUploadsOverTime() {
+    let labelsAndData = calculateUploadsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -665,28 +660,25 @@ function updateUploadsOverTime(numberOfDays) {
     uploadsOverTime.update();
 }
 
-function calculateUploadsOverTime(numberOfDays) {
-    let days = getPreviousDays(numberOfDays);
-    let dates = {};
-    for (let day of days) {
-        dates[day.toDateString()] = 0;
-    }
+function calculateUploadsOverTime() {
+    let times = getPreviousTimes();
+    let uploadCounts = new Array(times.length).fill(0);
 
     for (let file of response.files) {
         for (let version of file.versions) {
-            let versionDate = new Date(version.uploadTime).toDateString();
-            if (dates[versionDate] != undefined) {
-                dates[versionDate]++;
+            let versionDate = new Date(version.uploadTime);
+            for (let i = 1; i < times.length; i++) {
+                if (versionDate >= times[i-1] && versionDate < times[i]) {
+                    uploadCounts[i-1]++;
+                }
             }
         }
     }
 
-    let uploadsPerDay = [];
-    for (let i = 0; i < days.length; i++) {
-        uploadsPerDay[i] = dates[days[i].toDateString()];
-    }
-
-    return [days, uploadsPerDay];
+    times.splice(times.length - 1, 1);
+    uploadCounts.splice(uploadCounts.length - 1, 1);
+    let returnVal = [times, uploadCounts];
+    return returnVal;
 }
 
 let fileSizeDistribution = null;

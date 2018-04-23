@@ -282,6 +282,7 @@ function showNodeInfo(nodeId) {
         $('#node-id').text(renter.id);
         $('#node-type').text('renter');
         $('#renter-name').text(renter.alias);
+        $('#node-balance').text('$' + renter.balance / 1000);
 
         let numberOfFiles = 0;
         let storageUsed = 0;
@@ -324,6 +325,7 @@ function showNodeInfo(nodeId) {
         $('#node-id').text(provider.id);
         $('#node-type').text('provider');
         $('#storage-available').text(bytesToSize(provider.spaceAvail));
+        $('#node-balance').text('$' + provider.balance / 1000);
 
         let amountReserved = 0;
         for (let contract of response.contracts) {

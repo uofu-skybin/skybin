@@ -417,8 +417,7 @@ function showNodeInfo(nodeId) {
                         listItem.append('<i title="block corrupt" class="fas fa-times-circle text-danger"></i> ');
                     }
 
-                    let integrityIcon = $('<i>')
-                    integrityIcon.addClass('fas');
+                    let integrityIcon = $('<i>', {'class': 'can-click fas'})
                     integrityIcon.on(
                         'click',
                         { fileId: file.id, blockId: block.id},
@@ -436,7 +435,7 @@ function showNodeInfo(nodeId) {
 
                     listItem.append(integrityIcon);
 
-                    let idSpan = $('<span>');
+                    let idSpan = $('<span>', {'class': 'can-copy'});
                     idSpan.append(block.id);
                     idSpan.click(copyToClipboard);
                     listItem.append(idSpan);

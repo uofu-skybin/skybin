@@ -20,7 +20,7 @@ let providers = {};
 
 $(document).ready(function() {
     setupPage();
-    setInterval(updatePage, 2500);
+    setInterval(updatePage, 30000);
 
     $('#node-id').click(copyToClipboard);
 });
@@ -282,7 +282,7 @@ function showNodeInfo(nodeId) {
         $('#node-id').text(renter.id);
         $('#node-type').text('renter');
         $('#renter-name').text(renter.alias);
-        $('#node-balance').text('$' + renter.balance / 1000);
+        $('#node-balance').text(renter.balance / 1000);
 
         let numberOfFiles = 0;
         let storageUsed = 0;
@@ -296,6 +296,7 @@ function showNodeInfo(nodeId) {
 
                 let li = $('<li>')
                 li.append(file.name);
+                li.addClass('clickable-item');
                 li.click(() => {
                     showFileContractsAndLocations(renter.id, file.id);
                 });
@@ -325,7 +326,7 @@ function showNodeInfo(nodeId) {
         $('#node-id').text(provider.id);
         $('#node-type').text('provider');
         $('#storage-available').text(bytesToSize(provider.spaceAvail));
-        $('#node-balance').text('$' + provider.balance / 1000);
+        $('#node-balance').text(provider.balance / 1000);
 
         let amountReserved = 0;
         for (let contract of response.contracts) {
@@ -338,6 +339,7 @@ function showNodeInfo(nodeId) {
 
         $('#storage-rate').text(provider.storageRate / 1000);
 
+        // Check if the user has expanded any of the existing list items.
         let expandedSet = {};
         for (let item of $('#file-list').children()) {
             let name = '';
@@ -363,6 +365,18 @@ function showNodeInfo(nodeId) {
 
             let latestVersion = file.versions[file.versions.length - 1];
             let listItem = $('<li>');
+            if (!expandedSet[file.name]) {
+                listItem.addClass('clickable-item');
+            }
+            
+            let bulletSpan = $('<span>');
+            bulletSpan.attr('class', 'bullet-span');
+            if (!expandedSet[file.name]) {
+                bulletSpan.append('<i class="fas fa-angle-right"></i> ');
+            } else {
+                bulletSpan.append('<i class="fas fa-angle-down"></i> ');
+            }
+            listItem.append(bulletSpan);
 
             let nameSpan = $('<span>');
             nameSpan.append(file.name);
@@ -377,7 +391,7 @@ function showNodeInfo(nodeId) {
             }
             span.append('<br>Block IDs:<br>')
 
-            let blockList = $('<ul>')
+            let blockList = $('<ul>', {"class": "block-id-list"});
             let blockStored = false;
             for (let block of latestVersion.blocks) {
                 if (block.location.providerId == provider.id) {
@@ -453,7 +467,14 @@ function updateNodeInfo() {
 }
 
 function showOrHideBlocks(event) {
-    $(this).siblings('.block-list').toggle();
+    if ($(this).siblings('.block-list').is(':visible')) {
+        $(this).siblings('.bullet-span').html('<i class="fas fa-angle-right"></i> ');
+        $(this).parent().addClass('clickable-item');
+    } else {
+        $(this).siblings('.bullet-span').html('<i class="fas fa-angle-down"></i> ');
+        $(this).parent().removeClass('clickable-item');
+    }
+    $(this).siblings('.block-list').slideToggle(100);
 }
 
 function showFileContractsAndLocations(renterId, fileId) {

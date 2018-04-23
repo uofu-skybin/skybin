@@ -31,6 +31,12 @@ ul {
     height: 30%;
 }
 
+#refresh-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
 #node-title {
     margin-bottom: 0;
 }

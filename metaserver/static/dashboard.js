@@ -21,6 +21,7 @@ let providers = {};
 $(document).ready(function() {
     setupPage();
     setInterval(updatePage, 30000);
+    setInterval(updateRefreshTime, 5000);
 
     $('#node-id').click(copyToClipboard);
 });
@@ -89,8 +90,18 @@ function setupLegend() {
     network.moveTo({position: {x: x, y: pos.y + 5}, scale: scale * 0.9});
 }
 
+let refreshTime = new Date();
+
+function updateRefreshTime() {
+    let secondsPassed = Math.floor((new Date() - refreshTime) / 1000);
+    $('#refresh-time').text(secondsPassed);
+}
+
 function updatePage() {
     console.log('Updating!');
+
+    $('#refresh-button').addClass('fa-spin');
+
     
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -102,6 +113,9 @@ function updatePage() {
             updateUploadsOverTime(7);
             updateFileSizeDistribution();
             updateNodeInfo();
+            $('#refresh-button').removeClass('fa-spin');
+            refreshTime = new Date();
+            updateRefreshTime();
         }
     }
     // Get data from metaserver.

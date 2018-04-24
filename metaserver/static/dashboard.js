@@ -637,6 +637,7 @@ function getPreviousTimes() {
         currTime.setHours(currTime.getHours() + 1);
         currTime.setMinutes(0);
     }
+    currTime.setSeconds(0);
     for (let i = 0; i < numTicks; i++) {
         let nextTime = new Date(currTime - 30 * 60 * 1000 * i);
         times.push(nextTime);

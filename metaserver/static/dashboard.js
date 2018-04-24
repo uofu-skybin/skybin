@@ -309,11 +309,35 @@ function showNodeInfo(nodeId) {
                 }
 
                 let li = $('<li>')
-                li.append(file.name);
-                li.addClass('clickable-item');
-                li.click(() => {
+
+                let isCorrupt = false;
+                if (file.versions.length > 0) {
+                    for (let block of file.versions[file.versions.length - 1].blocks) {
+                        if (!block.auditPassed) {
+                            isCorrupt = true;
+                            break;
+                        }
+                    }
+                }
+                if (isCorrupt) {
+                    li.append($('<i>', {
+                        'class': 'fas fa-times-circle text-danger',
+                        'title': 'contains corrupt blocks'
+                    }));
+                } else {
+                    li.append($('<i>', {
+                        'class': 'fas fa-check-circle text-success',
+                        'title': 'all blocks verified'
+                    }));
+                }
+
+                let $name = $('<span>', {'class': 'clickable-item'});
+                $name.append(' ' + file.name);
+                $name.click(() => {
                     showFileContractsAndLocations(renter.id, file.id);
                 });
+
+                li.append($name);
 
                 $('#file-list').append(li);
             }
@@ -412,9 +436,9 @@ function showNodeInfo(nodeId) {
                     blockStored = true;
                     let listItem = $('<li>');
                     if (block.auditPassed) {
-                        listItem.append('<i title="block verified" class="fas fa-check-circle text-success"></i> ');
+                        listItem.append('<i title="block verified" class="indicator fas fa-check-circle text-success"></i> ');
                     } else {
-                        listItem.append('<i title="block corrupt" class="fas fa-times-circle text-danger"></i> ');
+                        listItem.append('<i title="block corrupt" class="indicator fas fa-times-circle text-danger"></i> ');
                     }
 
                     let integrityIcon = $('<i>', {'class': 'can-click fas'})
@@ -458,16 +482,34 @@ function showNodeInfo(nodeId) {
 }
 
 function checkIntegrity(event) {
-    $(this).removeClass('fa-question-circle');
-    $(this).addClass('fa-spinner');
-    $(this).addClass('fa-spin');
-    $(this).prop('title', 'checking block integrity')
+    let $this = $(this);
+    $this.removeClass('fa-question-circle');
+    $this.addClass('fa-spinner');
+    $this.addClass('fa-spin');
+    $this.prop('title', 'checking block integrity')
     auditing[event.data.blockId] = true;
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4 && this.status == 200) {
             delete auditing[event.data.blockId];
+
+            $this.removeClass('fa-spinner');
+            $this.removeClass('fa-spin');
+            $this.addClass('fa-question-circle');
+
+            let response = JSON.parse(this.responseText);
+            if (response.success) {
+                $this.siblings('.indicator').removeClass('fa-times-circle');
+                $this.siblings('.indicator').removeClass('text-danger');
+                $this.siblings('.indicator').addClass('fa-check-circle');
+                $this.siblings('.indicator').addClass('text-success');
+            } else {
+                $this.siblings('.indicator').removeClass('fa-check-circle');
+                $this.siblings('.indicator').removeClass('text-success');
+                $this.siblings('.indicator').addClass('fa-times-circle');
+                $this.siblings('.indicator').addClass('text-danger');
+            }
         }
     }
     // Get data from metaserver.
@@ -592,9 +634,9 @@ function calculateContractsOverTime() {
 
     for (let contract of response.contracts) {
         let contractDate = new Date(contract.startDate);
-        for (let i = 1; i < times.length; i++) {
-            if (contractDate >= times[i-1] && contractDate < times[i]) {
-                contractNumbers[i-1]++;
+        for (let i = 0; i < times.length - 1; i++) {
+            if (contractDate > times[i] && contractDate <= times[i + 1]) {
+                contractNumbers[i]++;
             }
         }
     }
@@ -667,9 +709,9 @@ function calculateUploadsOverTime() {
     for (let file of response.files) {
         for (let version of file.versions) {
             let versionDate = new Date(version.uploadTime);
-            for (let i = 1; i < times.length; i++) {
-                if (versionDate >= times[i-1] && versionDate < times[i]) {
-                    uploadCounts[i-1]++;
+            for (let i = 0; i < times.length - 1; i++) {
+                if (versionDate > times[i] && versionDate <= times[i+1]) {
+                    uploadCounts[i]++;
                 }
             }
         }

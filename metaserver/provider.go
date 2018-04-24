@@ -130,6 +130,11 @@ func (server *MetaServer) putProviderHandler() http.HandlerFunc {
 			writeErr("must not change provider public key", http.StatusBadRequest, w)
 			return
 		}
+		// Make sure the user is not trying to update their balance.
+		if updatedProvider.Balance != provider.Balance {
+			writeErr("must not change balance", http.StatusUnauthorized, w)
+			return
+		}
 		// Put the new provider into the database.
 		err = server.db.UpdateProvider(&updatedProvider)
 		if err != nil {

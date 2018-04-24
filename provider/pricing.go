@@ -53,7 +53,7 @@ func (provider *Provider) updatePricing() {
 	switch provider.Config.PricingPolicy {
 	case AggressivePricingPolicy:
 		// Set the price to the average of the most expensive quartile of providers.
-		mostExpensiveQuartile := len(rates) - len(rates) / 4
+		mostExpensiveQuartile := len(rates) - len(rates)/4
 		if mostExpensiveQuartile == len(rates) {
 			mostExpensiveQuartile -= 1
 		}
@@ -81,7 +81,7 @@ func (provider *Provider) updatePricing() {
 			tot += rates[i]
 		}
 		avg = tot
-		if l := int64(mostExpensiveQuartile-cheapestQuartile); l > 0 {
+		if l := int64(mostExpensiveQuartile - cheapestQuartile); l > 0 {
 			avg /= l
 		}
 		noise := 3 - rand.Intn(7)
@@ -106,5 +106,8 @@ func (provider *Provider) updatePricing() {
 	provider.mu.Lock()
 	provider.Config.StorageRate = rate
 	provider.mu.Unlock()
-	provider.UpdateMeta()
+	err = provider.UpdateMeta()
+	if err != nil {
+		provider.logger.Println("Error updating price:", err)
+	}
 }

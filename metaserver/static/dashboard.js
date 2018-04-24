@@ -698,7 +698,7 @@ function updateContractsOverTime() {
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
-    contractsOverTime.labels = labels;
+    contractsOverTime.data.labels = labels;
     contractsOverTime.data.datasets[0].data = data;
 
     contractsOverTime.update();
@@ -772,7 +772,7 @@ function updateUploadsOverTime() {
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
-    uploadsOverTime.labels = labels;
+    uploadsOverTime.data.labels = labels;
     uploadsOverTime.data.datasets[0].data = data;
 
     uploadsOverTime.update();

@@ -6,12 +6,14 @@ import (
 	"time"
 )
 
-func (server *MetaServer) startPaymentRunner() {
-	// Frequency at which the runner should be triggered (should probably put this in a config file)
-	runnerFrequency := time.Minute * 1
+const (
+	// Frequency at which the runner should be triggered.
+	paymentRunnerFreq = time.Minute * 5
+)
 
+func (server *MetaServer) startPaymentRunner() {
 	// Ticker triggering the runner.
-	ticker := time.NewTicker(runnerFrequency)
+	ticker := time.NewTicker(paymentRunnerFreq)
 
 	go func() {
 		for range ticker.C {

@@ -94,7 +94,7 @@ const (
 	DefaultMinStorageRate = 1
 	DefaultMaxStorageRate = 100000
 	DefaultStorageRate    = DefaultMinStorageRate
-	PricingUpdateFreq     = 1 * time.Minute
+	PricingUpdateFreq     = 5 * time.Minute
 	renterKeyFile         = "renter_keys.json"
 )
 

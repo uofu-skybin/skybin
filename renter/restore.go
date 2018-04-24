@@ -106,6 +106,22 @@ func (r *Renter) restoreBlockBatch(batch *recoveredBlockBatch) {
 		badProviders[cb.block.Location.ProviderId] = true
 	}
 
+	// We may need to re-pad the last block up to the chunk size of the
+	// file, since its padding was removed when reconstructing the file.
+	for _, block := range badBlocks {
+		st, err := block.contents.Stat()
+		if err != nil {
+			r.logger.Println("block recovery thread: unable to stat block file. error: ", err)
+			continue
+		}
+		if st.Size() != block.block.Size {
+			err = block.contents.Truncate(block.block.Size)
+			if err != nil {
+				r.logger.Println("block recovery thread: error truncating block file. error: ", err)
+			}
+		}
+	}
+
 	// Now upload the bad blocks to new providers and create new
 	// metadata for the file version.
 	newVersion := *currVersion

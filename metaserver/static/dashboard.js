@@ -42,8 +42,8 @@ function setupPage() {
             response = JSON.parse(this.responseText);
 
             setupNetworkAndNodeDetails();
-            createContractsOverTime(7);
-            createUploadsOverTime(7);
+            createContractsOverTime();
+            createUploadsOverTime();
             createFileSizeDistribution();
         }
     }
@@ -309,11 +309,47 @@ function showNodeInfo(nodeId) {
                 }
 
                 let li = $('<li>')
-                li.append(file.name);
-                li.addClass('clickable-item');
-                li.click(() => {
+
+                let isCorrupt = false;
+                if (file.versions.length > 0) {
+                    for (let block of file.versions[file.versions.length - 1].blocks) {
+                        if (!block.auditPassed) {
+                            isCorrupt = true;
+                            break;
+                        }
+                    }
+                }
+                if (isCorrupt) {
+                    li.append($('<i>', {
+                        'class': 'indicator fas fa-times-circle text-danger',
+                        'title': 'contains corrupt blocks'
+                    }));
+                } else {
+                    li.append($('<i>', {
+                        'class': 'indicator fas fa-check-circle text-success',
+                        'title': 'all blocks verified'
+                    }));
+                }
+
+                let $verifyButton = $('<i>', {
+                    'class': 'fas fa-question-circle text-primary can-click',
+                    'title': 'verify file integrity'
+                })
+                $verifyButton.on(
+                    'click',
+                    { file: file},
+                    checkFileIntegrity
+                );
+                li.append(' ');
+                li.append($verifyButton);
+
+                let $name = $('<span>', {'class': 'clickable-item'});
+                $name.append(' ' + file.name);
+                $name.click(() => {
                     showFileContractsAndLocations(renter.id, file.id);
                 });
+
+                li.append($name);
 
                 $('#file-list').append(li);
             }
@@ -412,13 +448,12 @@ function showNodeInfo(nodeId) {
                     blockStored = true;
                     let listItem = $('<li>');
                     if (block.auditPassed) {
-                        listItem.append('<i title="block verified" class="fas fa-check-circle text-success"></i> ');
+                        listItem.append('<i title="block verified" class="indicator fas fa-check-circle text-success"></i> ');
                     } else {
-                        listItem.append('<i title="block corrupt" class="fas fa-times-circle text-danger"></i> ');
+                        listItem.append('<i title="block corrupt" class="indicator fas fa-times-circle text-danger"></i> ');
                     }
 
-                    let integrityIcon = $('<i>')
-                    integrityIcon.addClass('fas');
+                    let integrityIcon = $('<i>', {'class': 'can-click fas'})
                     integrityIcon.on(
                         'click',
                         { fileId: file.id, blockId: block.id},
@@ -436,7 +471,7 @@ function showNodeInfo(nodeId) {
 
                     listItem.append(integrityIcon);
 
-                    let idSpan = $('<span>');
+                    let idSpan = $('<span>', {'class': 'can-copy'});
                     idSpan.append(block.id);
                     idSpan.click(copyToClipboard);
                     listItem.append(idSpan);
@@ -458,17 +493,89 @@ function showNodeInfo(nodeId) {
     }
 }
 
+function checkFileIntegrity(event) {
+    let $this = $(this);
+    let file = event.data.file;
+
+    if (file.versions.length == 0) {
+        return;
+    }
+    let latestVersion = file.versions[file.versions.length - 1];
+
+    let numBlocks = latestVersion.blocks.length;
+    $this.removeClass('fa-question-circle');
+    $this.addClass('fa-spinner');
+    $this.addClass('fa-spin');
+    $this.prop('title', 'checking file integrity')
+
+    let numChecked = 0;
+    let isCorrupt = false;
+
+    for (let block of latestVersion.blocks) {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                let response = JSON.parse(this.responseText);
+                if (!response.success) {
+                    isCorrupt = true;
+                }
+                numChecked++;
+
+                if (numChecked == numBlocks) {
+                    $this.removeClass('fa-spinner');
+                    $this.removeClass('fa-spin');
+                    $this.addClass('fa-question-circle');
+
+                    console.log(isCorrupt);
+                    if (!isCorrupt) {
+                        $this.siblings('.indicator').removeClass('fa-times-circle');
+                        $this.siblings('.indicator').removeClass('text-danger');
+                        $this.siblings('.indicator').addClass('fa-check-circle');
+                        $this.siblings('.indicator').addClass('text-success');
+                    } else {
+                        $this.siblings('.indicator').removeClass('fa-check-circle');
+                        $this.siblings('.indicator').removeClass('text-success');
+                        $this.siblings('.indicator').addClass('fa-times-circle');
+                        $this.siblings('.indicator').addClass('text-danger');
+                    }
+                }
+            }
+        }
+    // Get data from metaserver.
+        xhttp.open("POST", "/dashboard/audit/" + file.id + "/" + block.id, true)
+        xhttp.send()
+    }
+}
+
 function checkIntegrity(event) {
-    $(this).removeClass('fa-question-circle');
-    $(this).addClass('fa-spinner');
-    $(this).addClass('fa-spin');
-    $(this).prop('title', 'checking block integrity')
+    let $this = $(this);
+    $this.removeClass('fa-question-circle');
+    $this.addClass('fa-spinner');
+    $this.addClass('fa-spin');
+    $this.prop('title', 'checking block integrity')
     auditing[event.data.blockId] = true;
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4 && this.status == 200) {
             delete auditing[event.data.blockId];
+
+            $this.removeClass('fa-spinner');
+            $this.removeClass('fa-spin');
+            $this.addClass('fa-question-circle');
+
+            let response = JSON.parse(this.responseText);
+            if (response.success) {
+                $this.siblings('.indicator').removeClass('fa-times-circle');
+                $this.siblings('.indicator').removeClass('text-danger');
+                $this.siblings('.indicator').addClass('fa-check-circle');
+                $this.siblings('.indicator').addClass('text-success');
+            } else {
+                $this.siblings('.indicator').removeClass('fa-check-circle');
+                $this.siblings('.indicator').removeClass('text-success');
+                $this.siblings('.indicator').addClass('fa-times-circle');
+                $this.siblings('.indicator').addClass('text-danger');
+            }
         }
     }
     // Get data from metaserver.
@@ -492,51 +599,52 @@ function showOrHideBlocks(event) {
 }
 
 function showFileContractsAndLocations(renterId, fileId) {
-    let nodesToSelect = [renterId];
-    let edgesToSelect = [];
-    for (let file of response.files) {
-        if (file.id == fileId) {
-            if (file.versions.length > 0) {
-                let latestVersion = file.versions[file.versions.length - 1];
-                for (let block of latestVersion.blocks) {
-                    nodesToSelect.push(block.location.providerId);
-                    edgesToSelect.push(renterId + ' ' + block.location.providerId);
+    network.setSelection({nodes: [], edges: []});
+    setTimeout(() => {
+        let nodesToSelect = [renterId];
+        let edgesToSelect = [];
+        for (let file of response.files) {
+            if (file.id == fileId) {
+                if (file.versions.length > 0) {
+                    let latestVersion = file.versions[file.versions.length - 1];
+                    for (let block of latestVersion.blocks) {
+                        nodesToSelect.push(block.location.providerId);
+                        edgesToSelect.push(renterId + ' ' + block.location.providerId);
+                    }
                 }
+                break;
             }
-            break;
         }
-    }
 
-    network.setSelection({
-        nodes: nodesToSelect,
-        edges: edgesToSelect,
-    },
-    {
-        unselectAll: true,
-        highlightEdges: false
-    });
+        network.setSelection({
+            nodes: nodesToSelect,
+            edges: edgesToSelect,
+        },
+        {
+            unselectAll: true,
+            highlightEdges: false
+        });
+    }, 100);
 }
 
-function getPreviousDays(numDays) {
-    /** 
-     * Create an array containing the specified number of days, moving backward starting with the current day.
-    */
-    let days = [];
-    for (let i = 0; i < numDays; i++) {
-        let currDate = new Date();
-        currDate.setDate(currDate.getDate() - (numDays - 1) + i);
-        days.push(currDate);
+function getPreviousTimes() {
+    let times = [];
+    let numTicks = 7;
+    let currTime = new Date();
+    for (let i = 0; i < numTicks; i++) {
+        let nextTime = new Date(currTime - 30 * 60 * 1000 * i);
+        times.push(nextTime);
     }
-    return days;
+    return times.reverse();
 }
 
 let contractsOverTime = null;
 
-function createContractsOverTime(numberOfDays) {
+function createContractsOverTime() {
     /** 
      * Create the contracts per day chart
     */
-    let labelsAndData = calculateContractsOverTime(numberOfDays);
+    let labelsAndData = calculateContractsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -559,7 +667,7 @@ function createContractsOverTime(numberOfDays) {
             maintainAspectRatio: false,
             scales: {
                 xAxes: [{
-                    type: 'time'
+                    type: 'time',
                 }],
                 yAxes: [{
                     ticks: {
@@ -572,14 +680,14 @@ function createContractsOverTime(numberOfDays) {
             },
             title: {
                 display: true,
-                text: "Storage Reservations Per Day"
+                text: "Storage Reservations in Last 3 Hours"
             }
         }
     });
 }
 
-function updateContractsOverTime(numberOfDays) {
-    let labelsAndData = calculateContractsOverTime(numberOfDays);
+function updateContractsOverTime() {
+    let labelsAndData = calculateContractsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -589,32 +697,29 @@ function updateContractsOverTime(numberOfDays) {
     contractsOverTime.update();
 }
 
-function calculateContractsOverTime(numberOfDays) {
-    let days = getPreviousDays(numberOfDays);
-    let dates = {};
-    for (let day of days) {
-        dates[day.toDateString()] = 0;
-    }
+function calculateContractsOverTime() {
+    let times = getPreviousTimes();
+    let contractNumbers = new Array(times.length).fill(0);
 
     for (let contract of response.contracts) {
-        let contractDate = new Date(contract.startDate).toDateString();
-        if (dates[contractDate] != undefined) {
-            dates[contractDate]++;
+        let contractDate = new Date(contract.startDate);
+        for (let i = 0; i < times.length - 1; i++) {
+            if (contractDate > times[i] && contractDate <= times[i + 1]) {
+                contractNumbers[i]++;
+            }
         }
     }
 
-    let numberOfContractsPerDay = [];
-    for (let i = 0; i < days.length; i++) {
-        numberOfContractsPerDay[i] = dates[days[i].toDateString()];
-    }
-
-    return [days, numberOfContractsPerDay];
+    times.splice(times.length - 1, 1);
+    contractNumbers.splice(contractNumbers.length - 1, 1);
+    let returnVal = [times, contractNumbers];
+    return returnVal;
 }
 
 let uploadsOverTime = null;
 
-function createUploadsOverTime(numberOfDays) {
-    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+function createUploadsOverTime() {
+    let labelsAndData = calculateUploadsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -649,14 +754,14 @@ function createUploadsOverTime(numberOfDays) {
             },
             title: {
                 display: true,
-                text: "Uploads Per Day"
+                text: "Uploads in Last 3 Hours"
             }
         }
     });
 }
 
-function updateUploadsOverTime(numberOfDays) {
-    let labelsAndData = calculateUploadsOverTime(numberOfDays);
+function updateUploadsOverTime() {
+    let labelsAndData = calculateUploadsOverTime();
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
@@ -666,28 +771,25 @@ function updateUploadsOverTime(numberOfDays) {
     uploadsOverTime.update();
 }
 
-function calculateUploadsOverTime(numberOfDays) {
-    let days = getPreviousDays(numberOfDays);
-    let dates = {};
-    for (let day of days) {
-        dates[day.toDateString()] = 0;
-    }
+function calculateUploadsOverTime() {
+    let times = getPreviousTimes();
+    let uploadCounts = new Array(times.length).fill(0);
 
     for (let file of response.files) {
         for (let version of file.versions) {
-            let versionDate = new Date(version.uploadTime).toDateString();
-            if (dates[versionDate] != undefined) {
-                dates[versionDate]++;
+            let versionDate = new Date(version.uploadTime);
+            for (let i = 0; i < times.length - 1; i++) {
+                if (versionDate > times[i] && versionDate <= times[i+1]) {
+                    uploadCounts[i]++;
+                }
             }
         }
     }
 
-    let uploadsPerDay = [];
-    for (let i = 0; i < days.length; i++) {
-        uploadsPerDay[i] = dates[days[i].toDateString()];
-    }
-
-    return [days, uploadsPerDay];
+    times.splice(times.length - 1, 1);
+    uploadCounts.splice(uploadCounts.length - 1, 1);
+    let returnVal = [times, uploadCounts];
+    return returnVal;
 }
 
 let fileSizeDistribution = null;

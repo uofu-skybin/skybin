@@ -321,15 +321,27 @@ function showNodeInfo(nodeId) {
                 }
                 if (isCorrupt) {
                     li.append($('<i>', {
-                        'class': 'fas fa-times-circle text-danger',
+                        'class': 'indicator fas fa-times-circle text-danger',
                         'title': 'contains corrupt blocks'
                     }));
                 } else {
                     li.append($('<i>', {
-                        'class': 'fas fa-check-circle text-success',
+                        'class': 'indicator fas fa-check-circle text-success',
                         'title': 'all blocks verified'
                     }));
                 }
+
+                let $verifyButton = $('<i>', {
+                    'class': 'fas fa-question-circle text-primary can-click',
+                    'title': 'verify file integrity'
+                })
+                $verifyButton.on(
+                    'click',
+                    { file: file},
+                    checkFileIntegrity
+                );
+                li.append(' ');
+                li.append($verifyButton);
 
                 let $name = $('<span>', {'class': 'clickable-item'});
                 $name.append(' ' + file.name);
@@ -478,6 +490,60 @@ function showNodeInfo(nodeId) {
         $('#renter-info').hide();
         $('#provider-info').show();
         $("#file-list-container").css("max-height", $("#node-info").height()-$("#provider-info").height()-$("#general-info").height());
+    }
+}
+
+function checkFileIntegrity(event) {
+    let $this = $(this);
+    let file = event.data.file;
+
+    if (file.versions.length == 0) {
+        return;
+    }
+    let latestVersion = file.versions[file.versions.length - 1];
+
+    let numBlocks = latestVersion.blocks.length;
+    $this.removeClass('fa-question-circle');
+    $this.addClass('fa-spinner');
+    $this.addClass('fa-spin');
+    $this.prop('title', 'checking file integrity')
+
+    let numChecked = 0;
+    let isCorrupt = false;
+
+    for (let block of latestVersion.blocks) {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                let response = JSON.parse(this.responseText);
+                if (!response.success) {
+                    isCorrupt = true;
+                }
+                numChecked++;
+
+                if (numChecked == numBlocks) {
+                    $this.removeClass('fa-spinner');
+                    $this.removeClass('fa-spin');
+                    $this.addClass('fa-question-circle');
+
+                    console.log(isCorrupt);
+                    if (!isCorrupt) {
+                        $this.siblings('.indicator').removeClass('fa-times-circle');
+                        $this.siblings('.indicator').removeClass('text-danger');
+                        $this.siblings('.indicator').addClass('fa-check-circle');
+                        $this.siblings('.indicator').addClass('text-success');
+                    } else {
+                        $this.siblings('.indicator').removeClass('fa-check-circle');
+                        $this.siblings('.indicator').removeClass('text-success');
+                        $this.siblings('.indicator').addClass('fa-times-circle');
+                        $this.siblings('.indicator').addClass('text-danger');
+                    }
+                }
+            }
+        }
+    // Get data from metaserver.
+        xhttp.open("POST", "/dashboard/audit/" + file.id + "/" + block.id, true)
+        xhttp.send()
     }
 }
 

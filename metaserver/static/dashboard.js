@@ -599,29 +599,32 @@ function showOrHideBlocks(event) {
 }
 
 function showFileContractsAndLocations(renterId, fileId) {
-    let nodesToSelect = [renterId];
-    let edgesToSelect = [];
-    for (let file of response.files) {
-        if (file.id == fileId) {
-            if (file.versions.length > 0) {
-                let latestVersion = file.versions[file.versions.length - 1];
-                for (let block of latestVersion.blocks) {
-                    nodesToSelect.push(block.location.providerId);
-                    edgesToSelect.push(renterId + ' ' + block.location.providerId);
+    network.setSelection({nodes: [], edges: []});
+    setTimeout(() => {
+        let nodesToSelect = [renterId];
+        let edgesToSelect = [];
+        for (let file of response.files) {
+            if (file.id == fileId) {
+                if (file.versions.length > 0) {
+                    let latestVersion = file.versions[file.versions.length - 1];
+                    for (let block of latestVersion.blocks) {
+                        nodesToSelect.push(block.location.providerId);
+                        edgesToSelect.push(renterId + ' ' + block.location.providerId);
+                    }
                 }
+                break;
             }
-            break;
         }
-    }
 
-    network.setSelection({
-        nodes: nodesToSelect,
-        edges: edgesToSelect,
-    },
-    {
-        unselectAll: true,
-        highlightEdges: false
-    });
+        network.setSelection({
+            nodes: nodesToSelect,
+            edges: edgesToSelect,
+        },
+        {
+            unselectAll: true,
+            highlightEdges: false
+        });
+    }, 100);
 }
 
 function getPreviousTimes() {

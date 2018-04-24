@@ -29,6 +29,8 @@ func runUpload(args ...string) {
 		destpath = args[1]
 	}
 
+	destpath = filepath.ToSlash(destpath)
+
 	client, err := getRenterClient()
 	if err != nil {
 		log.Fatal(err)

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"crypto/rsa"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,7 +14,6 @@ import (
 	"skybin/util"
 	"sync"
 	"time"
-	"errors"
 )
 
 type Config struct {
@@ -316,6 +316,7 @@ func (provider *Provider) UpdateMeta() error {
 	if err != nil {
 		return fmt.Errorf("Failed to parse pubKey in UpdateMeta. error: %s", err)
 	}
+
 	provider.mu.RLock()
 	info := core.ProviderInfo{
 		ID:          provider.Config.ProviderID,
@@ -330,6 +331,14 @@ func (provider *Provider) UpdateMeta() error {
 	if err != nil {
 		return fmt.Errorf("Error authenticating with metaserver: %s", err)
 	}
+
+	// Retrieve provider's current balance.
+	currentInfo, err := metaService.GetProvider(provider.Config.ProviderID)
+	if err != nil {
+		return fmt.Errorf("Error retrieving provider balance: %s", err)
+	}
+	info.Balance = currentInfo.Balance
+
 	err = metaService.UpdateProvider(&info)
 	if err != nil {
 		return fmt.Errorf("Error updating provider: %s", err)

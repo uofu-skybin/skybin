@@ -147,6 +147,10 @@ func (client *Client) UpdateProvider(provider *core.ProviderInfo) error {
 	req.Header.Add("Authorization", token)
 
 	resp, err := client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return decodeError(resp.Body)

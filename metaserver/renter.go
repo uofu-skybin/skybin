@@ -1,11 +1,11 @@
 package metaserver
 
 import (
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
-	"skybin/core"
 	"skybin/constants"
-	"crypto/rsa"
+	"skybin/core"
 	"skybin/util"
 	"strings"
 
@@ -164,6 +164,11 @@ func (server *MetaServer) putRenterHandler() http.HandlerFunc {
 			return
 		} else if updatedRenter.PublicKey != renter.PublicKey {
 			writeErr("must not change renter public key", http.StatusUnauthorized, w)
+			return
+		}
+		// Make sure the user is not trying to update their balance.
+		if updatedRenter.Balance != renter.Balance {
+			writeErr("must not change balance", http.StatusUnauthorized, w)
 			return
 		}
 

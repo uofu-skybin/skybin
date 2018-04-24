@@ -631,6 +631,13 @@ function getPreviousTimes() {
     let times = [];
     let numTicks = 7;
     let currTime = new Date();
+    if (currTime.getMinutes() < 30) {
+        currTime.setMinutes(30);
+    } else {
+        currTime.setHours(currTime.getHours() + 1);
+        currTime.setMinutes(0);
+    }
+    currTime.setSeconds(0);
     for (let i = 0; i < numTicks; i++) {
         let nextTime = new Date(currTime - 30 * 60 * 1000 * i);
         times.push(nextTime);
@@ -691,7 +698,7 @@ function updateContractsOverTime() {
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
-    contractsOverTime.labels = labels;
+    contractsOverTime.data.labels = labels;
     contractsOverTime.data.datasets[0].data = data;
 
     contractsOverTime.update();
@@ -765,7 +772,7 @@ function updateUploadsOverTime() {
     let labels = labelsAndData[0];
     let data = labelsAndData[1];
 
-    uploadsOverTime.labels = labels;
+    uploadsOverTime.data.labels = labels;
     uploadsOverTime.data.datasets[0].data = data;
 
     uploadsOverTime.update();

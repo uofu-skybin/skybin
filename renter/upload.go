@@ -19,7 +19,6 @@ import (
 	"skybin/core"
 	"skybin/provider"
 	"skybin/util"
-	"strings"
 	"time"
 	"hash"
 )
@@ -233,8 +232,12 @@ func (r *Renter) uploadDir(sourcePath string, destPath string) (*core.File, erro
 		}
 		fullPath := destPath
 		if path != sourcePath {
-			relPath := strings.TrimPrefix(path, sourcePath)
-			fullPath += relPath
+			relPath, err := filepath.Rel(sourcePath, path)
+			if err != nil {
+				return err
+			}
+			relPath = filepath.ToSlash(relPath)
+			fullPath += "/" + relPath
 		}
 		if info.IsDir() {
 			folders = append(folders, folderUpload{

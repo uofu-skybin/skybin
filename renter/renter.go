@@ -86,6 +86,11 @@ var (
 	// Indicates that a block download has failed because
 	// the block contents are incorrect.
 	errBlockCorrupted = errors.New("Block corrupted")
+
+	// Default HTTP client to use for requests to providers
+	netClient = &http.Client{
+		Timeout: 20 * time.Second,
+	}
 )
 
 func LoadFromDisk(homedir string) (*Renter, error) {
@@ -497,9 +502,27 @@ func (r *Renter) removeDir(dir *core.File, recursive bool) error {
 	if err != nil {
 		return fmt.Errorf("Unable to delete folder metadata. Error: %s", err)
 	}
+	blocks := map[string][]*core.Block{}
 	for _, child := range children {
 		if !child.IsDir {
-			r.removeFileContents(child)
+			for i := 0; i < len(child.Versions); i++ {
+				version := &child.Versions[i]
+				for j := 0; j < len(version.Blocks); j++ {
+					block := &version.Blocks[j]
+					blocks[block.Location.Addr] = append(blocks[block.Location.Addr], block)
+				}
+			}
+		}
+	}
+	for addr, blockList := range blocks {
+		pvdr := provider.NewClient(addr, netClient)
+		err := pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
+		if err != nil {
+			r.logger.Println("removeDir: error authorizing renter. error:", err)
+			// Continue regardless
+		}
+		for _, block := range blockList {
+			r.removeBlockFrom(block, pvdr)
 		}
 	}
 	// Update the local file cache
@@ -577,7 +600,7 @@ func (r *Renter) removeVersionContents(version *core.Version) {
 // Removes a block from the provider where it is stored, reclaiming
 // the block's storage for the freelist.
 func (r *Renter) removeBlock(block *core.Block) {
-	pvdr := provider.NewClient(block.Location.Addr, &http.Client{})
+	pvdr := provider.NewClient(block.Location.Addr, netClient)
 	err := pvdr.AuthorizeRenter(r.privKey, r.Config.RenterId)
 	if err == nil {
 		err = pvdr.RemoveBlock(r.Config.RenterId, block.ID)
@@ -591,6 +614,24 @@ func (r *Renter) removeBlock(block *core.Block) {
 	}
 
 	// Reclaim the storage used by the block.
+	blob := &storageBlob{
+		ProviderId: block.Location.ProviderId,
+		Addr:       block.Location.Addr,
+		Amount:     block.Size,
+		ContractId: block.Location.ContractId,
+	}
+	r.storageManager.AddBlob(blob)
+}
+
+func (r *Renter) removeBlockFrom(block *core.Block, pvdr *provider.Client) {
+	err := pvdr.RemoveBlock(r.Config.RenterId, block.ID)
+	if err != nil {
+		r.logger.Printf("Unable to remove block %s from provider %s\n",
+			block.ID, block.Location.ProviderId)
+		r.logger.Printf("Error: %s\n", err)
+		r.blocksToDelete = append(r.blocksToDelete, block)
+		return
+	}
 	blob := &storageBlob{
 		ProviderId: block.Location.ProviderId,
 		Addr:       block.Location.Addr,
